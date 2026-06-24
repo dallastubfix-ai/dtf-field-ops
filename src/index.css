@@ -1,0 +1,32 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply font-sans text-[#1F2937] bg-white;
+    -webkit-tap-highlight-color: transparent;
+  }
+  input, select, textarea {
+    @apply font-sans;
+  }
+}
+
+/* Safe area for iOS/Android notch + bottom bar */
+.safe-top    { padding-top: env(safe-area-inset-top); }
+.safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+
+/* Bottom nav height constant — used to offset page content */
+.bottom-nav-offset { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
+
+/* ── PRINT STYLES (Invoice + Warranty PDF) ──────────────────────── */
+@media print {
+  .no-print { display: none !important; }
+  body { background: white !important; }
+  .print-page {
+    width: 816px !important;
+    padding: 43px !important;
+    box-shadow: none !important;
+    margin: 0 !important;
+  }
+}

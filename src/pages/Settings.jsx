@@ -1,0 +1,146 @@
+import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { Bell, LogOut, Info, Trash2 } from 'lucide-react'
+import { useLiveQuery } from 'dexie-react-hooks'
+import { useAuth } from '../context/AuthContext'
+import { supabase } from '../lib/supabase'
+import db from '../lib/db'
+import Button from '../components/ui/Button'
+
+// VAPID public key goes in .env.local as VITE_VAPID_PUBLIC_KEY
+const VAPID_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY
+
+function urlBase64ToUint8Array(base64) {
+  const pad = '='.repeat((4 - base64.length % 4) % 4)
+  const raw = atob((base64 + pad).replace(/-/g, '+').replace(/_/g, '/'))
+  return Uint8Array.from([...raw].map(c => c.charCodeAt(0)))
+}
+
+export default function Settings() {
+  const { user, signOut } = useAuth()
+  const navigate = useNavigate()
+  const [pushEnabled, setPushEnabled] = useState(false)
+  const [pushLoading, setPushLoading] = useState(false)
+  const [pushStatus, setPushStatus] = useState('')
+
+  const togglePush = async () => {
+    if (pushEnabled) { setPushEnabled(false); return }
+    if (!('Notification' in window)) { setPushStatus('Notifications not supported in this browser.'); return }
+    if (!VAPID_KEY) { setPushStatus('VAPID key not configured. Add VITE_VAPID_PUBLIC_KEY to .env.local.'); return }
+
+    setPushLoading(true)
+    try {
+      const permission = await Notification.requestPermission()
+      if (permission !== 'granted') { setPushStatus('Permission denied.'); return }
+
+      const reg = await navigator.serviceWorker.ready
+      const subscription = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(VAPID_KEY),
+      })
+
+      await supabase.from('push_subscriptions').insert({
+        id: crypto.randomUUID(),
+        user_id: user.id,
+        subscription: JSON.stringify(subscription),
+        created_at: new Date().toISOString(),
+      })
+
+      setPushEnabled(true)
+      setPushStatus('Push notifications enabled!')
+    } catch (err) {
+      console.error('Push setup error:', err)
+      setPushStatus('Failed to enable push notifications.')
+    } finally {
+      setPushLoading(false)
+    }
+  }
+
+  const pendingCount = useLiveQuery(() => db.sync_queue.count(), []) ?? 0
+
+  const clearSyncQueue = async () => {
+    await db.sync_queue.clear()
+  }
+
+  const handleSignOut = async () => {
+    await signOut()
+    navigate('/login', { replace: true })
+  }
+
+  return (
+    <div className="min-h-screen bg-[#F3F4F6]">
+      <header className="bg-navy px-4 py-4">
+        <h1 className="text-white font-bold text-lg">Settings</h1>
+      </header>
+
+      <div className="px-4 py-5 space-y-4 max-w-lg mx-auto">
+
+        {/* Notifications */}
+        <div className="bg-white rounded-xl border border-[#E5E7EB] shadow-sm p-4">
+          <div className="flex items-center gap-3 mb-3">
+            <Bell size={18} className="text-navy" />
+            <h2 className="font-semibold text-[#1F2937]">Notifications</h2>
+          </div>
+          <label className="flex items-center justify-between cursor-pointer">
+            <span className="text-sm text-[#1F2937]">Enable Push Notifications</span>
+            <div
+              onClick={togglePush}
+              className={`w-10 h-6 rounded-full transition-colors flex items-center px-1 ${pushEnabled ? 'bg-navy' : 'bg-gray-300'}`}
+            >
+              <div className={`w-4 h-4 rounded-full bg-white shadow transition-transform ${pushEnabled ? 'translate-x-4' : 'translate-x-0'}`} />
+            </div>
+          </label>
+          {pushLoading && <p className="text-xs text-[#6B7280] mt-2">Setting up…</p>}
+          {pushStatus && (
+            <p className={`text-xs mt-2 ${pushStatus.includes('enabled') ? 'text-green-600' : 'text-red-500'}`}>
+              {pushStatus}
+            </p>
+          )}
+        </div>
+
+        {/* Maintenance */}
+        {pendingCount > 0 && (
+          <div className="bg-white rounded-xl border border-[#E5E7EB] shadow-sm p-4">
+            <div className="flex items-center gap-3 mb-3">
+              <Trash2 size={18} className="text-red-400" />
+              <h2 className="font-semibold text-[#1F2937]">Maintenance</h2>
+            </div>
+            <p className="text-sm text-[#6B7280] mb-3">{pendingCount} item(s) pending sync</p>
+            <Button variant="destructive" className="w-full" onClick={clearSyncQueue}>
+              Clear Sync Queue
+            </Button>
+          </div>
+        )}
+
+        {/* Account */}
+        <div className="bg-white rounded-xl border border-[#E5E7EB] shadow-sm p-4">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-9 h-9 rounded-full bg-navy flex items-center justify-center text-white font-bold text-sm">
+              {user?.email?.[0]?.toUpperCase() ?? 'J'}
+            </div>
+            <div>
+              <div className="font-semibold text-[#1F2937] text-sm">{user?.user_metadata?.full_name ?? 'John Figueroa'}</div>
+              <div className="text-xs text-[#6B7280]">{user?.email}</div>
+            </div>
+          </div>
+          <Button variant="destructive" className="w-full" onClick={handleSignOut}>
+            <LogOut size={16} /> Sign Out
+          </Button>
+        </div>
+
+        {/* App info */}
+        <div className="bg-white rounded-xl border border-[#E5E7EB] shadow-sm p-4">
+          <div className="flex items-center gap-3 mb-1">
+            <Info size={18} className="text-[#9CA3AF]" />
+            <h2 className="font-semibold text-[#1F2937]">App Info</h2>
+          </div>
+          <div className="text-sm text-[#6B7280] space-y-0.5 pl-7">
+            <div>Version 1.0.0</div>
+            <div>DTF Field Ops · Dallas Tub Fix</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  )
+}
