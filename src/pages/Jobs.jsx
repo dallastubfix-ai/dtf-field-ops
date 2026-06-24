@@ -32,15 +32,18 @@ export default function Jobs() {
       setCustomers(map)
     })
 
-    // Background refresh
+    // Background refresh — replace jobs table entirely so deleted records don't linger
     supabase.from('jobs').select('*, customers(*)').order('created_at', { ascending: false })
       .then(async ({ data }) => {
         if (!data) return
+        const jobRows = []
         for (const j of data) {
           const { customers: cust, ...job } = j
-          await db.jobs.put({ ...job, _synced: true })
+          jobRows.push({ ...job, _synced: true })
           if (cust) await db.customers.put({ ...cust, _synced: true })
         }
+        await db.jobs.clear()
+        await db.jobs.bulkPut(jobRows)
       }).catch(console.error)
   }, [])
 

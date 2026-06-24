@@ -94,9 +94,11 @@ export default function NewIntake() {
     e.preventDefault()
     if (!form.full_name.trim()) return
     setSaving(true)
-    try {
-      let customerId = linkedCustomer?.id
 
+    let customerId = linkedCustomer?.id
+    let savedJob, jobNumber
+
+    try {
       if (!linkedCustomer) {
         const customerPayload = {
           id: generateId(),
@@ -108,7 +110,7 @@ export default function NewIntake() {
         customerId = saved.id
       }
 
-      let jobNumber = `DTF-${Date.now().toString().slice(-5)}`
+      jobNumber = `DTF-${Date.now().toString().slice(-5)}`
       if (isOnline) {
         const { data } = await supabase.rpc('generate_job_number')
         if (data) jobNumber = data
@@ -128,55 +130,52 @@ export default function NewIntake() {
         call_datetime: form.call_datetime,
         created_at: new Date().toISOString(),
       }
-      const savedJob = await writeRecord('jobs', jobPayload, isOnline)
+      savedJob = await writeRecord('jobs', jobPayload, isOnline)
 
       setToast(`Saved! Job ${jobNumber}`)
-      setTimeout(() => navigate(`/jobs/${savedJob.id}`, { replace: true }), 800)
-
-      if (form.schedule_appointment && form.appointment_datetime) {
-        try {
-          const apptPayload = {
-            id: generateId(),
-            job_id: savedJob.id,
-            appointment_datetime: form.appointment_datetime,
-            location_address: form.location_address || null,
-            created_at: new Date().toISOString(),
-          }
-          await writeRecord('appointments', apptPayload, isOnline)
-        } catch (err) {
-          console.error('Appointment write failed:', err)
-        }
-
-        if (isOnline) {
-          try {
-            const { data: { session } } = await supabase.auth.getSession()
-            if (session?.provider_token) {
-              const event = {
-                summary: `DTF — ${form.full_name} (${form.fixture_type || 'Job'})`,
-                description: `Job: ${jobNumber}\nPhone: ${form.phone}\nNotes: ${form.notes}`,
-                start: { dateTime: new Date(form.appointment_datetime).toISOString() },
-                end:   { dateTime: new Date(new Date(form.appointment_datetime).getTime() + 2 * 3600000).toISOString() },
-                location: form.location_address || undefined,
-              }
-              await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
-                method: 'POST',
-                headers: {
-                  Authorization: `Bearer ${session.provider_token}`,
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(event),
-              })
-            }
-          } catch (err) {
-            console.error('Calendar sync failed:', err)
-          }
-        }
-      }
-    } catch (err) {
-      console.error(err)
+      navigate(`/jobs/${savedJob.id}`, { replace: true })
+    } catch (primaryError) {
+      console.error(primaryError)
       setToast('Error saving. Try again.')
-    } finally {
       setSaving(false)
+      return
+    }
+
+    // Secondary operations — run after navigate; each fully isolated
+    if (form.schedule_appointment && form.appointment_datetime) {
+      try {
+        const apptPayload = {
+          id: generateId(),
+          job_id: savedJob.id,
+          appointment_datetime: form.appointment_datetime,
+          location_address: form.location_address || null,
+          created_at: new Date().toISOString(),
+        }
+        await writeRecord('appointments', apptPayload, isOnline)
+      } catch (e) { console.error('Appointment write failed:', e) }
+
+      if (isOnline) {
+        try {
+          const { data: { session } } = await supabase.auth.getSession()
+          if (session?.provider_token) {
+            const event = {
+              summary: `DTF — ${form.full_name} (${form.fixture_type || 'Job'})`,
+              description: `Job: ${jobNumber}\nPhone: ${form.phone}\nNotes: ${form.notes}`,
+              start: { dateTime: new Date(form.appointment_datetime).toISOString() },
+              end:   { dateTime: new Date(new Date(form.appointment_datetime).getTime() + 2 * 3600000).toISOString() },
+              location: form.location_address || undefined,
+            }
+            await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${session.provider_token}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(event),
+            })
+          }
+        } catch (e) { console.error('Calendar sync failed:', e) }
+      }
     }
   }
 

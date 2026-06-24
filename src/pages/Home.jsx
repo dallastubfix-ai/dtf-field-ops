@@ -49,7 +49,7 @@ export default function Home() {
       setCustomers(map)
     })
 
-    // Background refresh from Supabase
+    // Background refresh — clear and replace appointments so deleted records don't linger
     const refresh = async () => {
       const { data: appts } = await supabase
         .from('appointments')
@@ -57,14 +57,18 @@ export default function Home() {
         .gte('appointment_datetime', format(today, 'yyyy-MM-dd') + 'T00:00:00')
         .lte('appointment_datetime', format(today, 'yyyy-MM-dd') + 'T23:59:59')
       if (appts) {
+        const apptRows = []
         for (const a of appts) {
-          await db.appointments.put({ ...a, _synced: true })
-          if (a.jobs) {
-            const { customers: cust, ...job } = a.jobs
+          const { jobs: jobData, ...appt } = a
+          apptRows.push({ ...appt, _synced: true })
+          if (jobData) {
+            const { customers: cust, ...job } = jobData
             await db.jobs.put({ ...job, _synced: true })
             if (cust) await db.customers.put({ ...cust, _synced: true })
           }
         }
+        await db.appointments.clear()
+        await db.appointments.bulkPut(apptRows)
       }
     }
     refresh().catch(console.error)
