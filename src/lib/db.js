@@ -2,7 +2,7 @@ import Dexie from 'dexie'
 
 export const db = new Dexie('dtf_field_ops')
 
-db.version(1).stores({
+db.version(2).stores({
   customers:    '++_localId, id, phone, full_name, created_at',
   jobs:         '++_localId, id, job_number, customer_id, status, created_at',
   appointments: '++_localId, id, job_id, appointment_datetime',

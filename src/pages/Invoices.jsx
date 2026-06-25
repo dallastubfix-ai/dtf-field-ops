@@ -129,14 +129,14 @@ export default function Invoices() {
               >
                 <div className="flex items-start justify-between mb-1">
                   <span className="font-bold text-[#1F2937] text-base">
-                    #{inv.invoice_number ?? job?.job_number ?? '—'}
+                    #{inv.invoice_number ?? job?.job_number ?? '--'}
                   </span>
                   <span className={`text-xs font-semibold px-2 py-0.5 rounded-full capitalize ${paymentPill[inv.payment_status] ?? 'bg-gray-100 text-gray-600'}`}>
                     {inv.payment_status ?? 'Unpaid'}
                   </span>
                 </div>
                 <div className="text-sm text-[#6B7280]">
-                  {customer?.full_name ?? '—'} · {job?.job_number ?? '—'}
+                  {customer?.full_name ?? '--'} · {job?.job_number ?? '--'}
                 </div>
                 <div className="text-2xl font-bold text-navy mt-1">
                   ${Number(inv.total_amount ?? 0).toFixed(2)}
