@@ -85,16 +85,30 @@ export default function Jobs() {
         </div>
       )}
 
-      {/* Filter tabs */}
-      <div className="bg-white border-b border-[#E5E7EB] overflow-x-auto scrollbar-hide" style={{ WebkitOverflowScrolling: 'touch' }}>
-        <div className="flex px-4 py-0 min-w-max">
+      {/* Mobile: dropdown selector */}
+      <div className="lg:hidden bg-white border-b border-[#E5E7EB] px-4 py-3">
+        <select
+          value={filter}
+          onChange={e => setFilter(e.target.value)}
+          className="w-full border border-[#E5E7EB] rounded-lg px-3 py-2.5 text-sm font-medium text-[#1F2937] bg-white focus:outline-none focus:ring-2 focus:ring-[#1E40AF] appearance-none"
+          style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236B7280' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 12px center', paddingRight: '36px' }}
+        >
+          {FILTERS.map(f => (
+            <option key={f.value} value={f.value}>{f.label}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* Desktop: full tab bar */}
+      <div className="hidden lg:block bg-white border-b border-[#E5E7EB]">
+        <div className="flex px-4">
           {FILTERS.map(f => (
             <button
               key={f.value}
               onClick={() => setFilter(f.value)}
-              className={`flex-shrink-0 px-3 py-3 text-sm font-medium whitespace-nowrap transition-colors border-b-2 ${
+              className={`px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
                 filter === f.value
-                  ? 'border-navy text-navy'
+                  ? 'border-[#1E40AF] text-[#1E40AF]'
                   : 'border-transparent text-[#6B7280] hover:text-[#1F2937]'
               }`}
             >
