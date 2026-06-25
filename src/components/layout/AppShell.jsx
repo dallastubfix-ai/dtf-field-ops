@@ -49,16 +49,12 @@ export default function AppShell({ children }) {
       {/* Main content — single render of children */}
       <div className="flex-1 flex flex-col min-h-screen lg:ml-60">
         <OfflineBanner />
-        <main className="flex-1 bottom-nav-offset lg:pb-0">
+        <main className="flex-1 pb-[calc(64px+env(safe-area-inset-bottom))] lg:pb-0">
           {children}
         </main>
       </div>
 
-      {/* Mobile bottom nav */}
-      <div className="lg:hidden">
-        <BottomNav />
-      </div>
-
+      <BottomNav />
       <FAB />
     </div>
   )

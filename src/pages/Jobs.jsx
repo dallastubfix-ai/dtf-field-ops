@@ -86,13 +86,13 @@ export default function Jobs() {
       )}
 
       {/* Filter tabs */}
-      <div className="bg-white border-b border-[#E5E7EB] overflow-x-auto">
+      <div className="bg-white border-b border-[#E5E7EB] overflow-x-auto scrollbar-hide" style={{ WebkitOverflowScrolling: 'touch' }}>
         <div className="flex px-4 py-0 min-w-max">
           {FILTERS.map(f => (
             <button
               key={f.value}
               onClick={() => setFilter(f.value)}
-              className={`px-3 py-3 text-sm font-medium whitespace-nowrap transition-colors border-b-2 ${
+              className={`flex-shrink-0 px-3 py-3 text-sm font-medium whitespace-nowrap transition-colors border-b-2 ${
                 filter === f.value
                   ? 'border-navy text-navy'
                   : 'border-transparent text-[#6B7280] hover:text-[#1F2937]'

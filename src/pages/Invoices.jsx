@@ -6,6 +6,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import db from '../lib/db'
 import { supabase } from '../lib/supabase'
 import EmptyState from '../components/ui/EmptyState'
+import LoadingSpinner from '../components/ui/LoadingSpinner'
 
 const FILTERS = [
   { label: 'All',     value: 'all'     },
@@ -25,13 +26,19 @@ export default function Invoices() {
   const [filter, setFilter] = useState('all')
   const [customers, setCustomers] = useState({})
   const [jobs, setJobs] = useState({})
+  const [error, setError] = useState(null)
 
   useEffect(() => {
-    db.customers.toArray().then(cs => { const m = {}; cs.forEach(c => { m[c.id] = c }); setCustomers(m) })
-    db.jobs.toArray().then(js => { const m = {}; js.forEach(j => { m[j.id] = j }); setJobs(m) })
+    db.customers.toArray()
+      .then(cs => { const m = {}; cs.forEach(c => { m[c.id] = c }); setCustomers(m) })
+      .catch(console.error)
+    db.jobs.toArray()
+      .then(js => { const m = {}; js.forEach(j => { m[j.id] = j }); setJobs(m) })
+      .catch(console.error)
 
     supabase.from('invoices').select('*, jobs(*, customers(*))').order('created_at', { ascending: false })
-      .then(async ({ data }) => {
+      .then(async ({ data, error: fetchError }) => {
+        if (fetchError) { setError(fetchError.message); return }
         if (!data) return
         for (const inv of data) {
           const { jobs: jobData, ...invoice } = inv
@@ -42,7 +49,8 @@ export default function Invoices() {
             if (cust) await db.customers.put({ ...cust, _synced: true })
           }
         }
-      }).catch(console.error)
+      })
+      .catch(err => setError(err.message))
   }, [])
 
   const invoices = useLiveQuery(async () => {
@@ -54,6 +62,18 @@ export default function Invoices() {
   const outstanding = (invoices ?? [])
     .filter(i => i.payment_status === 'unpaid' || i.payment_status === 'partial')
     .reduce((sum, i) => sum + (Number(i.total_amount) || 0), 0)
+
+  if (error) return (
+    <div className="min-h-screen bg-[#F3F4F6]">
+      <header className="bg-navy px-4 py-4">
+        <h1 className="text-white font-bold text-lg">Invoices</h1>
+      </header>
+      <div className="px-4 py-8 text-center">
+        <p className="text-red-600 font-medium">Failed to load invoices</p>
+        <p className="text-sm text-[#6B7280] mt-1">{error}</p>
+      </div>
+    </div>
+  )
 
   return (
     <div className="min-h-screen bg-[#F3F4F6]">
@@ -91,7 +111,11 @@ export default function Invoices() {
       </div>
 
       <div className="px-4 py-4 space-y-3">
-        {!invoices || invoices.length === 0 ? (
+        {invoices === undefined ? (
+          <div className="flex justify-center py-12">
+            <LoadingSpinner size="lg" />
+          </div>
+        ) : invoices.length === 0 ? (
           <EmptyState icon={FileText} title="No invoices yet" subtitle="Build an invoice from a job." />
         ) : (
           invoices.map(inv => {

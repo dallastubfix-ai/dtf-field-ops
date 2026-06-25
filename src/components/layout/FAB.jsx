@@ -1,8 +1,11 @@
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { Phone } from 'lucide-react'
 
 export default function FAB() {
   const navigate = useNavigate()
+  const location = useLocation()
+
+  if (location.pathname === '/intake') return null
 
   return (
     <div className="fixed bottom-20 right-4 z-50 group">

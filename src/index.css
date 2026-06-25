@@ -19,6 +19,10 @@
 /* Bottom nav height constant — used to offset page content */
 .bottom-nav-offset { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
 
+/* Hide scrollbars while keeping scroll functionality */
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+
 /* ── PRINT STYLES (Invoice + Warranty PDF) ──────────────────────── */
 @media print {
   .no-print { display: none !important; }
