@@ -2,19 +2,12 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Bell, LogOut, Info, Trash2 } from 'lucide-react'
 import { useLiveQuery } from 'dexie-react-hooks'
+import { getToken } from 'firebase/messaging'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
+import { messaging } from '../lib/firebase'
 import db from '../lib/db'
 import Button from '../components/ui/Button'
-
-// VAPID public key goes in .env.local as VITE_VAPID_PUBLIC_KEY
-const VAPID_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY
-
-function urlBase64ToUint8Array(base64) {
-  const pad = '='.repeat((4 - base64.length % 4) % 4)
-  const raw = atob((base64 + pad).replace(/-/g, '+').replace(/_/g, '/'))
-  return Uint8Array.from([...raw].map(c => c.charCodeAt(0)))
-}
 
 export default function Settings() {
   const { user, signOut } = useAuth()
@@ -26,33 +19,32 @@ export default function Settings() {
   const togglePush = async () => {
     if (pushEnabled) { setPushEnabled(false); return }
     if (!('Notification' in window)) { setPushStatus('Notifications not supported in this browser.'); return }
-    if (!VAPID_KEY) { setPushStatus('VAPID key not configured. Add VITE_VAPID_PUBLIC_KEY to .env.local.'); return }
 
     setPushLoading(true)
     try {
       const permission = await Notification.requestPermission()
       if (permission !== 'granted') { setPushStatus('Permission denied.'); return }
 
-      const reg = await navigator.serviceWorker.ready
-      const subscription = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(VAPID_KEY),
+      const token = await getToken(messaging, {
+        vapidKey: import.meta.env.VITE_VAPID_PUBLIC_KEY,
       })
 
-      const p256dh  = subscription.getKey('p256dh')
-      const authKey = subscription.getKey('auth')
-      if (!p256dh || !authKey) throw new Error('Missing subscription keys')
-      await supabase.from('push_subscriptions').upsert({
-        endpoint: subscription.endpoint,
-        p256dh:   btoa(String.fromCharCode(...new Uint8Array(p256dh))),
-        auth_key: btoa(String.fromCharCode(...new Uint8Array(authKey))),
+      if (!token) { setPushStatus('Failed to get FCM token.'); return }
+
+      const { error } = await supabase.from('push_subscriptions').upsert({
+        endpoint: token,
+        p256dh:   'fcm',
+        auth_key: 'fcm',
       }, { onConflict: 'endpoint' })
+
+      if (error) throw error
 
       setPushEnabled(true)
       setPushStatus('Push notifications enabled!')
+      localStorage.setItem('pushEnabled', 'true')
     } catch (err) {
       console.error('Push setup error:', err)
-      setPushStatus('Failed to enable push notifications.')
+      setPushStatus('Error: ' + err.message)
     } finally {
       setPushLoading(false)
     }

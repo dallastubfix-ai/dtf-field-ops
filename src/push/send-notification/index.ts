@@ -136,7 +136,10 @@ Deno.serve(async (req: Request) => {
     const toRemove: string[] = []
 
     for (const sub of subs ?? []) {
-      const fcmToken = sub.endpoint.split('/').pop()
+      // Token is stored directly or as a legacy FCM URL
+      const fcmToken = sub.endpoint.startsWith('https://')
+        ? sub.endpoint.split('/').pop()
+        : sub.endpoint
       if (!fcmToken) { failed++; continue }
 
       try {
