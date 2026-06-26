@@ -131,8 +131,6 @@ export default function NewIntake() {
         surface_type: form.surface_type || null,
         surface_color: form.surface_color || null,
         notes: form.notes || null,
-        lead_source: form.lead_source || null,
-        referred_by: form.lead_source === 'Referral' ? form.referred_by : null,
         created_at: new Date().toISOString(),
       }
       savedJob = await writeRecord('jobs', jobPayload, isOnline)
