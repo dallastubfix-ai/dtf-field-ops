@@ -97,8 +97,10 @@ export default function NewIntake() {
 
     let customerId = linkedCustomer?.id
     let savedJob, jobNumber
+    let step = 'customer'
 
     try {
+      // step: customer insert
       if (!linkedCustomer) {
         const customerPayload = {
           id: generateId(),
@@ -110,12 +112,16 @@ export default function NewIntake() {
         customerId = saved.id
       }
 
+      // step: generate_job_number RPC
+      step = 'job_number'
       jobNumber = `DTF-${Date.now().toString().slice(-5)}`
       if (isOnline) {
         const { data } = await supabase.rpc('generate_job_number')
         if (data) jobNumber = data
       }
 
+      // step: job insert
+      step = 'job'
       const jobPayload = {
         id: generateId(),
         job_number: jobNumber,
@@ -134,9 +140,8 @@ export default function NewIntake() {
 
       setToast(`Saved! Job ${jobNumber}`)
       navigate(`/jobs/${savedJob.id}`, { replace: true })
-    } catch (primaryError) {
-      console.error(primaryError)
-      setToast('Error saving. Try again.')
+    } catch (err) {
+      setToast(`Save failed [${step}]: ${err?.message || err?.code || JSON.stringify(err) || 'unknown error'}`)
       setSaving(false)
       return
     }
