@@ -51,11 +51,32 @@ export default function Settings() {
   }
 
   const sendTestNotification = async () => {
-    const { error } = await supabase.functions.invoke('send-notification', {
-      body: { type: 'test', title: 'DTF Field Ops', body: 'Push notifications are working!' },
-    })
-    if (error) setPushStatus('Test failed: ' + error.message)
-    else setPushStatus('Test notification sent!')
+    try {
+      setPushStatus('Sending...')
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-notification`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          },
+          body: JSON.stringify({
+            type: 'test',
+            title: 'DTF Field Ops',
+            body: 'Push notifications are working!'
+          })
+        }
+      )
+      const data = await res.json()
+      if (data.sent > 0) {
+        setPushStatus('Test notification sent!')
+      } else {
+        setPushStatus(`Test failed: sent=${data.sent} failed=${data.failed}`)
+      }
+    } catch (err) {
+      setPushStatus('Test failed: ' + err.message)
+    }
   }
 
   const pendingCount = useLiveQuery(() => db.sync_queue.count(), []) ?? 0
