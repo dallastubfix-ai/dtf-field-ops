@@ -108,13 +108,21 @@ export default function Home() {
           const time         = format(new Date(appt.appointment_datetime), 'h:mm a')
           const address      = appt.location_address ?? ''
 
-          await supabase.functions.invoke('send-notification', {
-            body: {
-              type:  'appointment_reminder',
-              title: 'DTF Appointment Today',
-              body:  `${customerName} · ${time}${address ? ` · ${address}` : ''}`,
-            },
-          })
+          await fetch(
+            `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-notification`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+              },
+              body: JSON.stringify({
+                type:  'appointment_reminder',
+                title: 'DTF Appointment Today',
+                body:  `${customerName} · ${time}${address ? ` · ${address}` : ''}`,
+              }),
+            }
+          )
           localStorage.setItem(key, '1')
         }
       } catch { /* silent */ }
@@ -135,13 +143,21 @@ export default function Home() {
 
           const customerName = job.customers?.full_name ?? 'Customer'
 
-          await supabase.functions.invoke('send-notification', {
-            body: {
-              type:  'quote_followup',
-              title: 'Follow Up Reminder',
-              body:  `${customerName} hasn't been scheduled yet`,
-            },
-          })
+          await fetch(
+            `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-notification`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+              },
+              body: JSON.stringify({
+                type:  'quote_followup',
+                title: 'Follow Up Reminder',
+                body:  `${customerName} hasn't been scheduled yet`,
+              }),
+            }
+          )
           localStorage.setItem(key, '1')
         }
       } catch { /* silent */ }

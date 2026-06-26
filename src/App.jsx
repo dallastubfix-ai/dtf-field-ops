@@ -1,5 +1,9 @@
+import { useState, useEffect } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
+import { onMessage } from 'firebase/messaging'
+import { Bell, X } from 'lucide-react'
 import { AuthProvider, useAuth } from './context/AuthContext'
+import { messaging } from './lib/firebase'
 import AppShell from './components/layout/AppShell'
 import LoadingSpinner from './components/ui/LoadingSpinner'
 import ErrorBoundary from './components/ErrorBoundary'
@@ -130,9 +134,36 @@ function AppRoutes() {
 }
 
 export default function App() {
+  const [foregroundNotif, setForegroundNotif] = useState(null)
+
+  useEffect(() => {
+    const unsubscribe = onMessage(messaging, (payload) => {
+      const title = payload.notification?.title ?? 'DTF Field Ops'
+      const body = payload.notification?.body ?? ''
+      setForegroundNotif({ title, body })
+      setTimeout(() => setForegroundNotif(null), 5000)
+    })
+    return unsubscribe
+  }, [])
+
   return (
     <AuthProvider>
       <ErrorBoundary>
+        {foregroundNotif && (
+          <div className="fixed top-0 left-0 right-0 z-50 bg-[#1E40AF] text-white py-3 px-4 flex items-start gap-3">
+            <Bell size={18} className="mt-0.5 flex-shrink-0" />
+            <div className="flex-1 min-w-0">
+              <div className="font-bold text-sm">{foregroundNotif.title}</div>
+              <div className="text-xs text-blue-100">{foregroundNotif.body}</div>
+            </div>
+            <button
+              onClick={() => setForegroundNotif(null)}
+              className="text-[#F59E0B] flex-shrink-0"
+            >
+              <X size={18} />
+            </button>
+          </div>
+        )}
         <AppRoutes />
       </ErrorBoundary>
     </AuthProvider>
