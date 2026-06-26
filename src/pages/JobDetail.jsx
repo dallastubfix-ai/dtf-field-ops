@@ -417,7 +417,7 @@ export default function JobDetail() {
                 value={job.status}
                 onChange={e => saveStatus(e.target.value)}
                 options={STATUS_OPTIONS}
-                className="flex-1 py-1.5"
+                className="flex-1 py-1.5 pr-8"
               />
             </div>
 

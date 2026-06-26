@@ -4,33 +4,32 @@ import { ArrowLeft, Camera, Image, X, Upload } from 'lucide-react'
 import { format } from 'date-fns'
 import { supabase } from '../lib/supabase'
 import db from '../lib/db'
+import heic2any from 'heic2any'
 import Button from '../components/ui/Button'
 
 // iPhones / some Androids deliver image/heic which browsers can't render.
-// Best-effort convert to JPEG via canvas; on any failure fall back to the
-// original file so the upload still goes through.
+// Convert to JPEG with heic2any; on any failure fall back to the original
+// file so the upload still goes through.
 async function toUploadableJpeg(file) {
-  const type = (file.type || '').toLowerCase()
-  if (type !== 'image/heic' && type !== 'image/heif') return file
+  if (!file.type.includes('heic') && !file.type.includes('heif')) {
+    return file
+  }
   try {
-    const url = URL.createObjectURL(file)
-    const img = await new Promise((resolve, reject) => {
-      const el = new window.Image()
-      el.onload = () => resolve(el)
-      el.onerror = reject
-      el.src = url
+    const result = await heic2any({
+      blob: file,
+      toType: 'image/jpeg',
+      quality: 0.85,
     })
-    const canvas = document.createElement('canvas')
-    canvas.width = img.naturalWidth
-    canvas.height = img.naturalHeight
-    canvas.getContext('2d').drawImage(img, 0, 0)
-    URL.revokeObjectURL(url)
-    const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.9))
-    if (!blob) throw new Error('canvas.toBlob returned null')
-    const newName = file.name.replace(/\.(heic|heif)$/i, '.jpg')
-    return new File([blob], newName, { type: 'image/jpeg' })
+    // heic2any returns a Blob (or an array of Blobs for multi-image HEICs)
+    const jpegBlob = Array.isArray(result) ? result[0] : result
+    const jpegFile = new File(
+      [jpegBlob],
+      file.name.replace(/\.(heic|heif)$/i, '.jpg'),
+      { type: 'image/jpeg' }
+    )
+    return jpegFile
   } catch (err) {
-    console.error('HEIC→JPEG conversion failed, uploading original:', err)
+    console.error('HEIC conversion failed, uploading original:', err)
     return file
   }
 }
