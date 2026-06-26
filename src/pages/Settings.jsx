@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Bell, LogOut, Info, Trash2 } from 'lucide-react'
 import { useLiveQuery } from 'dexie-react-hooks'
@@ -15,6 +15,32 @@ export default function Settings() {
   const [pushEnabled, setPushEnabled] = useState(false)
   const [pushLoading, setPushLoading] = useState(false)
   const [pushStatus, setPushStatus] = useState('')
+
+  useEffect(() => {
+    const checkExistingSubscription = async () => {
+      try {
+        const stored = localStorage.getItem('pushEnabled')
+        if (stored === 'true') {
+          setPushEnabled(true)
+          return
+        }
+        if (Notification.permission === 'granted') {
+          const { getToken } = await import('firebase/messaging')
+          const { messaging } = await import('../lib/firebase')
+          const token = await getToken(messaging, {
+            vapidKey: import.meta.env.VITE_VAPID_PUBLIC_KEY
+          })
+          if (token) {
+            setPushEnabled(true)
+            localStorage.setItem('pushEnabled', 'true')
+          }
+        }
+      } catch (err) {
+        console.error('Push check failed:', err)
+      }
+    }
+    checkExistingSubscription()
+  }, [])
 
   const togglePush = async () => {
     if (pushEnabled) { setPushEnabled(false); return }
