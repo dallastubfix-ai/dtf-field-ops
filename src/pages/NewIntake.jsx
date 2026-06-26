@@ -138,7 +138,7 @@ export default function NewIntake() {
       setToast(`Saved! Job ${jobNumber}`)
       navigate(`/jobs/${savedJob.id}`, { replace: true })
     } catch (err) {
-      setToast('Error saving. Try again.')
+      setToast(`Save failed [${step}]: ${err?.message || err?.code || JSON.stringify(err) || 'unknown'}`)
       setSaving(false)
       return
     }
