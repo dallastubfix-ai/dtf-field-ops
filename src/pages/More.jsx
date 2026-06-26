@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import { ChevronRight, Settings, CheckCircle } from 'lucide-react'
+import { ChevronRight, Settings, CheckCircle, MessageSquare } from 'lucide-react'
 import { format } from 'date-fns'
 import { useLiveQuery } from 'dexie-react-hooks'
 import db from '../lib/db'
@@ -32,6 +32,17 @@ export default function More() {
           >
             <Settings size={18} className="text-navy" />
             <span className="flex-1 text-sm font-medium text-[#1F2937] text-left">Settings</span>
+            <ChevronRight size={16} className="text-[#9CA3AF]" />
+          </button>
+          <button
+            onClick={() => navigate('/chat-sessions')}
+            className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-[#F3F4F6] transition-colors border-b border-[#E5E7EB]"
+          >
+            <MessageSquare size={18} className="text-navy" />
+            <div className="flex-1 text-left">
+              <span className="text-sm font-medium text-[#1F2937] block">Chat Sessions</span>
+              <span className="text-xs text-[#9CA3AF]">Monitor website chat activity</span>
+            </div>
             <ChevronRight size={16} className="text-[#9CA3AF]" />
           </button>
           <div className="flex items-center gap-3 px-4 py-3.5">

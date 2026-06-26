@@ -15,8 +15,10 @@ import VideoCapture    from './pages/VideoCapture'
 import Invoices        from './pages/Invoices'
 import InvoiceBuilder  from './pages/InvoiceBuilder'
 import WarrantyBuilder from './pages/WarrantyBuilder'
-import More            from './pages/More'
-import Settings        from './pages/Settings'
+import More               from './pages/More'
+import Settings           from './pages/Settings'
+import ChatSessions       from './pages/ChatSessions'
+import ChatSessionDetail  from './pages/ChatSessionDetail'
 
 function AuthGuard({ children }) {
   const { user, loading } = useAuth()
@@ -109,6 +111,16 @@ function AppRoutes() {
       <Route path="/settings" element={
         <AuthGuard>
           <AppShell><Settings /></AppShell>
+        </AuthGuard>
+      } />
+      <Route path="/chat-sessions" element={
+        <AuthGuard>
+          <AppShell><ChatSessions /></AppShell>
+        </AuthGuard>
+      } />
+      <Route path="/chat-sessions/:id" element={
+        <AuthGuard>
+          <AppShell><ChatSessionDetail /></AppShell>
         </AuthGuard>
       } />
 
