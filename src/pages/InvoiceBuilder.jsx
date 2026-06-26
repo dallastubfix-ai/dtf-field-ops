@@ -4,6 +4,7 @@ import { ArrowLeft, Printer, Save, Shield } from 'lucide-react'
 import { format, addYears } from 'date-fns'
 import { supabase } from '../lib/supabase'
 import db from '../lib/db'
+import { formatEnum } from '../lib/formatEnum'
 import Input from '../components/ui/Input'
 import Textarea from '../components/ui/Textarea'
 import Button from '../components/ui/Button'
@@ -323,7 +324,7 @@ export default function InvoiceBuilder() {
             <div className="text-xs font-semibold uppercase tracking-wide text-[#6B7280] mb-1">Service Info</div>
             <div>Date: <strong>{inv.service_date}</strong></div>
             <div>Tech: <strong>{inv.technician}</strong></div>
-            <div>Surface: <strong>{inv.surface_type}</strong></div>
+            <div>Surface: <strong>{formatEnum(inv.surface_type)}</strong></div>
             {inv.surface_color && <div>Color: <strong>{inv.surface_color}</strong></div>}
           </div>
         </div>

@@ -5,6 +5,7 @@ import { format } from 'date-fns'
 import { useLiveQuery } from 'dexie-react-hooks'
 import db from '../lib/db'
 import { supabase } from '../lib/supabase'
+import { formatEnum } from '../lib/formatEnum'
 import Badge from '../components/ui/Badge'
 import EmptyState from '../components/ui/EmptyState'
 
@@ -145,7 +146,7 @@ export default function Jobs() {
                 <div className="text-sm text-[#6B7280] mt-0.5">{customer?.phone}</div>
                 {(job.fixture_type || job.surface_type) && (
                   <div className="text-xs text-[#9CA3AF] mt-1">
-                    {[job.fixture_type, job.surface_type].filter(Boolean).join(' · ')}
+                    {[job.fixture_type, job.surface_type].filter(Boolean).map(formatEnum).join(' · ')}
                   </div>
                 )}
                 <div className="text-xs text-[#9CA3AF] mt-1">

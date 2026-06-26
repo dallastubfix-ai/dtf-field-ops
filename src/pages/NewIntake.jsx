@@ -5,6 +5,7 @@ import { format } from 'date-fns'
 import { supabase } from '../lib/supabase'
 import db from '../lib/db'
 import { writeRecord } from '../lib/sync'
+import { formatEnum } from '../lib/formatEnum'
 import { useOnlineStatus } from '../hooks/useOnlineStatus'
 import Input from '../components/ui/Input'
 import Select from '../components/ui/Select'
@@ -29,11 +30,17 @@ const now = () => format(new Date(), "yyyy-MM-dd'T'HH:mm")
 
 const FIXTURE_OPTIONS  = [
   { value: '', label: '— Select Fixture —' },
-  'Bathtub', 'Sink', 'Countertop', 'Toilet'
+  { value: 'bathtub',    label: 'Bathtub' },
+  { value: 'sink',       label: 'Sink' },
+  { value: 'countertop', label: 'Countertop' },
+  { value: 'toilet',     label: 'Toilet' },
 ]
 const SURFACE_OPTIONS  = [
   { value: '', label: '— Select Surface —' },
-  'Porcelain/Cast Iron', 'Fiberglass', 'Acrylic', 'Cultured Marble'
+  { value: 'porcelain_cast_iron', label: 'Porcelain / Cast Iron' },
+  { value: 'fiberglass',          label: 'Fiberglass' },
+  { value: 'acrylic',             label: 'Acrylic' },
+  { value: 'cultured_marble',     label: 'Cultured Marble' },
 ]
 const LEAD_OPTIONS = [
   { value: '', label: '— How did they hear about us? —' },
@@ -97,10 +104,9 @@ export default function NewIntake() {
 
     let customerId = linkedCustomer?.id
     let savedJob, jobNumber
-    let step = 'customer'
 
     try {
-      // step: customer insert
+      // customer insert
       if (!linkedCustomer) {
         const customerPayload = {
           id: generateId(),
@@ -112,16 +118,14 @@ export default function NewIntake() {
         customerId = saved.id
       }
 
-      // step: generate_job_number RPC
-      step = 'job_number'
+      // generate_job_number RPC
       jobNumber = `DTF-${Date.now().toString().slice(-5)}`
       if (isOnline) {
         const { data } = await supabase.rpc('generate_job_number')
         if (data) jobNumber = data
       }
 
-      // step: job insert
-      step = 'job'
+      // job insert
       const jobPayload = {
         id: generateId(),
         job_number: jobNumber,
@@ -138,7 +142,8 @@ export default function NewIntake() {
       setToast(`Saved! Job ${jobNumber}`)
       navigate(`/jobs/${savedJob.id}`, { replace: true })
     } catch (err) {
-      setToast(`Save failed [${step}]: ${err?.message || err?.code || JSON.stringify(err) || 'unknown'}`)
+      console.error('Job save failed:', err)
+      setToast('Error saving. Try again.')
       setSaving(false)
       return
     }
@@ -161,7 +166,7 @@ export default function NewIntake() {
           const { data: { session } } = await supabase.auth.getSession()
           if (session?.provider_token) {
             const event = {
-              summary: `DTF — ${form.full_name} (${form.fixture_type || 'Job'})`,
+              summary: `DTF — ${form.full_name} (${formatEnum(form.fixture_type) || 'Job'})`,
               description: `Job: ${jobNumber}\nPhone: ${form.phone}\nNotes: ${form.notes}`,
               start: { dateTime: new Date(form.appointment_datetime).toISOString() },
               end:   { dateTime: new Date(new Date(form.appointment_datetime).getTime() + 2 * 3600000).toISOString() },

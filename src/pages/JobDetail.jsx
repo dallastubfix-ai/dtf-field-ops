@@ -8,6 +8,7 @@ import { format } from 'date-fns'
 import { supabase } from '../lib/supabase'
 import db from '../lib/db'
 import { updateRecord } from '../lib/sync'
+import { formatEnum } from '../lib/formatEnum'
 import { useOnlineStatus } from '../hooks/useOnlineStatus'
 import Badge from '../components/ui/Badge'
 import Button from '../components/ui/Button'
@@ -211,8 +212,8 @@ export default function JobDetail() {
               />
             </div>
             {[
-              ['Fixture',        job.fixture_type],
-              ['Surface',        job.surface_type],
+              ['Fixture',        formatEnum(job.fixture_type)],
+              ['Surface',        formatEnum(job.surface_type)],
               ['Color',          job.surface_color],
               ['Lead Source',    job.lead_source],
               ['Referred By',    job.referred_by],
