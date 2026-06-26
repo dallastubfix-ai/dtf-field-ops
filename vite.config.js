@@ -48,8 +48,8 @@ export default defineConfig({
   build: {
     rollupOptions: {
       output: {
-        manualChunks: {
-          firebase: ['firebase/app', 'firebase/messaging'],
+        manualChunks: (id) => {
+          if (id.includes('firebase')) return 'firebase'
         }
       }
     }
