@@ -82,6 +82,74 @@ export default function Home() {
     refresh().catch(console.error)
   }, [])
 
+  // Background notification checks — runs once on mount when online
+  useEffect(() => {
+    if (!navigator.onLine) return
+
+    const run = async () => {
+      const todayKey = format(new Date(), 'yyyy-MM-dd')
+
+      // Appointment reminders: appointments in the next 24 hours
+      try {
+        const now      = new Date().toISOString()
+        const tomorrow = new Date(Date.now() + 86400000).toISOString()
+
+        const { data: appts } = await supabase
+          .from('appointments')
+          .select('id, appointment_datetime, location_address, jobs(customers(full_name))')
+          .gte('appointment_datetime', now)
+          .lte('appointment_datetime', tomorrow)
+
+        for (const appt of appts ?? []) {
+          const key = `reminder_sent_${appt.id}_${todayKey}`
+          if (localStorage.getItem(key)) continue
+
+          const customerName = appt.jobs?.customers?.full_name ?? 'Customer'
+          const time         = format(new Date(appt.appointment_datetime), 'h:mm a')
+          const address      = appt.location_address ?? ''
+
+          await supabase.functions.invoke('send-notification', {
+            body: {
+              type:  'appointment_reminder',
+              title: 'DTF Appointment Today',
+              body:  `${customerName} · ${time}${address ? ` · ${address}` : ''}`,
+            },
+          })
+          localStorage.setItem(key, '1')
+        }
+      } catch { /* silent */ }
+
+      // Quote follow-up: jobs in contact/quote status older than 3 days
+      try {
+        const cutoff = new Date(Date.now() - 3 * 86400000).toISOString()
+
+        const { data: staleJobs } = await supabase
+          .from('jobs')
+          .select('id, customers(full_name)')
+          .in('status', ['contact', 'quote'])
+          .lt('created_at', cutoff)
+
+        for (const job of staleJobs ?? []) {
+          const key = `followup_sent_${job.id}`
+          if (localStorage.getItem(key)) continue
+
+          const customerName = job.customers?.full_name ?? 'Customer'
+
+          await supabase.functions.invoke('send-notification', {
+            body: {
+              type:  'quote_followup',
+              title: 'Follow Up Reminder',
+              body:  `${customerName} hasn't been scheduled yet`,
+            },
+          })
+          localStorage.setItem(key, '1')
+        }
+      } catch { /* silent */ }
+    }
+
+    run()
+  }, [])
+
   const stats = [
     { label: "Today's Jobs",     value: appointments?.length ?? 0 },
     { label: 'This Week',        value: weekAppointments?.length ?? 0 },

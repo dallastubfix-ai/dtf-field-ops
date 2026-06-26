@@ -39,12 +39,14 @@ export default function Settings() {
         applicationServerKey: urlBase64ToUint8Array(VAPID_KEY),
       })
 
-      await supabase.from('push_subscriptions').insert({
-        id: crypto.randomUUID(),
-        user_id: user.id,
-        subscription: JSON.stringify(subscription),
-        created_at: new Date().toISOString(),
-      })
+      const p256dh  = subscription.getKey('p256dh')
+      const authKey = subscription.getKey('auth')
+      if (!p256dh || !authKey) throw new Error('Missing subscription keys')
+      await supabase.from('push_subscriptions').upsert({
+        endpoint: subscription.endpoint,
+        p256dh:   btoa(String.fromCharCode(...new Uint8Array(p256dh))),
+        auth_key: btoa(String.fromCharCode(...new Uint8Array(authKey))),
+      }, { onConflict: 'endpoint' })
 
       setPushEnabled(true)
       setPushStatus('Push notifications enabled!')
@@ -54,6 +56,14 @@ export default function Settings() {
     } finally {
       setPushLoading(false)
     }
+  }
+
+  const sendTestNotification = async () => {
+    const { error } = await supabase.functions.invoke('send-notification', {
+      body: { type: 'test', title: 'DTF Field Ops', body: 'Push notifications are working!' },
+    })
+    if (error) setPushStatus('Test failed: ' + error.message)
+    else setPushStatus('Test notification sent!')
   }
 
   const pendingCount = useLiveQuery(() => db.sync_queue.count(), []) ?? 0
@@ -92,9 +102,14 @@ export default function Settings() {
           </label>
           {pushLoading && <p className="text-xs text-[#6B7280] mt-2">Setting up…</p>}
           {pushStatus && (
-            <p className={`text-xs mt-2 ${pushStatus.includes('enabled') ? 'text-green-600' : 'text-red-500'}`}>
+            <p className={`text-xs mt-2 ${pushStatus.includes('enabled') || pushStatus.includes('sent') ? 'text-green-600' : 'text-red-500'}`}>
               {pushStatus}
             </p>
+          )}
+          {pushEnabled && (
+            <Button className="w-full mt-3" onClick={sendTestNotification}>
+              Send Test Notification
+            </Button>
           )}
         </div>
 
