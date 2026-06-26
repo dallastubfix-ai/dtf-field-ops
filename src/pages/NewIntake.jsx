@@ -133,7 +133,6 @@ export default function NewIntake() {
         notes: form.notes || null,
         lead_source: form.lead_source || null,
         referred_by: form.lead_source === 'Referral' ? form.referred_by : null,
-        call_datetime: form.call_datetime,
         created_at: new Date().toISOString(),
       }
       savedJob = await writeRecord('jobs', jobPayload, isOnline)
@@ -141,7 +140,7 @@ export default function NewIntake() {
       setToast(`Saved! Job ${jobNumber}`)
       navigate(`/jobs/${savedJob.id}`, { replace: true })
     } catch (err) {
-      setToast(`Save failed [${step}]: ${err?.message || err?.code || JSON.stringify(err) || 'unknown error'}`)
+      setToast('Error saving. Try again.')
       setSaving(false)
       return
     }
