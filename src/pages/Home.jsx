@@ -5,6 +5,7 @@ import { Briefcase, Calendar, FileText } from 'lucide-react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import db from '../lib/db'
 import { supabase } from '../lib/supabase'
+import { upsertLocal } from '../lib/sync'
 import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
 import EmptyState from '../components/ui/EmptyState'
@@ -63,12 +64,19 @@ export default function Home() {
           apptRows.push({ ...appt, _synced: true })
           if (jobData) {
             const { customers: cust, ...job } = jobData
-            await db.jobs.put({ ...job, _synced: true })
-            if (cust) await db.customers.put({ ...cust, _synced: true })
+            await upsertLocal('jobs', { ...job, _synced: true })
+            if (cust) await upsertLocal('customers', { ...cust, _synced: true })
           }
         }
         await db.appointments.clear()
         await db.appointments.bulkPut(apptRows)
+
+        // Re-read lookup maps now that Dexie is fresh, otherwise today's
+        // appointments can't resolve their job/customer for display + nav.
+        const js = await db.jobs.toArray()
+        setJobs(js.reduce((m, j) => { m[j.id] = j; return m }, {}))
+        const cs = await db.customers.toArray()
+        setCustomers(cs.reduce((m, c) => { m[c.id] = c; return m }, {}))
       }
     }
     refresh().catch(console.error)

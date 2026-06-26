@@ -5,6 +5,7 @@ import { format } from 'date-fns'
 import { useLiveQuery } from 'dexie-react-hooks'
 import db from '../lib/db'
 import { supabase } from '../lib/supabase'
+import { upsertLocal } from '../lib/sync'
 import { formatEnum } from '../lib/formatEnum'
 import Badge from '../components/ui/Badge'
 import EmptyState from '../components/ui/EmptyState'
@@ -41,10 +42,15 @@ export default function Jobs() {
         for (const j of data) {
           const { customers: cust, ...job } = j
           jobRows.push({ ...job, _synced: true })
-          if (cust) await db.customers.put({ ...cust, _synced: true })
+          if (cust) await upsertLocal('customers', { ...cust, _synced: true })
         }
         await db.jobs.clear()
         await db.jobs.bulkPut(jobRows)
+
+        // Re-read the customer map now that Dexie is fresh, otherwise job
+        // cards render 'Unknown Customer' until the next mount.
+        const cs = await db.customers.toArray()
+        setCustomers(cs.reduce((m, c) => { m[c.id] = c; return m }, {}))
       }).catch(console.error)
   }, [])
 

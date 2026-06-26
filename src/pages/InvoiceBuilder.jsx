@@ -4,9 +4,8 @@ import { ArrowLeft, Printer, Save, Shield } from 'lucide-react'
 import { format, addYears } from 'date-fns'
 import { supabase } from '../lib/supabase'
 import db from '../lib/db'
+import { upsertLocal } from '../lib/sync'
 import { formatEnum } from '../lib/formatEnum'
-import Input from '../components/ui/Input'
-import Textarea from '../components/ui/Textarea'
 import Button from '../components/ui/Button'
 
 const DEFAULT_ITEMS = [
@@ -17,8 +16,52 @@ const DEFAULT_ITEMS = [
 ]
 
 const PAYMENT_METHODS = ['Cash', 'Check', 'Credit/Debit', 'Venmo', 'Zelle', 'Other']
+const PAYMENT_STATUSES = [
+  ['unpaid',  'Unpaid'],
+  ['partial', 'Partial'],
+  ['paid',    'Paid'],
+]
 
 const today = format(new Date(), 'yyyy-MM-dd')
+
+// Customer info is NOT stored on the invoices table — it is derived from the
+// linked job → customer. Map a customer record onto the invoice form fields.
+function customerFields(c) {
+  if (!c) return {}
+  return {
+    customer_name:    c.full_name      ?? '',
+    customer_phone:   c.phone          ?? '',
+    customer_email:   c.email          ?? '',
+    customer_address: c.address        ?? '',
+    customer_city:    c.city_state_zip ?? '',
+    customer_state:   '',
+    customer_zip:     '',
+  }
+}
+
+// Resolve a job's customer + most-recent appointment, Dexie-first with a
+// Supabase fallback, so pre-population works whether or not the join was loaded.
+async function loadJobContext(jobId) {
+  if (!jobId) return {}
+  let job = await db.jobs.where('id').equals(jobId).first()
+  if (!job) job = (await supabase.from('jobs').select('*').eq('id', jobId).maybeSingle()).data
+  if (!job) return {}
+
+  let customer = job.customer_id ? await db.customers.where('id').equals(job.customer_id).first() : null
+  if (!customer && job.customer_id) {
+    customer = (await supabase.from('customers').select('*').eq('id', job.customer_id).maybeSingle()).data
+  }
+
+  let appts = await db.appointments.where('job_id').equals(jobId).toArray()
+  if (!appts || appts.length === 0) {
+    appts = (await supabase.from('appointments').select('*').eq('job_id', jobId)).data ?? []
+  }
+  const appt = appts
+    .filter(a => a.appointment_datetime)
+    .sort((a, b) => new Date(b.appointment_datetime) - new Date(a.appointment_datetime))[0] ?? null
+
+  return { job, customer, appt }
+}
 
 function Field({ label, value, onChange, type = 'text', className = '' }) {
   return (
@@ -43,7 +86,7 @@ export default function InvoiceBuilder() {
     invoice_number: '', invoice_date: today, service_date: '',
     technician: 'John Figueroa Jr.',
     customer_name: '', customer_phone: '', customer_email: '',
-    customer_address: '', customer_city: '', customer_state: 'TX', customer_zip: '',
+    customer_address: '', customer_city: '', customer_state: '', customer_zip: '',
     surface_type: '', surface_color: '',
     line_items: DEFAULT_ITEMS,
     discount: '0', tax_rate: '0',
@@ -56,45 +99,56 @@ export default function InvoiceBuilder() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [existingWarranty, setExistingWarranty] = useState(null)
+  const [toast, setToast] = useState('')
 
   useEffect(() => {
     const load = async () => {
       if (isNew) {
-        // Load job + customer data for pre-population
-        const job = await db.jobs.where('id').equals(jobId).first()
-          ?? (await supabase.from('jobs').select('*, customers(*), appointments(*)').eq('id', jobId).single()).data
+        const { job, customer, appt } = await loadJobContext(jobId)
         if (!job) return
-
-        const customer = job.customers
-          ?? (await db.customers.where('id').equals(job.customer_id).first())
-
-        const appt = Array.isArray(job.appointments)
-          ? job.appointments.sort((a,b) => new Date(b.appointment_datetime) - new Date(a.appointment_datetime))[0]
-          : null
-
         setInv(v => ({
           ...v,
           invoice_number: job.job_number ?? '',
           service_date: appt?.appointment_datetime ? format(new Date(appt.appointment_datetime), 'yyyy-MM-dd') : '',
-          customer_name:    customer?.full_name  ?? '',
-          customer_phone:   customer?.phone      ?? '',
-          customer_email:   customer?.email      ?? '',
-          customer_address: customer?.address    ?? '',
-          customer_city:    customer?.city       ?? '',
-          customer_zip:     customer?.zip        ?? '',
-          surface_type:     job.surface_type     ?? '',
-          surface_color:    job.surface_color    ?? '',
+          surface_type:  job.surface_type  ?? '',
+          surface_color: job.surface_color ?? '',
+          ...customerFields(customer),
           job_id: jobId,
         }))
       } else if (id) {
-        const existing = await db.invoices.where('id').equals(id).first()
-          ?? (await supabase.from('invoices').select('*').eq('id', id).single()).data
-        if (existing) {
-          setInv({ ...inv, ...existing, line_items: existing.line_items ?? DEFAULT_ITEMS })
-          setSaved(true)
-          const warr = await db.warranties.where('invoice_id').equals(id).first()
-          setExistingWarranty(warr)
+        let existing = await db.invoices.where('id').equals(id).first()
+        if (!existing) {
+          existing = (await supabase.from('invoices').select('*').eq('id', id).maybeSingle()).data
+          if (existing) await upsertLocal('invoices', { ...existing, _synced: true })
         }
+        if (!existing) return
+
+        const nlines = (existing.invoice_notes ?? '').split('\n')
+        const { customer, appt } = await loadJobContext(existing.job_id)
+
+        setInv(v => ({
+          ...v,
+          ...existing,
+          line_items: Array.isArray(existing.line_items) && existing.line_items.length ? existing.line_items : DEFAULT_ITEMS,
+          payment_methods: existing.payment_methods ?? [],
+          payment_status: existing.payment_status ?? 'unpaid',
+          discount: String(existing.discount ?? '0'),
+          tax_rate: String(existing.tax_rate ?? '0'),
+          notes1: nlines[0] ?? '', notes2: nlines[1] ?? '', notes3: nlines[2] ?? '',
+          warranty_included: existing.warranty_included ?? true,
+          warranty_no_reason: existing.warranty_excluded_reason ?? '',
+          ...customerFields(customer),
+          service_date: existing.service_date
+            ?? (appt?.appointment_datetime ? format(new Date(appt.appointment_datetime), 'yyyy-MM-dd') : ''),
+          job_id: existing.job_id ?? null,
+          id: existing.id,
+          created_at: existing.created_at,
+        }))
+        setSaved(true)
+
+        let warr = await db.warranties.where('invoice_id').equals(id).first()
+        if (!warr) warr = (await supabase.from('warranties').select('*').eq('invoice_id', id).maybeSingle()).data
+        setExistingWarranty(warr ?? null)
       }
     }
     load()
@@ -117,50 +171,87 @@ export default function InvoiceBuilder() {
   const total     = taxable + tax
 
   const togglePayment = (method) => {
-    const methods = inv.payment_methods.includes(method)
+    const methods = (inv.payment_methods ?? []).includes(method)
       ? inv.payment_methods.filter(m => m !== method)
-      : [...inv.payment_methods, method]
+      : [...(inv.payment_methods ?? []), method]
     set('payment_methods', methods)
+  }
+
+  // Build a payload containing ONLY real invoices columns.
+  const buildDbPayload = (extra = {}) => ({
+    job_id: inv.job_id ?? null,
+    invoice_number: inv.invoice_number || null,
+    invoice_date: inv.invoice_date || null,
+    service_date: inv.service_date || null,
+    technician: inv.technician || null,
+    surface_type: inv.surface_type || null,
+    surface_color: inv.surface_color || null,
+    line_items: inv.line_items,
+    subtotal,
+    discount,
+    tax_rate: taxRate,
+    tax_amount: tax,
+    total,
+    payment_methods: inv.payment_methods ?? [],
+    payment_status: inv.payment_status || 'unpaid',
+    invoice_notes: [inv.notes1, inv.notes2, inv.notes3].filter(Boolean).join('\n') || null,
+    warranty_included: !!inv.warranty_included,
+    warranty_excluded_reason: inv.warranty_included ? null : (inv.warranty_no_reason || null),
+    updated_at: new Date().toISOString(),
+    ...extra,
+  })
+
+  const createWarranty = async (invoiceId) => {
+    if (!inv.service_date) return
+    const wPayload = {
+      id: crypto.randomUUID(),
+      invoice_id: invoiceId,
+      job_id: inv.job_id ?? null,
+      customer_name: inv.customer_name || null,
+      service_address: [inv.customer_address, inv.customer_city].filter(Boolean).join(', ') || null,
+      service_date: inv.service_date,
+      expiry_date: format(addYears(new Date(inv.service_date), 2), 'yyyy-MM-dd'),
+      technician: inv.technician || null,
+      created_at: new Date().toISOString(),
+    }
+    await db.warranties.add({ ...wPayload, _synced: false })
+    const { error } = await supabase.from('warranties').insert(wPayload)
+    if (!error) await db.warranties.where('id').equals(wPayload.id).modify({ _synced: true })
+    setExistingWarranty(wPayload)
   }
 
   const save = async () => {
     setSaving(true)
-    const payload = {
-      ...inv,
-      total_amount: total,
-      subtotal,
-      tax_amount: tax,
-      updated_at: new Date().toISOString(),
-    }
-    if (!saved) {
-      payload.id = crypto.randomUUID()
-      payload.created_at = new Date().toISOString()
-      await db.invoices.add({ ...payload, _synced: false })
-      const { data } = await supabase.from('invoices').insert(payload).select().single()
-      if (data) { await db.invoices.put({ ...data, _synced: true }); payload.id = data.id }
-
-      // Auto-create warranty record if included
-      if (inv.warranty_included && inv.service_date) {
-        const wPayload = {
-          id: crypto.randomUUID(),
-          invoice_id: payload.id,
-          job_id: inv.job_id,
-          service_date: inv.service_date,
-          expiry_date: format(addYears(new Date(inv.service_date), 2), 'yyyy-MM-dd'),
-          technician: inv.technician,
-          created_at: new Date().toISOString(),
-        }
-        await db.warranties.add({ ...wPayload, _synced: false })
-        await supabase.from('warranties').insert(wPayload)
-        setExistingWarranty(wPayload)
-      }
+    const invoiceId = inv.id ?? crypto.randomUUID()
+    const payload = buildDbPayload({
+      id: invoiceId,
+      created_at: inv.created_at ?? new Date().toISOString(),
+    })
+    try {
+      // Local first so nothing is lost, even offline.
+      await upsertLocal('invoices', { ...payload, _synced: !!navigator.onLine })
+      const wasNew = !inv.id
+      if (wasNew) setInv(v => ({ ...v, id: invoiceId }))
       setSaved(true)
-      setInv(v => ({ ...v, id: payload.id }))
-    } else {
-      await db.invoices.where('id').equals(inv.id).modify(payload)
-      await supabase.from('invoices').update(payload).eq('id', inv.id)
+
+      if (inv.warranty_included && inv.service_date && !existingWarranty) {
+        await createWarranty(invoiceId)
+      }
+
+      // upsert handles both create and update against Supabase by primary key.
+      const { error } = await supabase.from('invoices').upsert(payload)
+      if (error) {
+        await db.invoices.where('id').equals(invoiceId).modify({ _synced: false })
+        throw error
+      }
+      setToast(wasNew ? 'Invoice saved ✓' : 'Invoice updated ✓')
+    } catch (err) {
+      console.error('Invoice save failed:', err)
+      setToast(`Saved locally · ${err.message || 'offline — reopen online to upload'}`)
+    } finally {
+      setSaving(false)
+      setTimeout(() => setToast(''), 2800)
     }
-    setSaving(false)
   }
 
   const print = async () => {
@@ -178,11 +269,17 @@ export default function InvoiceBuilder() {
           <Button variant="secondary" className="text-white border-white/30 py-1.5 px-3" onClick={save} disabled={saving}>
             <Save size={14} /> {saving ? '…' : 'Save'}
           </Button>
-          <Button variant="gold" className="py-1.5 px-3" onClick={print}>
+          <Button variant="gold" className="py-1.5 px-3" onClick={print} disabled={saving}>
             <Printer size={14} /> Print
           </Button>
         </div>
       </header>
+
+      {toast && (
+        <div className="no-print fixed top-16 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-white text-sm px-4 py-2 rounded-lg shadow-lg">
+          {toast}
+        </div>
+      )}
 
       {/* Edit form — no-print */}
       <div className="no-print px-4 py-5 space-y-5 max-w-2xl mx-auto">
@@ -198,8 +295,7 @@ export default function InvoiceBuilder() {
             <Field label="Phone"      value={inv.customer_phone}   onChange={v => set('customer_phone', v)} />
             <Field label="Email"      value={inv.customer_email}   onChange={v => set('customer_email', v)} />
             <Field label="Address"    value={inv.customer_address} onChange={v => set('customer_address', v)} className="col-span-2" />
-            <Field label="City"       value={inv.customer_city}    onChange={v => set('customer_city', v)} />
-            <Field label="Zip"        value={inv.customer_zip}     onChange={v => set('customer_zip', v)} />
+            <Field label="City / State / Zip" value={inv.customer_city} onChange={v => set('customer_city', v)} className="col-span-2" />
           </div>
         </div>
 
@@ -254,8 +350,20 @@ export default function InvoiceBuilder() {
           <div className="flex flex-wrap gap-2">
             {PAYMENT_METHODS.map(m => (
               <button key={m} type="button" onClick={() => togglePayment(m)}
-                className={`px-3 py-1.5 rounded-full text-sm border transition-all ${inv.payment_methods.includes(m) ? 'bg-navy text-white border-navy' : 'border-[#E5E7EB] text-[#6B7280]'}`}>
+                className={`px-3 py-1.5 rounded-full text-sm border transition-all ${(inv.payment_methods ?? []).includes(m) ? 'bg-navy text-white border-navy' : 'border-[#E5E7EB] text-[#6B7280]'}`}>
                 {m}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl border border-[#E5E7EB] shadow-sm p-4 space-y-3">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Payment Status</h3>
+          <div className="flex gap-2">
+            {PAYMENT_STATUSES.map(([val, label]) => (
+              <button key={val} type="button" onClick={() => set('payment_status', val)}
+                className={`flex-1 py-2 rounded-lg text-sm font-semibold border transition-all ${inv.payment_status === val ? 'bg-navy text-white border-navy' : 'border-[#E5E7EB] text-[#6B7280]'}`}>
+                {label}
               </button>
             ))}
           </div>
@@ -361,7 +469,7 @@ export default function InvoiceBuilder() {
           </div>
         </div>
 
-        {inv.payment_methods.length > 0 && (
+        {(inv.payment_methods ?? []).length > 0 && (
           <div className="mb-4 text-sm"><strong>Payment accepted: </strong>{inv.payment_methods.join(', ')}</div>
         )}
 

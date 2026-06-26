@@ -7,7 +7,7 @@ import {
 import { format } from 'date-fns'
 import { supabase } from '../lib/supabase'
 import db from '../lib/db'
-import { updateRecord } from '../lib/sync'
+import { updateRecord, upsertLocal } from '../lib/sync'
 import { formatEnum } from '../lib/formatEnum'
 import { useOnlineStatus } from '../hooks/useOnlineStatus'
 import Badge from '../components/ui/Badge'
@@ -26,6 +26,36 @@ const STATUS_OPTIONS = [
   { value: 'completed',   label: 'Completed'   },
   { value: 'cancelled',   label: 'Cancelled'   },
 ]
+
+const FIXTURE_OPTIONS = [
+  { value: '',           label: '— Select Fixture —' },
+  { value: 'bathtub',    label: 'Bathtub' },
+  { value: 'sink',       label: 'Sink' },
+  { value: 'countertop', label: 'Countertop' },
+  { value: 'toilet',     label: 'Toilet' },
+]
+
+const SURFACE_OPTIONS = [
+  { value: '',                    label: '— Select Surface —' },
+  { value: 'porcelain_cast_iron', label: 'Porcelain / Cast Iron' },
+  { value: 'fiberglass',          label: 'Fiberglass' },
+  { value: 'acrylic',             label: 'Acrylic' },
+  { value: 'cultured_marble',     label: 'Cultured Marble' },
+]
+
+const LEAD_OPTIONS = [
+  { value: '',                label: '— Lead Source —' },
+  { value: 'Google Search',   label: 'Google Search' },
+  { value: 'Google Maps',     label: 'Google Maps' },
+  { value: 'Referral',        label: 'Referral' },
+  { value: 'Repeat Customer', label: 'Repeat Customer' },
+  { value: 'Other',           label: 'Other' },
+]
+
+const toLocalInput = (dt) => {
+  if (!dt) return ''
+  try { return format(new Date(dt), "yyyy-MM-dd'T'HH:mm") } catch { return '' }
+}
 
 function Section({ title, children, defaultOpen = true }) {
   const [open, setOpen] = useState(defaultOpen)
@@ -56,18 +86,33 @@ export default function JobDetail() {
   const [invoice, setInvoice] = useState(null)
   const [warranty, setWarranty] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [toast, setToast] = useState('')
+
+  // Edit state per section
   const [editNotes, setEditNotes] = useState(false)
   const [notesVal, setNotesVal] = useState('')
+  const [editCustomer, setEditCustomer] = useState(false)
+  const [custVal, setCustVal] = useState({})
+  const [editJob, setEditJob] = useState(false)
+  const [jobVal, setJobVal] = useState({})
+  const [editApptId, setEditApptId] = useState(null)
+  const [apptVal, setApptVal] = useState({ appointment_datetime: '', location_address: '', notes: '' })
+
   const [apptModal, setApptModal] = useState(false)
   const [newAppt, setNewAppt] = useState({ appointment_datetime: '', location_address: '' })
-  const [saving, setSaving] = useState(false)
+
+  // Signed URLs for private bucket images (id/_localId -> url)
+  const [signedUrls, setSignedUrls] = useState({})
+
+  const flashToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 1800) }
 
   const load = async () => {
     // Try Dexie first
     let j = await db.jobs.where('id').equals(id).first()
     if (!j && isOnline) {
       const { data } = await supabase.from('jobs').select('*').eq('id', id).single()
-      if (data) { await db.jobs.put({ ...data, _synced: true }); j = data }
+      if (data) { await upsertLocal('jobs', { ...data, _synced: true }); j = data }
     }
     setJob(j)
     setNotesVal(j?.notes ?? '')
@@ -76,7 +121,7 @@ export default function JobDetail() {
       let c = await db.customers.where('id').equals(j.customer_id).first()
       if (!c && isOnline) {
         const { data } = await supabase.from('customers').select('*').eq('id', j.customer_id).single()
-        if (data) { await db.customers.put({ ...data, _synced: true }); c = data }
+        if (data) { await upsertLocal('customers', { ...data, _synced: true }); c = data }
       }
       setCustomer(c)
     }
@@ -104,10 +149,19 @@ export default function JobDetail() {
         supabase.from('videos').select('*').eq('job_id', id),
         supabase.from('invoices').select('*').eq('job_id', id).maybeSingle(),
       ])
-      if (apptRes.data) { for (const a of apptRes.data) await db.appointments.put({ ...a, _synced: true }); setAppointments(apptRes.data) }
-      if (imgRes.data)  { for (const i of imgRes.data) await db.images.put({ ...i, _synced: true }); setImages(imgRes.data) }
-      if (vidRes.data)  { for (const v of vidRes.data) await db.videos.put({ ...v, _synced: true }); setVideos(vidRes.data) }
-      if (invRes.data)  { await db.invoices.put({ ...invRes.data, _synced: true }); setInvoice(invRes.data) }
+      if (apptRes.data) { for (const a of apptRes.data) await upsertLocal('appointments', { ...a, _synced: true }); setAppointments(apptRes.data) }
+      if (imgRes.data)  { for (const i of imgRes.data) await upsertLocal('images', { ...i, _synced: true }); setImages(imgRes.data) }
+      if (vidRes.data)  { for (const v of vidRes.data) await upsertLocal('videos', { ...v, _synced: true }); setVideos(vidRes.data) }
+      if (invRes.data)  {
+        await upsertLocal('invoices', { ...invRes.data, _synced: true })
+        setInvoice(invRes.data)
+        let warr = await db.warranties.where('invoice_id').equals(invRes.data.id).first()
+        if (!warr) {
+          const { data: wData } = await supabase.from('warranties').select('*').eq('invoice_id', invRes.data.id).maybeSingle()
+          if (wData) { await upsertLocal('warranties', { ...wData, _synced: true }); warr = wData }
+        }
+        if (warr) setWarranty(warr)
+      }
     }
 
     setLoading(false)
@@ -115,19 +169,129 @@ export default function JobDetail() {
 
   useEffect(() => { if (id) load() }, [id])
 
+  // Generate signed URLs whenever the image set changes (bucket is private)
+  useEffect(() => {
+    let cancelled = false
+    const run = async () => {
+      if (!images || images.length === 0) { setSignedUrls({}); return }
+      const entries = await Promise.all(images.map(async (img) => {
+        const key = img.id || img._localId
+        if (!img.storage_path) return [key, null]
+        try {
+          const { data } = await supabase.storage
+            .from('job-images')
+            .createSignedUrl(img.storage_path, 3600)
+          return [key, data?.signedUrl ?? null]
+        } catch {
+          return [key, null]
+        }
+      }))
+      if (!cancelled) setSignedUrls(Object.fromEntries(entries))
+    }
+    run()
+    return () => { cancelled = true }
+  }, [images])
+
   const saveStatus = async (status) => {
     if (!job) return
-    const updated = { ...job, status }
+    const updated = { ...job, status, updated_at: new Date().toISOString() }
     setJob(updated)
     await updateRecord('jobs', updated, isOnline)
+    flashToast(`Status → ${formatEnum(status)}`)
   }
 
   const saveNotes = async () => {
     if (!job) return
-    const updated = { ...job, notes: notesVal }
+    const updated = { ...job, notes: notesVal, updated_at: new Date().toISOString() }
     setJob(updated)
     await updateRecord('jobs', updated, isOnline)
     setEditNotes(false)
+    flashToast('Notes saved')
+  }
+
+  const startEditCustomer = () => {
+    setCustVal({
+      full_name:      customer?.full_name      ?? '',
+      phone:          customer?.phone          ?? '',
+      email:          customer?.email          ?? '',
+      address:        customer?.address        ?? '',
+      city_state_zip: customer?.city_state_zip ?? '',
+      lead_source:    customer?.lead_source    ?? '',
+      referred_by:    customer?.referred_by    ?? '',
+    })
+    setEditCustomer(true)
+  }
+
+  const saveCustomer = async () => {
+    if (!customer) return
+    setSaving(true)
+    const updated = {
+      ...customer,
+      ...custVal,
+      email:       custVal.email       || null,
+      address:     custVal.address     || null,
+      lead_source: custVal.lead_source || null,
+      referred_by: custVal.lead_source === 'Referral' ? (custVal.referred_by || null) : null,
+      updated_at: new Date().toISOString(),
+    }
+    setCustomer(updated)
+    await updateRecord('customers', updated, isOnline)
+    setEditCustomer(false)
+    setSaving(false)
+    flashToast('Customer saved')
+  }
+
+  const startEditJob = () => {
+    setJobVal({
+      fixture_type:  job?.fixture_type  ?? '',
+      surface_type:  job?.surface_type  ?? '',
+      surface_color: job?.surface_color ?? '',
+    })
+    setEditJob(true)
+  }
+
+  const saveJob = async () => {
+    if (!job) return
+    setSaving(true)
+    const updated = {
+      ...job,
+      fixture_type:  jobVal.fixture_type  || null,
+      surface_type:  jobVal.surface_type  || null,
+      surface_color: jobVal.surface_color || null,
+      updated_at: new Date().toISOString(),
+    }
+    setJob(updated)
+    await updateRecord('jobs', updated, isOnline)
+    setEditJob(false)
+    setSaving(false)
+    flashToast('Job details saved')
+  }
+
+  const startEditAppt = (a) => {
+    setEditApptId(a.id || a._localId)
+    setApptVal({
+      appointment_datetime: toLocalInput(a.appointment_datetime),
+      location_address: a.location_address ?? '',
+      notes: a.notes ?? '',
+    })
+  }
+
+  const saveAppt = async (a) => {
+    if (!apptVal.appointment_datetime) return
+    setSaving(true)
+    const key = a.id || a._localId
+    const updated = {
+      ...a,
+      appointment_datetime: apptVal.appointment_datetime,
+      location_address: apptVal.location_address || null,
+      notes: apptVal.notes || null,
+      updated_at: new Date().toISOString(),
+    }
+    setAppointments(list => list.map(x => (x.id || x._localId) === key ? updated : x))
+    await updateRecord('appointments', updated, isOnline)
+    setEditApptId(null)
+    setSaving(false)
+    flashToast('Appointment saved')
   }
 
   const addAppointment = async () => {
@@ -143,11 +307,13 @@ export default function JobDetail() {
     await db.appointments.add({ ...payload, _synced: false })
     if (isOnline) {
       await supabase.from('appointments').insert(payload)
+      await db.appointments.where('id').equals(payload.id).modify({ _synced: true })
     }
     setAppointments(a => [...a, payload])
     setApptModal(false)
     setNewAppt({ appointment_datetime: '', location_address: '' })
     setSaving(false)
+    flashToast('Appointment added')
   }
 
   if (loading) {
@@ -167,10 +333,9 @@ export default function JobDetail() {
     )
   }
 
-  const nextStatus = {
-    contact: 'appointment', quote: 'appointment',
-    appointment: 'active', active: 'completed',
-  }[job.status]
+  const sortedImages = [...images].sort(
+    (a, b) => (a.image_type === 'before' ? 0 : 1) - (b.image_type === 'before' ? 0 : 1)
+  )
 
   return (
     <div className="min-h-screen bg-[#F3F4F6] pb-28">
@@ -183,20 +348,64 @@ export default function JobDetail() {
         <Badge status={job.status} />
       </header>
 
+      {toast && (
+        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-white text-sm px-4 py-2 rounded-lg shadow-lg">
+          {toast}
+        </div>
+      )}
+
       <div className="px-4 py-4 space-y-3">
 
         {/* Customer */}
         <Section title="Customer">
-          <div className="space-y-1">
-            <div className="font-bold text-[#1F2937]">{customer?.full_name ?? '—'}</div>
-            {customer?.phone && (
-              <a href={`tel:${customer.phone}`} className="flex items-center gap-2 text-navy text-sm">
-                <Phone size={14} /> {customer.phone}
-              </a>
-            )}
-            {customer?.email && <div className="text-sm text-[#6B7280]">{customer.email}</div>}
-            {customer?.address && <div className="text-sm text-[#6B7280]">{customer.address}</div>}
-          </div>
+          {editCustomer ? (
+            <div className="space-y-3">
+              <Input label="Full Name" value={custVal.full_name}
+                onChange={e => setCustVal(v => ({ ...v, full_name: e.target.value }))} />
+              <Input label="Phone" type="tel" value={custVal.phone}
+                onChange={e => setCustVal(v => ({ ...v, phone: e.target.value }))} />
+              <Input label="Email" type="email" value={custVal.email}
+                onChange={e => setCustVal(v => ({ ...v, email: e.target.value }))} />
+              <Input label="Address" value={custVal.address}
+                onChange={e => setCustVal(v => ({ ...v, address: e.target.value }))} />
+              <Input label="City / State / Zip" value={custVal.city_state_zip}
+                onChange={e => setCustVal(v => ({ ...v, city_state_zip: e.target.value }))} />
+              <Select label="Lead Source" value={custVal.lead_source} options={LEAD_OPTIONS}
+                onChange={e => setCustVal(v => ({ ...v, lead_source: e.target.value }))} />
+              {custVal.lead_source === 'Referral' && (
+                <Input label="Referred By" value={custVal.referred_by}
+                  onChange={e => setCustVal(v => ({ ...v, referred_by: e.target.value }))} />
+              )}
+              <div className="flex gap-2">
+                <Button variant="primary" className="flex-1" onClick={saveCustomer} disabled={saving}>
+                  {saving ? 'Saving…' : 'Save'}
+                </Button>
+                <Button variant="ghost" onClick={() => setEditCustomer(false)}>Cancel</Button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-1">
+              <div className="flex items-start justify-between gap-2">
+                <div className="font-bold text-[#1F2937]">{customer?.full_name ?? '—'}</div>
+                {customer && (
+                  <button onClick={startEditCustomer} className="text-xs text-navy underline shrink-0">Edit</button>
+                )}
+              </div>
+              {customer?.phone && (
+                <a href={`tel:${customer.phone}`} className="flex items-center gap-2 text-navy text-sm">
+                  <Phone size={14} /> {customer.phone}
+                </a>
+              )}
+              {customer?.email && <div className="text-sm text-[#6B7280]">{customer.email}</div>}
+              {customer?.address && <div className="text-sm text-[#6B7280]">{customer.address}</div>}
+              {customer?.city_state_zip && <div className="text-sm text-[#6B7280]">{customer.city_state_zip}</div>}
+              {customer?.lead_source && (
+                <div className="text-xs text-[#9CA3AF] pt-1">
+                  Lead: {customer.lead_source}{customer.referred_by ? ` · ${customer.referred_by}` : ''}
+                </div>
+              )}
+            </div>
+          )}
         </Section>
 
         {/* Job Info */}
@@ -211,18 +420,37 @@ export default function JobDetail() {
                 className="flex-1 py-1.5"
               />
             </div>
-            {[
-              ['Fixture',        formatEnum(job.fixture_type)],
-              ['Surface',        formatEnum(job.surface_type)],
-              ['Color',          job.surface_color],
-              ['Lead Source',    job.lead_source],
-              ['Referred By',    job.referred_by],
-            ].map(([label, value]) => value ? (
-              <div key={label} className="flex gap-2">
-                <span className="text-xs text-[#6B7280] w-28">{label}</span>
-                <span className="text-sm text-[#1F2937]">{value}</span>
+
+            {editJob ? (
+              <div className="space-y-3 pt-1">
+                <Select label="Fixture Type" value={jobVal.fixture_type} options={FIXTURE_OPTIONS}
+                  onChange={e => setJobVal(v => ({ ...v, fixture_type: e.target.value }))} />
+                <Select label="Surface Type" value={jobVal.surface_type} options={SURFACE_OPTIONS}
+                  onChange={e => setJobVal(v => ({ ...v, surface_type: e.target.value }))} />
+                <Input label="Surface Color" value={jobVal.surface_color}
+                  onChange={e => setJobVal(v => ({ ...v, surface_color: e.target.value }))} />
+                <div className="flex gap-2">
+                  <Button variant="primary" className="flex-1" onClick={saveJob} disabled={saving}>
+                    {saving ? 'Saving…' : 'Save'}
+                  </Button>
+                  <Button variant="ghost" onClick={() => setEditJob(false)}>Cancel</Button>
+                </div>
               </div>
-            ) : null)}
+            ) : (
+              <>
+                {[
+                  ['Fixture', formatEnum(job.fixture_type)],
+                  ['Surface', formatEnum(job.surface_type)],
+                  ['Color',   job.surface_color],
+                ].map(([label, value]) => value ? (
+                  <div key={label} className="flex gap-2">
+                    <span className="text-xs text-[#6B7280] w-28">{label}</span>
+                    <span className="text-sm text-[#1F2937]">{value}</span>
+                  </div>
+                ) : null)}
+                <button onClick={startEditJob} className="text-xs text-navy underline mt-1">Edit job details</button>
+              </>
+            )}
           </div>
         </Section>
 
@@ -232,16 +460,45 @@ export default function JobDetail() {
             {appointments.length === 0 && (
               <p className="text-sm text-[#6B7280]">No appointments yet.</p>
             )}
-            {appointments.map(a => (
-              <div key={a.id || a._localId} className="border border-[#E5E7EB] rounded-lg p-3">
-                <div className="font-semibold text-sm text-[#1F2937]">
-                  {format(new Date(a.appointment_datetime), 'EEE, MMM d · h:mm a')}
+            {appointments.map(a => {
+              const key = a.id || a._localId
+              const editing = editApptId === key
+              return (
+                <div key={key} className="border border-[#E5E7EB] rounded-lg p-3">
+                  {editing ? (
+                    <div className="space-y-3">
+                      <Input label="Date & Time" type="datetime-local" value={apptVal.appointment_datetime}
+                        onChange={e => setApptVal(v => ({ ...v, appointment_datetime: e.target.value }))} />
+                      <Input label="Address" value={apptVal.location_address}
+                        onChange={e => setApptVal(v => ({ ...v, location_address: e.target.value }))} />
+                      <Textarea label="Notes" rows={2} value={apptVal.notes}
+                        onChange={e => setApptVal(v => ({ ...v, notes: e.target.value }))} />
+                      <div className="flex gap-2">
+                        <Button variant="primary" className="flex-1" onClick={() => saveAppt(a)} disabled={saving}>
+                          {saving ? 'Saving…' : 'Save'}
+                        </Button>
+                        <Button variant="ghost" onClick={() => setEditApptId(null)}>Cancel</Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <div className="font-semibold text-sm text-[#1F2937]">
+                          {format(new Date(a.appointment_datetime), 'EEE, MMM d · h:mm a')}
+                        </div>
+                        {a.location_address && (
+                          <div className="text-xs text-[#6B7280] mt-0.5">{a.location_address}</div>
+                        )}
+                        {a.notes && (
+                          <div className="text-xs text-[#6B7280] mt-0.5 whitespace-pre-wrap">{a.notes}</div>
+                        )}
+                      </div>
+                      <button onClick={() => startEditAppt(a)} className="text-xs text-navy underline shrink-0">Edit</button>
+                    </div>
+                  )}
                 </div>
-                {a.location_address && (
-                  <div className="text-xs text-[#6B7280] mt-0.5">{a.location_address}</div>
-                )}
-              </div>
-            ))}
+              )
+            })}
             <button
               onClick={() => setApptModal(true)}
               className="flex items-center gap-2 text-navy text-sm font-medium mt-2"
@@ -253,16 +510,29 @@ export default function JobDetail() {
 
         {/* Images */}
         <Section title="Photos">
-          {images.length > 0 && (
+          {sortedImages.length > 0 ? (
             <div className="grid grid-cols-2 gap-2 mb-3">
-              {images.map(img => (
-                <div key={img.id || img._localId} className="relative rounded-lg overflow-hidden aspect-square bg-[#F3F4F6]">
-                  <span className={`absolute top-1 left-1 text-xs font-bold px-1.5 py-0.5 rounded ${img.image_type === 'before' ? 'bg-green-500 text-white' : 'bg-gold text-white'}`}>
-                    {img.image_type?.toUpperCase()}
-                  </span>
-                </div>
-              ))}
+              {sortedImages.map(img => {
+                const key = img.id || img._localId
+                const url = signedUrls[key]
+                return (
+                  <div key={key} className="relative rounded-lg overflow-hidden aspect-square bg-[#F3F4F6]">
+                    {url ? (
+                      <img src={url} alt={img.image_type ?? 'job photo'} loading="lazy" className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <div className="w-5 h-5 animate-spin rounded-full border-2 border-[#E5E7EB] border-t-navy" />
+                      </div>
+                    )}
+                    <span className={`absolute top-1 left-1 text-xs font-bold px-1.5 py-0.5 rounded ${img.image_type === 'before' ? 'bg-green-500 text-white' : 'bg-gold text-white'}`}>
+                      {img.image_type?.toUpperCase()}
+                    </span>
+                  </div>
+                )
+              })}
             </div>
+          ) : (
+            <p className="text-sm text-[#6B7280] mb-3">No photos yet.</p>
           )}
           <Button variant="secondary" className="w-full" onClick={() => navigate(`/jobs/${id}/images`)}>
             <Camera size={16} /> Add Photos
@@ -317,11 +587,11 @@ export default function JobDetail() {
               <Button
                 variant="secondary"
                 className="flex-1"
-                disabled={!invoice?.warranty_included}
+                disabled={!warranty}
                 onClick={() => warranty && navigate(`/warranties/${warranty.id}`)}
               >
                 <Shield size={16} />
-                {warranty ? 'View Warranty' : 'Build Warranty'}
+                {warranty ? 'View Warranty' : 'No Warranty'}
               </Button>
             </div>
           </div>

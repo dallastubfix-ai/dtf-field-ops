@@ -5,6 +5,7 @@ import { format } from 'date-fns'
 import { useLiveQuery } from 'dexie-react-hooks'
 import db from '../lib/db'
 import { supabase } from '../lib/supabase'
+import { upsertLocal } from '../lib/sync'
 import EmptyState from '../components/ui/EmptyState'
 import LoadingSpinner from '../components/ui/LoadingSpinner'
 
@@ -42,13 +43,19 @@ export default function Invoices() {
         if (!data) return
         for (const inv of data) {
           const { jobs: jobData, ...invoice } = inv
-          await db.invoices.put({ ...invoice, _synced: true })
+          await upsertLocal('invoices', { ...invoice, _synced: true })
           if (jobData) {
             const { customers: cust, ...job } = jobData
-            await db.jobs.put({ ...job, _synced: true })
-            if (cust) await db.customers.put({ ...cust, _synced: true })
+            await upsertLocal('jobs', { ...job, _synced: true })
+            if (cust) await upsertLocal('customers', { ...cust, _synced: true })
           }
         }
+        // Re-read the lookup maps now that Dexie is fresh, otherwise names
+        // for newly-fetched jobs/customers render as '--'.
+        const cs = await db.customers.toArray()
+        setCustomers(cs.reduce((m, c) => { m[c.id] = c; return m }, {}))
+        const js = await db.jobs.toArray()
+        setJobs(js.reduce((m, j) => { m[j.id] = j; return m }, {}))
       })
       .catch(err => setError(err.message))
   }, [])
@@ -61,7 +68,7 @@ export default function Invoices() {
 
   const outstanding = (invoices ?? [])
     .filter(i => i.payment_status === 'unpaid' || i.payment_status === 'partial')
-    .reduce((sum, i) => sum + (Number(i.total_amount) || 0), 0)
+    .reduce((sum, i) => sum + (Number(i.total) || 0), 0)
 
   if (error) return (
     <div className="min-h-screen bg-[#F3F4F6]">
@@ -139,7 +146,7 @@ export default function Invoices() {
                   {customer?.full_name ?? '--'} · {job?.job_number ?? '--'}
                 </div>
                 <div className="text-2xl font-bold text-navy mt-1">
-                  ${Number(inv.total_amount ?? 0).toFixed(2)}
+                  ${Number(inv.total ?? 0).toFixed(2)}
                 </div>
                 {inv.service_date && (
                   <div className="text-xs text-[#9CA3AF] mt-1">

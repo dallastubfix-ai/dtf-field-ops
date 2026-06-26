@@ -41,6 +41,20 @@ export async function processSyncQueue() {
   return { synced, errors }
 }
 
+// Upsert a row into Dexie keyed by the real Supabase `id`, NOT the Dexie
+// ++_localId primary key. A plain db.table.put() of a row without _localId
+// always inserts a new row, so repeated background refreshes would otherwise
+// accumulate duplicate records on every page load.
+export async function upsertLocal(tableName, row) {
+  if (!row || row.id == null) return
+  const existing = await db[tableName].where('id').equals(row.id).first()
+  if (existing) {
+    await db[tableName].where('id').equals(row.id).modify(row)
+  } else {
+    await db[tableName].add(row)
+  }
+}
+
 export async function writeRecord(tableName, payload, isOnline) {
   await db[tableName].put({ ...payload, _synced: isOnline })
 
@@ -68,18 +82,24 @@ export async function writeRecord(tableName, payload, isOnline) {
 }
 
 export async function updateRecord(tableName, payload, isOnline) {
-  await db[tableName].where('id').equals(payload.id).modify(payload)
+  // _localId and _synced are Dexie-only bookkeeping fields — they are NOT
+  // columns on the Supabase table, so they must be stripped before any
+  // .update() call or Postgres rejects the whole request.
+  const { _localId, _synced, ...clean } = payload
+
+  await db[tableName].where('id').equals(clean.id).modify({ ...clean, _synced: !!isOnline })
 
   if (isOnline) {
     const { error } = await supabase
       .from(tableName)
-      .update(payload)
-      .eq('id', payload.id)
+      .update(clean)
+      .eq('id', clean.id)
     if (error) {
+      await db[tableName].where('id').equals(clean.id).modify({ _synced: false })
       await db.sync_queue.add({
         table_name: tableName,
         operation: 'update',
-        payload,
+        payload: clean,
         created_at: new Date().toISOString()
       })
     }
@@ -87,7 +107,7 @@ export async function updateRecord(tableName, payload, isOnline) {
     await db.sync_queue.add({
       table_name: tableName,
       operation: 'update',
-      payload,
+      payload: clean,
       created_at: new Date().toISOString()
     })
   }

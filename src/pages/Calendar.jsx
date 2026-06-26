@@ -9,6 +9,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import db from '../lib/db'
 import { supabase } from '../lib/supabase'
+import { upsertLocal } from '../lib/sync'
 import Badge from '../components/ui/Badge'
 
 export default function Calendar() {
@@ -48,13 +49,20 @@ export default function Calendar() {
       .then(async ({ data }) => {
         if (!data) return
         for (const a of data) {
-          await db.appointments.put({ ...a, _synced: true })
-          if (a.jobs) {
-            const { customers: cust, ...job } = a.jobs
-            await db.jobs.put({ ...job, _synced: true })
-            if (cust) await db.customers.put({ ...cust, _synced: true })
+          const { jobs: jobData, ...appt } = a
+          await upsertLocal('appointments', { ...appt, _synced: true })
+          if (jobData) {
+            const { customers: cust, ...job } = jobData
+            await upsertLocal('jobs', { ...job, _synced: true })
+            if (cust) await upsertLocal('customers', { ...cust, _synced: true })
           }
         }
+        // Refresh lookup maps so tapping a freshly-synced appointment can
+        // resolve its job and navigate to JobDetail.
+        const js = await db.jobs.toArray()
+        setJobs(js.reduce((m, j) => { m[j.id] = j; return m }, {}))
+        const cs = await db.customers.toArray()
+        setCustomers(cs.reduce((m, c) => { m[c.id] = c; return m }, {}))
       }).catch(console.error)
   }, [current])
 

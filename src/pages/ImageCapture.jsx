@@ -6,6 +6,35 @@ import { supabase } from '../lib/supabase'
 import db from '../lib/db'
 import Button from '../components/ui/Button'
 
+// iPhones / some Androids deliver image/heic which browsers can't render.
+// Best-effort convert to JPEG via canvas; on any failure fall back to the
+// original file so the upload still goes through.
+async function toUploadableJpeg(file) {
+  const type = (file.type || '').toLowerCase()
+  if (type !== 'image/heic' && type !== 'image/heif') return file
+  try {
+    const url = URL.createObjectURL(file)
+    const img = await new Promise((resolve, reject) => {
+      const el = new window.Image()
+      el.onload = () => resolve(el)
+      el.onerror = reject
+      el.src = url
+    })
+    const canvas = document.createElement('canvas')
+    canvas.width = img.naturalWidth
+    canvas.height = img.naturalHeight
+    canvas.getContext('2d').drawImage(img, 0, 0)
+    URL.revokeObjectURL(url)
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.9))
+    if (!blob) throw new Error('canvas.toBlob returned null')
+    const newName = file.name.replace(/\.(heic|heif)$/i, '.jpg')
+    return new File([blob], newName, { type: 'image/jpeg' })
+  } catch (err) {
+    console.error('HEIC→JPEG conversion failed, uploading original:', err)
+    return file
+  }
+}
+
 export default function ImageCapture() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -51,18 +80,26 @@ export default function ImageCapture() {
     setUploading(true)
     const ts = format(new Date(), "yyyy-MM-dd'T'HH-mm-ss")
 
-    for (const item of captured) {
+    let failed = 0
+    // On a retry, skip photos that already uploaded successfully
+    const pending = captured.filter(i => progress[i.id] !== 'done')
+
+    for (const item of pending) {
       setProgress(p => ({ ...p, [item.id]: 'uploading' }))
+
+      // HEIC/HEIF → JPEG (best-effort) before upload
+      const file = await toUploadableJpeg(item.file)
       const filename = `${job?.job_number ?? id}-${item.type.toUpperCase()}-${ts}.jpg`
       const storagePath = `${id}/${filename}`
 
       const { error: uploadError } = await supabase.storage
         .from('job-images')
-        .upload(storagePath, item.file, { contentType: item.file.type, upsert: false })
+        .upload(storagePath, file, { contentType: file.type || 'image/jpeg', upsert: false })
 
       if (uploadError) {
-        console.error('Upload error:', uploadError)
+        console.error('Storage upload error:', uploadError)
         setProgress(p => ({ ...p, [item.id]: 'error' }))
+        failed++
         continue
       }
 
@@ -77,13 +114,28 @@ export default function ImageCapture() {
         captured_at: new Date().toISOString(),
       }
 
-      await supabase.from('images').insert(record)
+      // The images-table row is what makes the photo show up in JobDetail.
+      // If this insert fails the upload is effectively lost, so surface it.
+      const { error: insertError } = await supabase.from('images').insert(record)
+      if (insertError) {
+        console.error('images insert error:', insertError)
+        setProgress(p => ({ ...p, [item.id]: 'error' }))
+        failed++
+        continue
+      }
+
       await db.images.add({ ...record, _synced: true })
       setProgress(p => ({ ...p, [item.id]: 'done' }))
     }
 
     setUploading(false)
-    setToast(`${captured.length} photo${captured.length > 1 ? 's' : ''} uploaded!`)
+
+    const ok = pending.length - failed
+    if (failed > 0) {
+      setToast(`${ok} uploaded · ${failed} failed — check connection`)
+      return
+    }
+    setToast(`${ok} photo${ok > 1 ? 's' : ''} uploaded!`)
     setTimeout(() => navigate(`/jobs/${id}`, { replace: true }), 900)
   }
 
