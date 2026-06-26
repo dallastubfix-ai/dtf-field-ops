@@ -2,6 +2,7 @@ import { NavLink } from 'react-router-dom'
 import { Home, Calendar, Briefcase, FileText, Menu, Settings } from 'lucide-react'
 import BottomNav from './BottomNav'
 import FAB from './FAB'
+import UpdateBanner from './UpdateBanner'
 import OfflineBanner from './OfflineBanner'
 import SyncIndicator from './SyncIndicator'
 
@@ -48,6 +49,7 @@ export default function AppShell({ children }) {
 
       {/* Main content — single render of children */}
       <div className="flex-1 flex flex-col min-h-screen lg:ml-60">
+        <UpdateBanner />
         <OfflineBanner />
         <main className="flex-1 pb-[calc(64px+env(safe-area-inset-bottom))] lg:pb-0">
           {children}
