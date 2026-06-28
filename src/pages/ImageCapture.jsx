@@ -1,5 +1,6 @@
 import { useRef, useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { useLiveQuery } from 'dexie-react-hooks'
 import { ArrowLeft, Camera, Image, X, Upload } from 'lucide-react'
 import { format } from 'date-fns'
 import { supabase } from '../lib/supabase'
@@ -40,21 +41,34 @@ export default function ImageCapture() {
   const cameraRef = useRef()
   const fileRef = useRef()
 
+  const job = useLiveQuery(() => db.jobs.get({ id }), [id])
+  const userHasToggled = useRef(false)
+
   const [imageType, setImageType] = useState('before')
   const [captured, setCaptured] = useState([])
   const [uploading, setUploading] = useState(false)
   const [progress, setProgress] = useState({})
   const [coords, setCoords] = useState(null)
-  const [job, setJob] = useState(null)
   const [toast, setToast] = useState('')
 
   useEffect(() => {
-    db.jobs.where('id').equals(id).first().then(setJob)
+    window.scrollTo(0, 0)
+  }, [])
+
+  useEffect(() => {
     navigator.geolocation?.getCurrentPosition(
       pos => setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
       () => {}
     )
   }, [id])
+
+  useEffect(() => {
+    if (job && !userHasToggled.current) {
+      setImageType(
+        job.status === 'active' || job.status === 'completed' ? 'after' : 'before'
+      )
+    }
+  }, [job])
 
   const addFiles = (files) => {
     const newItems = Array.from(files).map(file => ({
@@ -157,7 +171,7 @@ export default function ImageCapture() {
         {/* Before / After toggle */}
         <div className="flex gap-2">
           <button
-            onClick={() => setImageType('before')}
+            onClick={() => { userHasToggled.current = true; setImageType('before') }}
             className={`flex-1 py-3 rounded-xl font-semibold text-sm transition-all ${
               imageType === 'before'
                 ? 'bg-green-500 text-white shadow-sm'
@@ -167,7 +181,7 @@ export default function ImageCapture() {
             BEFORE
           </button>
           <button
-            onClick={() => setImageType('after')}
+            onClick={() => { userHasToggled.current = true; setImageType('after') }}
             className={`flex-1 py-3 rounded-xl font-semibold text-sm transition-all ${
               imageType === 'after'
                 ? 'bg-gold text-white shadow-sm'
