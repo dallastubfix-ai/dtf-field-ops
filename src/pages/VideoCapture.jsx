@@ -90,7 +90,8 @@ export default function VideoCapture() {
     setUploading(true)
 
     const { data: { session } } = await supabase.auth.getSession()
-    if (!session?.provider_token) {
+    const providerToken = session?.provider_token || localStorage.getItem('dtf_google_token')
+    if (!providerToken) {
       setNoProvider(true)
       setUploading(false)
       return
@@ -109,7 +110,7 @@ export default function VideoCapture() {
         'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink',
         {
           method: 'POST',
-          headers: { Authorization: `Bearer ${session.provider_token}` },
+          headers: { Authorization: `Bearer ${providerToken}` },
           body: form,
         }
       )
