@@ -65,7 +65,8 @@ export default function CustomerSign() {
       setStatus('done')
     } catch (err) {
       console.error('CustomerSign submit error:', err)
-      setErrorMsg('Something went wrong. Please try again.')
+      const msg = err?.message || err?.error_description || JSON.stringify(err) || 'Unknown error'
+      setErrorMsg(`Error: ${msg}`)
       setStatus('ready')
     }
   }
