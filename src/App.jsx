@@ -43,9 +43,14 @@ function AppRoutes() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <LoadingSpinner size="lg" />
-      </div>
+      <Routes>
+        <Route path="/sign/:token" element={<CustomerSign />} />
+        <Route path="*" element={
+          <div className="flex items-center justify-center min-h-screen">
+            <LoadingSpinner size="lg" />
+          </div>
+        } />
+      </Routes>
     )
   }
 
