@@ -97,21 +97,22 @@ export default function SignatureCapture({ invoiceId, technicianName, customerNa
           )}
         </div>
 
-        <SignaturePad
-          key={step}
-          ref={step === 'technician' ? techPadRef : custPadRef}
-          width={720}
-          height={360}
-          rotated={true}
-          className="mb-2 flex-1"
-        />
+        {!(step === 'customer' && sigLinkState?.status === 'ready') && (
+          <SignaturePad
+            key={step}
+            ref={step === 'technician' ? techPadRef : custPadRef}
+            width={720}
+            height={360}
+            rotated={true}
+            className="mb-2 flex-1"
+          />
+        )}
 
         {error && <p className="text-red-600 text-xs mb-2">{error}</p>}
 
         {step === 'customer' && sigLinkState?.status === 'ready' && (
-          <div className="mb-2 p-2 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-800 break-all">
-            Link ready — copy and send to customer:
-            <br />
+          <div className="mb-2 flex-1 p-4 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-800 break-all flex flex-col justify-center gap-2">
+            <span className="font-semibold text-sm">Link ready — copy and send to customer:</span>
             <span className="font-mono select-all">{sigLinkState.url}</span>
           </div>
         )}
