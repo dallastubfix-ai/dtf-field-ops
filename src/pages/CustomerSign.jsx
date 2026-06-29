@@ -17,7 +17,7 @@ export default function CustomerSign() {
       try {
         const { data, error } = await supabase
           .from('signature_requests')
-          .select('*')
+          .select('*, invoice:invoice_id(*)')
           .eq('token', token)
           .single()
 
@@ -118,9 +118,71 @@ export default function CustomerSign() {
 
       <div className="flex-1 px-4 py-6 max-w-lg mx-auto w-full">
         <h2 className="text-base font-bold text-[#111827] mb-1">Please sign below</h2>
-        <p className="text-sm text-[#6B7280] mb-4">
+        <p className="text-sm text-[#6B7280] mb-3">
           By signing, you confirm the work has been completed and accepted.
         </p>
+
+        {request?.invoice && (() => {
+          const inv = request.invoice
+          const lineItems = (inv.line_items || []).filter(i => i.description && i.amount)
+          const hasDiscount = parseFloat(inv.discount) > 0
+          return (
+            <div className="bg-[#F3F4F6] rounded-xl p-4 mb-4 space-y-3">
+              <div className="text-xs font-bold uppercase tracking-wide text-[#1E40AF] mb-1">Invoice Summary</div>
+
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div>
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-[#6B7280]">Invoice #</div>
+                  <div className="font-medium text-[#111827]">{inv.invoice_number || '—'}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-[#6B7280]">Service Date</div>
+                  <div className="font-medium text-[#111827]">{inv.service_date || '—'}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-[#6B7280]">Surface Type</div>
+                  <div className="font-medium text-[#111827]">{inv.surface_type || '—'}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-[#6B7280]">Surface Color</div>
+                  <div className="font-medium text-[#111827]">{inv.surface_color || '—'}</div>
+                </div>
+              </div>
+
+              {lineItems.length > 0 && (
+                <div>
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-[#6B7280] mb-1">Services</div>
+                  {lineItems.map((item, i) => (
+                    <div key={i} className="flex justify-between text-sm py-1 border-b border-[#E5E7EB] last:border-0">
+                      <span className="text-[#111827]">{item.description}</span>
+                      <span className="font-semibold text-[#111827]">${parseFloat(item.amount).toFixed(2)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="space-y-1 pt-1">
+                {hasDiscount && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-[#6B7280]">Discount</span>
+                    <span className="text-[#111827]">−${parseFloat(inv.discount).toFixed(2)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-base font-bold">
+                  <span className="text-[#111827]">Total Due</span>
+                  <span className="text-[#1E40AF]">${parseFloat(inv.total || 0).toFixed(2)}</span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 pt-1">
+                <div className={`w-2 h-2 rounded-full ${inv.warranty_included ? 'bg-green-500' : 'bg-gray-300'}`} />
+                <span className="text-xs font-semibold text-[#6B7280]">
+                  {inv.warranty_included ? '2-Year Warranty Included' : 'No Warranty'}
+                </span>
+              </div>
+            </div>
+          )
+        })()}
 
         <div className="mb-4">
           <label className="text-xs font-semibold uppercase tracking-wide text-[#6B7280] block mb-1">
