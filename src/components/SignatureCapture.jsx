@@ -30,21 +30,7 @@ export default function SignatureCapture({ invoiceId, technicianName, customerNa
     setError(null)
     try {
       const custDataURL = custPadRef.current.getDataURL()
-      const toBlob = async (dataURL) => {
-        const img = await new Promise((resolve) => {
-          const i = new Image()
-          i.onload = () => resolve(i)
-          i.src = dataURL
-        })
-        const canvas = document.createElement('canvas')
-        canvas.width = img.height
-        canvas.height = img.width
-        const ctx = canvas.getContext('2d')
-        ctx.translate(canvas.width / 2, canvas.height / 2)
-        ctx.rotate(-Math.PI / 2)
-        ctx.drawImage(img, -img.width / 2, -img.height / 2)
-        return await new Promise(resolve => canvas.toBlob(resolve, 'image/png'))
-      }
+      const toBlob = async (dataURL) => (await fetch(dataURL)).blob()
       const [techBlob, custBlob] = await Promise.all([toBlob(techDataURL), toBlob(custDataURL)])
 
       const techPath = `signatures/${invoiceId}/technician.png`
