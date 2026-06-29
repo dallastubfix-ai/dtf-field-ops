@@ -17,6 +17,8 @@ import Modal from '../components/ui/Modal'
 import Input from '../components/ui/Input'
 import Select from '../components/ui/Select'
 import Textarea from '../components/ui/Textarea'
+import { useAuth } from '../context/AuthContext'
+import { createCalendarEvent, updateCalendarEvent } from '../lib/googleCalendar'
 
 const STATUS_OPTIONS = [
   { value: 'contact',     label: 'Contact'     },
@@ -77,6 +79,7 @@ export default function JobDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
   const isOnline = useOnlineStatus()
+  const { providerToken } = useAuth()
 
   const [job, setJob] = useState(null)
   const [customer, setCustomer] = useState(null)
@@ -291,6 +294,33 @@ export default function JobDetail() {
     await updateRecord('appointments', updated, isOnline)
     setEditApptId(null)
     setSaving(false)
+    if (isOnline && providerToken) {
+      try {
+        const [apptDate, apptTime] = apptVal.appointment_datetime.split('T')
+        const appointmentData = {
+          customerName: customer?.full_name || '',
+          address: apptVal.location_address || '',
+          appointmentDate: apptDate,
+          appointmentTime: apptTime,
+          jobNumber: job?.job_number || '',
+          notes: apptVal.notes || '',
+        }
+        let eventId
+        if (updated.google_calendar_event_id) {
+          eventId = await updateCalendarEvent(providerToken, updated.google_calendar_event_id, appointmentData)
+        } else {
+          eventId = await createCalendarEvent(providerToken, appointmentData)
+        }
+        if (eventId && typeof eventId === 'string') {
+          const withEventId = { ...updated, google_calendar_event_id: eventId }
+          setAppointments(list => list.map(x => (x.id || x._localId) === key ? withEventId : x))
+          await updateRecord('appointments', withEventId, isOnline)
+        } else if (eventId?.error === 'token_expired') {
+          flashToast('Appointment saved. Calendar sync failed — sign in again to reconnect.')
+          return
+        }
+      } catch (e) { console.error('Calendar sync failed:', e) }
+    }
     flashToast('Appointment saved')
   }
 
@@ -314,6 +344,26 @@ export default function JobDetail() {
     setNewAppt({ appointment_datetime: '', location_address: '' })
     setSaving(false)
     flashToast('Appointment added')
+    if (isOnline && providerToken) {
+      try {
+        const [apptDate, apptTime] = newAppt.appointment_datetime.split('T')
+        const eventId = await createCalendarEvent(providerToken, {
+          customerName: customer?.full_name || '',
+          address: newAppt.location_address || '',
+          appointmentDate: apptDate,
+          appointmentTime: apptTime,
+          jobNumber: job?.job_number || '',
+          notes: '',
+        })
+        if (eventId && typeof eventId === 'string') {
+          const withEventId = { ...payload, google_calendar_event_id: eventId }
+          setAppointments(prev => prev.map(a => a.id === payload.id ? withEventId : a))
+          await updateRecord('appointments', withEventId, isOnline)
+        } else if (eventId?.error === 'token_expired') {
+          flashToast('Calendar sync failed — sign in again to reconnect.')
+        }
+      } catch (e) { console.error('Calendar sync failed:', e) }
+    }
   }
 
   if (loading) {

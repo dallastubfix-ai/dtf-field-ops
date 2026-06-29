@@ -4,7 +4,7 @@ import { X, Search } from 'lucide-react'
 import { format } from 'date-fns'
 import { supabase } from '../lib/supabase'
 import db from '../lib/db'
-import { writeRecord } from '../lib/sync'
+import { writeRecord, updateRecord } from '../lib/sync'
 import { formatEnum } from '../lib/formatEnum'
 import { useOnlineStatus } from '../hooks/useOnlineStatus'
 import Input from '../components/ui/Input'
@@ -12,6 +12,8 @@ import Select from '../components/ui/Select'
 import Textarea from '../components/ui/Textarea'
 import Modal from '../components/ui/Modal'
 import Button from '../components/ui/Button'
+import { useAuth } from '../context/AuthContext'
+import { createCalendarEvent } from '../lib/googleCalendar'
 
 function formatPhone(value) {
   const digits = value.replace(/\D/g, '').slice(0, 10)
@@ -50,6 +52,7 @@ const LEAD_OPTIONS = [
 export default function NewIntake() {
   const navigate = useNavigate()
   const isOnline = useOnlineStatus()
+  const { providerToken } = useAuth()
   const nameRef = useRef(null)
 
   const [form, setForm] = useState({
@@ -150,8 +153,9 @@ export default function NewIntake() {
 
     // Secondary operations — run after navigate; each fully isolated
     if (form.schedule_appointment && form.appointment_datetime) {
+      let apptPayload = null
       try {
-        const apptPayload = {
+        apptPayload = {
           id: generateId(),
           job_id: savedJob.id,
           appointment_datetime: form.appointment_datetime,
@@ -161,26 +165,21 @@ export default function NewIntake() {
         await writeRecord('appointments', apptPayload, isOnline)
       } catch (e) { console.error('Appointment write failed:', e) }
 
-      if (isOnline) {
+      if (isOnline && providerToken && apptPayload) {
         try {
-          const { data: { session } } = await supabase.auth.getSession()
-          if (session?.provider_token) {
-            const event = {
-              summary: `DTF — ${form.full_name} (${formatEnum(form.fixture_type) || 'Job'})`,
-              description: `Job: ${jobNumber}\nPhone: ${form.phone}\nNotes: ${form.notes}`,
-              start: { dateTime: new Date(form.appointment_datetime).toISOString() },
-              end:   { dateTime: new Date(new Date(form.appointment_datetime).getTime() + 2 * 3600000).toISOString() },
-              location: form.location_address || undefined,
-            }
-            await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
-              method: 'POST',
-              headers: {
-                Authorization: `Bearer ${session.provider_token}`,
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify(event),
-            })
+          const [apptDate, apptTime] = form.appointment_datetime.split('T')
+          const eventId = await createCalendarEvent(providerToken, {
+            customerName: form.full_name,
+            address: form.location_address || '',
+            appointmentDate: apptDate,
+            appointmentTime: apptTime,
+            jobNumber: jobNumber || '',
+            notes: form.notes || '',
+          })
+          if (eventId && typeof eventId === 'string') {
+            await updateRecord('appointments', { ...apptPayload, google_calendar_event_id: eventId }, isOnline)
           }
+          // token_expired case: appointment already saved, user already navigated — silent
         } catch (e) { console.error('Calendar sync failed:', e) }
       }
     }
