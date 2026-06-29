@@ -221,6 +221,8 @@ export default function InvoiceBuilder() {
   const [existingWarranty, setExistingWarranty] = useState(null)
   const [toast, setToast] = useState('')
   const [showSigCapture, setShowSigCapture] = useState(false)
+  const [sigLinkState, setSigLinkState] = useState(null)
+  // sigLinkState: null | { status: 'generating' } | { status: 'ready', url: string } | { status: 'error' }
 
   useEffect(() => {
     const load = async () => {
@@ -274,6 +276,33 @@ export default function InvoiceBuilder() {
           customer_signature_url: existing.customer_signature_url ?? null,
         }))
         setSaved(true)
+
+        // Check for completed remote customer signature
+        const { data: sigReq } = await supabase
+          .from('signature_requests')
+          .select('customer_signature_path, customer_name, used_at')
+          .eq('invoice_id', id)
+          .not('used_at', 'is', null)
+          .order('used_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+        if (sigReq?.customer_signature_path && !existing.customer_signature_url) {
+          const { data: urlData } = await supabase.storage
+            .from('job-images')
+            .createSignedUrl(sigReq.customer_signature_path, 31536000)
+          if (urlData?.signedUrl) {
+            const { error: invError } = await supabase.from('invoices').update({
+              customer_signature_url: urlData.signedUrl,
+              updated_at: new Date().toISOString(),
+            }).eq('id', id)
+            if (!invError) {
+              await db.invoices.where('id').equals(id).modify({
+                customer_signature_url: urlData.signedUrl,
+              })
+              setInv(v => ({ ...v, customer_signature_url: urlData.signedUrl }))
+            }
+          }
+        }
 
         let warr = await db.warranties.where('invoice_id').equals(id).first()
         if (!warr) warr = (await supabase.from('warranties').select('*').eq('invoice_id', id).maybeSingle()).data
@@ -412,6 +441,27 @@ export default function InvoiceBuilder() {
     }
   }
 
+  const generateSigningLink = async () => {
+    if (!inv.id) return
+    setSigLinkState({ status: 'generating' })
+    try {
+      const token = crypto.randomUUID().replace(/-/g, '')
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+      const { error } = await supabase.from('signature_requests').insert({
+        invoice_id: inv.id,
+        token,
+        expires_at: expiresAt,
+        customer_name: inv.customer_name || null,
+      })
+      if (error) throw error
+      const url = `${window.location.origin}/sign/${token}`
+      setSigLinkState({ status: 'ready', url })
+    } catch (err) {
+      console.error('Failed to generate signing link:', err)
+      setSigLinkState({ status: 'error' })
+    }
+  }
+
   return (
     <div className="min-h-screen bg-[#F3F4F6]">
       {/* Top nav — hidden on print */}
@@ -429,6 +479,14 @@ export default function InvoiceBuilder() {
             disabled={!saved || !inv.id}
           >
             Sign
+          </Button>
+          <Button
+            variant="secondary"
+            className="text-white border-white/30 py-1.5 px-3"
+            onClick={generateSigningLink}
+            disabled={!saved || !inv.id || sigLinkState?.status === 'generating'}
+          >
+            {sigLinkState?.status === 'generating' ? '…' : 'Send to Customer'}
           </Button>
           <Button variant="gold" className="py-1.5 px-3" onClick={print} disabled={saving}>
             <Printer size={14} /> Print
@@ -754,6 +812,42 @@ export default function InvoiceBuilder() {
 
         </div>
       </div>
+
+      {sigLinkState && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-6">
+          <div className="bg-white rounded-xl p-6 w-full max-w-sm">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-base font-bold text-[#111827]">Customer Signing Link</h2>
+              <button onClick={() => setSigLinkState(null)} className="text-[#6B7280] text-2xl leading-none px-1">×</button>
+            </div>
+            {sigLinkState.status === 'generating' && (
+              <p className="text-sm text-[#6B7280]">Generating link…</p>
+            )}
+            {sigLinkState.status === 'error' && (
+              <p className="text-sm text-red-600">Failed to generate link. Please try again.</p>
+            )}
+            {sigLinkState.status === 'ready' && (
+              <>
+                <p className="text-xs text-[#6B7280] mb-3">Copy this link and send it to your customer. It expires in 24 hours and can only be used once.</p>
+                <div className="bg-[#F3F4F6] rounded-lg px-3 py-2.5 text-xs font-mono text-[#111827] break-all mb-4 select-all">
+                  {sigLinkState.url}
+                </div>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(sigLinkState.url)
+                    setToast('Link copied ✓')
+                    setTimeout(() => setToast(''), 2000)
+                    setSigLinkState(null)
+                  }}
+                  className="w-full py-2.5 text-sm font-bold text-white bg-[#1E40AF] rounded-lg"
+                >
+                  Copy Link
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {showSigCapture && inv.id && (
         <SignatureCapture

@@ -23,6 +23,7 @@ import More               from './pages/More'
 import Settings           from './pages/Settings'
 import ChatSessions       from './pages/ChatSessions'
 import ChatSessionDetail  from './pages/ChatSessionDetail'
+import CustomerSign      from './pages/CustomerSign'
 
 function AuthGuard({ children }) {
   const { user, loading } = useAuth()
@@ -128,6 +129,7 @@ function AppRoutes() {
         </AuthGuard>
       } />
 
+      <Route path="/sign/:token" element={<CustomerSign />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )
