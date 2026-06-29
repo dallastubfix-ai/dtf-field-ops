@@ -8,6 +8,7 @@ export default function CustomerSign() {
   const [status, setStatus] = useState('loading')
   // status values: loading | ready | submitting | done | error | expired | used
   const [request, setRequest] = useState(null)
+  const [invoice, setInvoice] = useState(null)
   const [custName, setCustName] = useState('')
   const [errorMsg, setErrorMsg] = useState('')
   const padRef = useRef(null)
@@ -17,7 +18,7 @@ export default function CustomerSign() {
       try {
         const { data, error } = await supabase
           .from('signature_requests')
-          .select('*, invoice:invoice_id(*)')
+          .select('*')
           .eq('token', token)
           .single()
 
@@ -26,6 +27,12 @@ export default function CustomerSign() {
         if (new Date(data.expires_at) < new Date()) { setStatus('expired'); return }
 
         setRequest(data)
+        const { data: invData } = await supabase
+          .from('invoices')
+          .select('*')
+          .eq('id', data.invoice_id)
+          .single()
+        if (invData) setInvoice(invData)
         setCustName(data.customer_name || '')
         setStatus('ready')
       } catch {
@@ -122,8 +129,8 @@ export default function CustomerSign() {
           By signing, you confirm the work has been completed and accepted.
         </p>
 
-        {request?.invoice && (() => {
-          const inv = request.invoice
+        {invoice && (() => {
+          const inv = invoice
           const lineItems = (inv.line_items || []).filter(i => i.description && i.amount)
           const hasDiscount = parseFloat(inv.discount) > 0
           return (
