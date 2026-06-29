@@ -19,6 +19,7 @@ import Select from '../components/ui/Select'
 import Textarea from '../components/ui/Textarea'
 import { useAuth } from '../context/AuthContext'
 import { createCalendarEvent, updateCalendarEvent } from '../lib/googleCalendar'
+import AddressAutocomplete from '../components/ui/AddressAutocomplete'
 
 const STATUS_OPTIONS = [
   { value: 'contact',     label: 'Contact'     },
@@ -416,8 +417,8 @@ export default function JobDetail() {
                 onChange={e => setCustVal(v => ({ ...v, phone: e.target.value }))} />
               <Input label="Email" type="email" value={custVal.email}
                 onChange={e => setCustVal(v => ({ ...v, email: e.target.value }))} />
-              <Input label="Address" value={custVal.address}
-                onChange={e => setCustVal(v => ({ ...v, address: e.target.value }))} />
+              <AddressAutocomplete label="Address" value={custVal.address}
+                onChange={v => setCustVal(cv => ({ ...cv, address: v }))} />
               <Input label="City / State / Zip" value={custVal.city_state_zip}
                 onChange={e => setCustVal(v => ({ ...v, city_state_zip: e.target.value }))} />
               <Select label="Lead Source" value={custVal.lead_source} options={LEAD_OPTIONS}
@@ -519,8 +520,8 @@ export default function JobDetail() {
                     <div className="space-y-3">
                       <Input label="Date & Time" type="datetime-local" value={apptVal.appointment_datetime}
                         onChange={e => setApptVal(v => ({ ...v, appointment_datetime: e.target.value }))} />
-                      <Input label="Address" value={apptVal.location_address}
-                        onChange={e => setApptVal(v => ({ ...v, location_address: e.target.value }))} />
+                      <AddressAutocomplete label="Address" value={apptVal.location_address}
+                        onChange={v => setApptVal(a => ({ ...a, location_address: v }))} />
                       <Textarea label="Notes" rows={2} value={apptVal.notes}
                         onChange={e => setApptVal(v => ({ ...v, notes: e.target.value }))} />
                       <div className="flex gap-2">
@@ -710,10 +711,10 @@ export default function JobDetail() {
             value={newAppt.appointment_datetime}
             onChange={e => setNewAppt(a => ({ ...a, appointment_datetime: e.target.value }))}
           />
-          <Input
+          <AddressAutocomplete
             label="Address"
             value={newAppt.location_address}
-            onChange={e => setNewAppt(a => ({ ...a, location_address: e.target.value }))}
+            onChange={v => setNewAppt(a => ({ ...a, location_address: v }))}
             placeholder="123 Main St, Dallas TX"
           />
           <Button variant="primary" className="w-full" onClick={addAppointment} disabled={saving}>

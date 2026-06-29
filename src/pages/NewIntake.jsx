@@ -14,6 +14,7 @@ import Modal from '../components/ui/Modal'
 import Button from '../components/ui/Button'
 import { useAuth } from '../context/AuthContext'
 import { createCalendarEvent } from '../lib/googleCalendar'
+import AddressAutocomplete from '../components/ui/AddressAutocomplete'
 
 function formatPhone(value) {
   const digits = value.replace(/\D/g, '').slice(0, 10)
@@ -300,11 +301,11 @@ export default function NewIntake() {
                 value={form.appointment_datetime}
                 onChange={e => set('appointment_datetime', e.target.value)}
               />
-              <Input
+              <AddressAutocomplete
                 label="Location / Address"
                 id="location_address"
                 value={form.location_address}
-                onChange={e => set('location_address', e.target.value)}
+                onChange={v => set('location_address', v)}
                 placeholder="123 Main St, Dallas TX 75201"
               />
             </div>

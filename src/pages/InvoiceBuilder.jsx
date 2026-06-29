@@ -7,6 +7,7 @@ import db from '../lib/db'
 import { upsertLocal } from '../lib/sync'
 import { formatEnum } from '../lib/formatEnum'
 import Button from '../components/ui/Button'
+import AddressAutocomplete from '../components/ui/AddressAutocomplete'
 
 const DEFAULT_ITEMS = [
   { description: '', notes: '', rate: '', amount: '' },
@@ -414,7 +415,7 @@ export default function InvoiceBuilder() {
             <Field label="Full Name"  value={inv.customer_name}    onChange={v => set('customer_name', v)}    className="col-span-2" />
             <Field label="Phone"      value={inv.customer_phone}   onChange={v => set('customer_phone', v)} />
             <Field label="Email"      value={inv.customer_email}   onChange={v => set('customer_email', v)} />
-            <Field label="Address"    value={inv.customer_address} onChange={v => set('customer_address', v)} className="col-span-2" />
+            <AddressAutocomplete label="Address" value={inv.customer_address} onChange={v => set('customer_address', v)} className="col-span-2" />
             <Field label="City / State / Zip" value={inv.customer_city} onChange={v => set('customer_city', v)} className="col-span-2" />
           </div>
         </div>
