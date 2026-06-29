@@ -8,6 +8,7 @@ export default function SignatureCapture({ invoiceId, technicianName, customerNa
   const [custName, setCustName] = useState(customerName || '')
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState(null)
+  const [copied, setCopied] = useState(false)
   const techPadRef = useRef(null)
   const custPadRef = useRef(null)
 
@@ -111,9 +112,19 @@ export default function SignatureCapture({ invoiceId, technicianName, customerNa
         {error && <p className="text-red-600 text-xs mb-2">{error}</p>}
 
         {step === 'customer' && sigLinkState?.status === 'ready' && (
-          <div className="mb-2 flex-1 p-4 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-800 break-all flex flex-col justify-center gap-2">
-            <span className="font-semibold text-sm">Link ready — copy and send to customer:</span>
-            <span className="font-mono select-all">{sigLinkState.url}</span>
+          <div className="mb-2 flex-1 p-4 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-800 flex flex-col justify-center gap-3">
+            <span className="font-semibold text-sm">Link ready — send to customer:</span>
+            <span className="font-mono break-all">{sigLinkState.url}</span>
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(sigLinkState.url)
+                setCopied(true)
+                setTimeout(() => setCopied(false), 2000)
+              }}
+              className="self-start px-4 py-2 bg-[#1E40AF] text-white text-sm font-semibold rounded-lg"
+            >
+              {copied ? 'Copied ✓' : 'Copy Link'}
+            </button>
           </div>
         )}
 
