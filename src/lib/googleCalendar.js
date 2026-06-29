@@ -37,7 +37,7 @@ export async function createCalendarEvent(token, appointmentData) {
       body: JSON.stringify(buildEventBody(appointmentData)),
     })
     if (res.status === 401) return { error: 'token_expired' }
-    if (res.status === 201) {
+    if (res.status === 200 || res.status === 201) {
       const data = await res.json()
       return data.id
     }

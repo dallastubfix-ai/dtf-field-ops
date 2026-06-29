@@ -285,7 +285,7 @@ export default function JobDetail() {
     const key = a.id || a._localId
     const updated = {
       ...a,
-      appointment_datetime: apptVal.appointment_datetime,
+      appointment_datetime: new Date(apptVal.appointment_datetime).toISOString(),
       location_address: apptVal.location_address || null,
       notes: apptVal.notes || null,
       updated_at: new Date().toISOString(),
@@ -330,7 +330,7 @@ export default function JobDetail() {
     const payload = {
       id: crypto.randomUUID(),
       job_id: id,
-      appointment_datetime: newAppt.appointment_datetime,
+      appointment_datetime: new Date(newAppt.appointment_datetime).toISOString(),
       location_address: newAppt.location_address || null,
       created_at: new Date().toISOString(),
     }
