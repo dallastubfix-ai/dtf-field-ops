@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import SignaturePad from './SignaturePad'
 
@@ -10,25 +10,6 @@ export default function SignatureCapture({ invoiceId, technicianName, customerNa
   const [error, setError] = useState(null)
   const techPadRef = useRef(null)
   const custPadRef = useRef(null)
-  const [isPortrait, setIsPortrait] = useState(
-    () => screen.orientation?.type?.startsWith('portrait') ?? false
-  )
-
-  useEffect(() => {
-    const handleOrientation = () => {
-      setIsPortrait(screen.orientation?.type?.startsWith('portrait') ?? false)
-    }
-    screen.orientation?.addEventListener('change', handleOrientation)
-    return () => screen.orientation?.removeEventListener('change', handleOrientation)
-  }, [])
-
-  useEffect(() => {
-    const lock = async () => {
-      try { await screen.orientation.lock('landscape') } catch {}
-    }
-    lock()
-    return () => { try { screen.orientation.unlock() } catch {} }
-  }, [])
 
   const handleTechNext = () => {
     if (!techPadRef.current || techPadRef.current.isEmpty()) {
@@ -49,7 +30,21 @@ export default function SignatureCapture({ invoiceId, technicianName, customerNa
     setError(null)
     try {
       const custDataURL = custPadRef.current.getDataURL()
-      const toBlob = async (dataURL) => (await fetch(dataURL)).blob()
+      const toBlob = async (dataURL) => {
+        const img = await new Promise((resolve) => {
+          const i = new Image()
+          i.onload = () => resolve(i)
+          i.src = dataURL
+        })
+        const canvas = document.createElement('canvas')
+        canvas.width = img.height
+        canvas.height = img.width
+        const ctx = canvas.getContext('2d')
+        ctx.translate(canvas.width / 2, canvas.height / 2)
+        ctx.rotate(-Math.PI / 2)
+        ctx.drawImage(img, -img.width / 2, -img.height / 2)
+        return await new Promise(resolve => canvas.toBlob(resolve, 'image/png'))
+      }
       const [techBlob, custBlob] = await Promise.all([toBlob(techDataURL), toBlob(custDataURL)])
 
       const techPath = `signatures/${invoiceId}/technician.png`
@@ -78,14 +73,15 @@ export default function SignatureCapture({ invoiceId, technicianName, customerNa
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl w-full max-w-2xl p-5">
-        {isPortrait && (
-          <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3 text-xs font-semibold text-amber-800 text-center">
-            Rotate device to landscape for best signing experience
-          </div>
-        )}
-
+    <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center">
+      <div className="bg-white rounded-xl p-5"
+        style={{
+          width: '90vh',
+          maxWidth: '90vh',
+          transform: 'rotate(90deg)',
+          transformOrigin: 'center center',
+        }}
+      >
         <div className="flex items-center justify-between mb-3">
           <div>
             <span className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">
