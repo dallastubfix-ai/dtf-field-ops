@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import SignaturePad from './SignaturePad'
 
-export default function SignatureCapture({ invoiceId, technicianName, customerName, onComplete, onClose }) {
+export default function SignatureCapture({ invoiceId, technicianName, customerName, onComplete, onClose, onSendToCustomer, sigLinkState }) {
   const [step, setStep] = useState('technician')
   const [techDataURL, setTechDataURL] = useState(null)
   const [custName, setCustName] = useState(customerName || '')
@@ -108,6 +108,14 @@ export default function SignatureCapture({ invoiceId, technicianName, customerNa
 
         {error && <p className="text-red-600 text-xs mb-2">{error}</p>}
 
+        {step === 'customer' && sigLinkState?.status === 'ready' && (
+          <div className="mb-2 p-2 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-800 break-all">
+            Link ready — copy and send to customer:
+            <br />
+            <span className="font-mono select-all">{sigLinkState.url}</span>
+          </div>
+        )}
+
         <div className="flex gap-3 justify-end mt-3">
           <button
             onClick={() => {
@@ -119,6 +127,15 @@ export default function SignatureCapture({ invoiceId, technicianName, customerNa
           >
             Clear
           </button>
+          {step === 'customer' && onSendToCustomer && (
+            <button
+              onClick={onSendToCustomer}
+              disabled={sigLinkState?.status === 'generating'}
+              className="px-4 py-2 text-sm font-semibold text-[#1E40AF] border border-[#1E40AF] rounded-lg disabled:opacity-60"
+            >
+              {sigLinkState?.status === 'generating' ? '…' : 'Send to Customer'}
+            </button>
+          )}
           {step === 'technician' ? (
             <button
               onClick={handleTechNext}

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, Phone, Camera, Video, FileText, Shield,
-  ChevronDown, ChevronUp, Plus, Calendar
+  ChevronDown, ChevronUp, Plus, Calendar, Trash2, X
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { supabase } from '../lib/supabase'
@@ -108,6 +108,7 @@ export default function JobDetail() {
 
   // Signed URLs for private bucket images (id/_localId -> url)
   const [signedUrls, setSignedUrls] = useState({})
+  const [lightboxImg, setLightboxImg] = useState(null)
 
   const flashToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 1800) }
 
@@ -195,6 +196,43 @@ export default function JobDetail() {
     run()
     return () => { cancelled = true }
   }, [images])
+
+  const deletePhoto = async (img) => {
+    if (!window.confirm('Delete this photo? This cannot be undone.')) return
+    try {
+      if (img.storage_path) {
+        await supabase.storage.from('job-images').remove([img.storage_path])
+      }
+      const imgId = img.id
+      if (imgId) await supabase.from('images').delete().eq('id', imgId)
+      await db.images.where('id').equals(imgId).delete()
+      setImages(prev => prev.filter(i => (i.id || i._localId) !== (img.id || img._localId)))
+      setLightboxImg(null)
+    } catch (err) {
+      console.error('Delete photo error:', err)
+      alert('Failed to delete photo. Please try again.')
+    }
+  }
+
+  const deleteVideo = async (v) => {
+    if (!window.confirm('Delete this video? It will also be removed from Google Drive.')) return
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const providerToken = session?.provider_token || localStorage.getItem('dtf_google_token')
+      if (providerToken && v.google_drive_file_id) {
+        await fetch(`https://www.googleapis.com/drive/v3/files/${v.google_drive_file_id}`, {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${providerToken}` },
+        })
+      }
+      if (v.id) await supabase.from('videos').delete().eq('id', v.id)
+      await db.videos.where('id').equals(v.id).delete()
+      setVideos(prev => prev.filter(vid => (vid.id || vid._localId) !== (v.id || v._localId)))
+    } catch (err) {
+      console.error('Delete video error:', err)
+      alert('Failed to delete video. Please try again.')
+    }
+  }
 
   const saveStatus = async (status) => {
     if (!job) return
@@ -569,7 +607,13 @@ export default function JobDetail() {
                 return (
                   <div key={key} className="relative rounded-lg overflow-hidden aspect-square bg-[#F3F4F6]">
                     {url ? (
-                      <img src={url} alt={img.image_type ?? 'job photo'} loading="lazy" className="w-full h-full object-cover" />
+                      <img
+                        src={url}
+                        alt={img.image_type ?? 'job photo'}
+                        loading="lazy"
+                        className="w-full h-full object-cover cursor-pointer"
+                        onClick={() => setLightboxImg({ url, img })}
+                      />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">
                         <div className="w-5 h-5 animate-spin rounded-full border-2 border-[#E5E7EB] border-t-navy" />
@@ -605,6 +649,12 @@ export default function JobDetail() {
                       </a>
                     )}
                   </div>
+                  <button
+                    onClick={() => deleteVideo(v)}
+                    className="p-1.5 rounded-lg text-red-400 hover:bg-red-50 transition-colors"
+                  >
+                    <Trash2 size={15} />
+                  </button>
                 </div>
               ))}
             </div>
@@ -701,6 +751,40 @@ export default function JobDetail() {
           </Button>
         )}
       </div>
+
+      {lightboxImg && (
+        <div
+          className="fixed inset-0 z-50 bg-black/95 flex flex-col"
+          onClick={() => setLightboxImg(null)}
+        >
+          <div className="flex items-center justify-between px-4 py-3" onClick={e => e.stopPropagation()}>
+            <span className={`text-xs font-bold px-2 py-1 rounded ${lightboxImg.img.image_type === 'before' ? 'bg-green-500 text-white' : 'bg-gold text-white'}`}>
+              {lightboxImg.img.image_type?.toUpperCase()}
+            </span>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => deletePhoto(lightboxImg.img)}
+                className="p-2 rounded-lg bg-red-500/20 text-red-400"
+              >
+                <Trash2 size={18} />
+              </button>
+              <button
+                onClick={() => setLightboxImg(null)}
+                className="p-2 rounded-lg bg-white/10 text-white"
+              >
+                <X size={18} />
+              </button>
+            </div>
+          </div>
+          <div className="flex-1 flex items-center justify-center px-4" onClick={e => e.stopPropagation()}>
+            <img
+              src={lightboxImg.url}
+              alt={lightboxImg.img.image_type ?? 'job photo'}
+              className="max-w-full max-h-full object-contain rounded-lg"
+            />
+          </div>
+        </div>
+      )}
 
       {/* Add Appointment Modal */}
       <Modal open={apptModal} onClose={() => setApptModal(false)} title="Add Appointment">

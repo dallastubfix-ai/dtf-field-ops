@@ -462,6 +462,22 @@ export default function InvoiceBuilder() {
     }
   }
 
+  const combinedAddress = [inv.customer_address, inv.customer_city]
+    .filter(Boolean)
+    .join(', ')
+
+  const handleAddressAutocomplete = (formatted) => {
+    const clean = formatted.replace(/, (USA|United States)$/, '').trim()
+    const commaIdx = clean.indexOf(',')
+    if (commaIdx === -1) {
+      set('customer_address', clean)
+      set('customer_city', '')
+    } else {
+      set('customer_address', clean.slice(0, commaIdx).trim())
+      set('customer_city', clean.slice(commaIdx + 1).trim())
+    }
+  }
+
   return (
     <div className="min-h-screen bg-[#F3F4F6]">
       {/* Top nav — hidden on print */}
@@ -479,14 +495,6 @@ export default function InvoiceBuilder() {
             disabled={!saved || !inv.id}
           >
             Sign
-          </Button>
-          <Button
-            variant="secondary"
-            className="text-white border-white/30 py-1.5 px-3"
-            onClick={generateSigningLink}
-            disabled={!saved || !inv.id || sigLinkState?.status === 'generating'}
-          >
-            {sigLinkState?.status === 'generating' ? '…' : 'Send to Customer'}
           </Button>
           <Button variant="gold" className="py-1.5 px-3" onClick={print} disabled={saving}>
             <Printer size={14} /> Print
@@ -513,8 +521,13 @@ export default function InvoiceBuilder() {
             <Field label="Full Name"  value={inv.customer_name}    onChange={v => set('customer_name', v)}    className="col-span-2" />
             <Field label="Phone"      value={inv.customer_phone}   onChange={v => set('customer_phone', v)} />
             <Field label="Email"      value={inv.customer_email}   onChange={v => set('customer_email', v)} />
-            <AddressAutocomplete label="Address" value={inv.customer_address} onChange={v => set('customer_address', v)} className="col-span-2" />
-            <Field label="City / State / Zip" value={inv.customer_city} onChange={v => set('customer_city', v)} className="col-span-2" />
+            <AddressAutocomplete
+              label="Address"
+              value={combinedAddress}
+              onChange={v => set('customer_address', v)}
+              onAutocomplete={handleAddressAutocomplete}
+              className="col-span-2"
+            />
           </div>
         </div>
 
@@ -856,6 +869,8 @@ export default function InvoiceBuilder() {
           customerName={inv.customer_name}
           onComplete={handleSignaturesComplete}
           onClose={() => setShowSigCapture(false)}
+          onSendToCustomer={generateSigningLink}
+          sigLinkState={sigLinkState}
         />
       )}
     </div>

@@ -25,6 +25,7 @@ export default function VideoCapture() {
   const recorderRef = useRef()
   const chunksRef = useRef([])
   const streamRef = useRef()
+  const fileInputRef = useRef()
 
   const [videoType, setVideoType] = useState('before')
   const [recording, setRecording] = useState(false)
@@ -34,6 +35,7 @@ export default function VideoCapture() {
   const [toast, setToast] = useState('')
   const [noProvider, setNoProvider] = useState(false)
   const [job, setJob] = useState(null)
+  const [gallerySrc, setGallerySrc] = useState(null)
 
   const timer = useTimer(recording)
 
@@ -85,6 +87,15 @@ export default function VideoCapture() {
     setBlobUrl(null)
   }
 
+  const handleGalleryPick = (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const url = URL.createObjectURL(file)
+    setBlob(file)
+    setBlobUrl(url)
+    setGallerySrc(url)
+  }
+
   const uploadToDrive = async () => {
     if (!blob) return
     setUploading(true)
@@ -98,12 +109,13 @@ export default function VideoCapture() {
     }
 
     const ts = format(new Date(), "yyyy-MM-dd'T'HH-mm-ss")
-    const filename = `${job?.job_number ?? id}-${videoType.toUpperCase()}-${ts}.webm`
+    const ext = blob?.type?.includes('mp4') ? 'mp4' : 'webm'
+    const filename = `${job?.job_number ?? id}-${videoType.toUpperCase()}-${ts}.${ext}`
 
     const folderId = import.meta.env.VITE_GOOGLE_DRIVE_FOLDER_ID
     const meta = {
       name: filename,
-      mimeType: 'video/webm',
+      mimeType: blob?.type?.includes('mp4') ? 'video/mp4' : 'video/webm',
       ...(folderId ? { parents: [folderId] } : {}),
     }
     const form = new FormData()
@@ -149,6 +161,13 @@ export default function VideoCapture() {
 
   return (
     <div className="min-h-screen bg-black flex flex-col">
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="video/*"
+        className="hidden"
+        onChange={handleGalleryPick}
+      />
       <header className="bg-navy px-4 py-4 flex items-center gap-3 z-30">
         <button onClick={() => navigate(-1)} className="text-white"><ArrowLeft size={20} /></button>
         <h1 className="text-white font-bold text-base flex-1">
@@ -224,6 +243,14 @@ export default function VideoCapture() {
               {uploading ? 'Uploading…' : 'Upload to Drive'}
             </Button>
           </div>
+        )}
+        {!blob && !recording && (
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="mt-1 text-white/60 text-sm underline underline-offset-2"
+          >
+            Choose from Gallery
+          </button>
         )}
         <p className="text-white/40 text-xs">
           {recording ? 'Tap to stop recording' : blob ? '' : 'Tap to start recording'}

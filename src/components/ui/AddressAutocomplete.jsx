@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 
-export default function AddressAutocomplete({ label, id, value, onChange, placeholder, className = '' }) {
+export default function AddressAutocomplete({ label, id, value, onChange, onAutocomplete, placeholder, className = '' }) {
   const inputRef = useRef(null)
 
   useEffect(() => {
@@ -22,7 +22,13 @@ export default function AddressAutocomplete({ label, id, value, onChange, placeh
 
       autocomplete.addListener('place_changed', () => {
         const place = autocomplete.getPlace()
-        if (place?.formatted_address) onChange(place.formatted_address)
+        if (place?.formatted_address) {
+          if (onAutocomplete) {
+            onAutocomplete(place.formatted_address)
+          } else {
+            onChange(place.formatted_address)
+          }
+        }
       })
     }
 
