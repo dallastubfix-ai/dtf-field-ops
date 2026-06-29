@@ -114,7 +114,10 @@ export default function VideoCapture() {
           body: form,
         }
       )
-      if (!res.ok) throw new Error(`Drive error ${res.status}`)
+      if (!res.ok) {
+        const errBody = await res.text()
+        throw new Error(`Drive ${res.status}: ${errBody.slice(0, 120)}`)
+      }
       const { id: fileId, webViewLink } = await res.json()
 
       const record = {
@@ -132,8 +135,8 @@ export default function VideoCapture() {
       setToast('Video uploaded to Google Drive!')
       setTimeout(() => navigate(`/jobs/${id}`, { replace: true }), 900)
     } catch (err) {
-      console.error('Drive upload error:', err)
-      setToast('Upload failed. Check console.')
+      const msg = err?.message ?? String(err)
+      setToast(`Upload failed: ${msg}`)
     } finally {
       setUploading(false)
     }
