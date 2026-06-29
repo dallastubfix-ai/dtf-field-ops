@@ -79,17 +79,12 @@ export default function SignatureCapture({ invoiceId, technicianName, customerNa
 
   return (
     <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4">
-      {isPortrait && (
-        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center text-white text-center px-6">
-          <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mb-4 animate-spin" style={{ animationDuration: '2s' }}>
-            <rect x="4" y="2" width="16" height="20" rx="2" />
-            <path d="M12 18h.01" />
-          </svg>
-          <p className="text-lg font-bold mb-1">Rotate your device</p>
-          <p className="text-sm text-white/70">Landscape mode required for signatures</p>
-        </div>
-      )}
       <div className="bg-white rounded-xl w-full max-w-2xl p-5">
+        {isPortrait && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3 text-xs font-semibold text-amber-800 text-center">
+            Rotate device to landscape for best signing experience
+          </div>
+        )}
 
         <div className="flex items-center justify-between mb-3">
           <div>
