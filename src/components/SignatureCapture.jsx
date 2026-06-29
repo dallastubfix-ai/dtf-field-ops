@@ -78,8 +78,11 @@ export default function SignatureCapture({ invoiceId, technicianName, customerNa
         style={{
           width: '90vh',
           maxWidth: '90vh',
+          height: '90vw',
           transform: 'rotate(90deg)',
           transformOrigin: 'center center',
+          display: 'flex',
+          flexDirection: 'column',
         }}
       >
         <div className="flex items-center justify-between mb-3">
@@ -111,9 +114,10 @@ export default function SignatureCapture({ invoiceId, technicianName, customerNa
         <SignaturePad
           key={step}
           ref={step === 'technician' ? techPadRef : custPadRef}
-          width={700}
-          height={180}
-          className="mb-2"
+          width={720}
+          height={360}
+          rotated={true}
+          className="mb-2 flex-1"
         />
 
         {error && <p className="text-red-600 text-xs mb-2">{error}</p>}

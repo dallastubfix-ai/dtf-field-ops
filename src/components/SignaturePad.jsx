@@ -1,6 +1,6 @@
 import { useRef, useEffect, useImperativeHandle, forwardRef } from 'react'
 
-const SignaturePad = forwardRef(function SignaturePad({ width, height, className = '' }, ref) {
+const SignaturePad = forwardRef(function SignaturePad({ width, height, className = '', rotated = false }, ref) {
   const canvasRef = useRef(null)
   const drawing = useRef(false)
 
@@ -37,17 +37,21 @@ const SignaturePad = forwardRef(function SignaturePad({ width, height, className
   const getPos = (e) => {
     const canvas = canvasRef.current
     const rect = canvas.getBoundingClientRect()
-    const scaleX = canvas.width / rect.width
-    const scaleY = canvas.height / rect.height
-    if (e.touches) {
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY
+    if (rotated) {
+      const relX = clientX - rect.left
+      const relY = clientY - rect.top
       return {
-        x: (e.touches[0].clientX - rect.left) * scaleX,
-        y: (e.touches[0].clientY - rect.top) * scaleY,
+        x: relY * (canvas.width / rect.height),
+        y: (rect.width - relX) * (canvas.height / rect.width),
       }
     }
+    const scaleX = canvas.width / rect.width
+    const scaleY = canvas.height / rect.height
     return {
-      x: (e.clientX - rect.left) * scaleX,
-      y: (e.clientY - rect.top) * scaleY,
+      x: (clientX - rect.left) * scaleX,
+      y: (clientY - rect.top) * scaleY,
     }
   }
 
