@@ -98,9 +98,9 @@ export default function VideoCapture() {
     }
 
     const ts = format(new Date(), "yyyy-MM-dd'T'HH-mm-ss")
-    const filename = `${job?.job_number ?? id}-${videoType.toUpperCase()}-${ts}.mp4`
+    const filename = `${job?.job_number ?? id}-${videoType.toUpperCase()}-${ts}.webm`
 
-    const meta = { name: filename, mimeType: 'video/mp4' }
+    const meta = { name: filename, mimeType: 'video/webm' }
     const form = new FormData()
     form.append('metadata', new Blob([JSON.stringify(meta)], { type: 'application/json' }))
     form.append('file', blob)
