@@ -10,6 +10,17 @@ export default function SignatureCapture({ invoiceId, technicianName, customerNa
   const [error, setError] = useState(null)
   const techPadRef = useRef(null)
   const custPadRef = useRef(null)
+  const [isPortrait, setIsPortrait] = useState(
+    () => screen.orientation?.type?.startsWith('portrait') ?? false
+  )
+
+  useEffect(() => {
+    const handleOrientation = () => {
+      setIsPortrait(screen.orientation?.type?.startsWith('portrait') ?? false)
+    }
+    screen.orientation?.addEventListener('change', handleOrientation)
+    return () => screen.orientation?.removeEventListener('change', handleOrientation)
+  }, [])
 
   useEffect(() => {
     const lock = async () => {
@@ -68,6 +79,16 @@ export default function SignatureCapture({ invoiceId, technicianName, customerNa
 
   return (
     <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4">
+      {isPortrait && (
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center text-white text-center px-6">
+          <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mb-4 animate-spin" style={{ animationDuration: '2s' }}>
+            <rect x="4" y="2" width="16" height="20" rx="2" />
+            <path d="M12 18h.01" />
+          </svg>
+          <p className="text-lg font-bold mb-1">Rotate your device</p>
+          <p className="text-sm text-white/70">Landscape mode required for signatures</p>
+        </div>
+      )}
       <div className="bg-white rounded-xl w-full max-w-2xl p-5">
 
         <div className="flex items-center justify-between mb-3">
@@ -97,6 +118,7 @@ export default function SignatureCapture({ invoiceId, technicianName, customerNa
         </div>
 
         <SignaturePad
+          key={step}
           ref={step === 'technician' ? techPadRef : custPadRef}
           width={700}
           height={180}
