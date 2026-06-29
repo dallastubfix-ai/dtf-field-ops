@@ -8,6 +8,8 @@ import { upsertLocal } from '../lib/sync'
 import { formatEnum } from '../lib/formatEnum'
 import Button from '../components/ui/Button'
 import AddressAutocomplete from '../components/ui/AddressAutocomplete'
+import { useAuth } from '../context/AuthContext'
+import SignatureCapture from '../components/SignatureCapture'
 
 const DEFAULT_ITEMS = [
   { description: '', notes: '', rate: '', amount: '' },
@@ -195,6 +197,7 @@ function Field({ label, value, onChange, type = 'text', className = '' }) {
 export default function InvoiceBuilder() {
   const { id, jobId } = useParams()
   const navigate = useNavigate()
+  const { user } = useAuth()
   const isNew = !!jobId
 
   const [inv, setInv] = useState({
@@ -209,12 +212,15 @@ export default function InvoiceBuilder() {
     notes1: '', notes2: '', notes3: '',
     warranty_included: true, warranty_no_reason: '',
     payment_status: 'unpaid',
+    technician_signature_url: null,
+    customer_signature_url: null,
     job_id: jobId ?? null,
   })
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [existingWarranty, setExistingWarranty] = useState(null)
   const [toast, setToast] = useState('')
+  const [showSigCapture, setShowSigCapture] = useState(false)
 
   useEffect(() => {
     const load = async () => {
@@ -264,6 +270,8 @@ export default function InvoiceBuilder() {
           job_id: existing.job_id ?? null,
           id: existing.id,
           created_at: existing.created_at,
+          technician_signature_url: existing.technician_signature_url ?? null,
+          customer_signature_url: existing.customer_signature_url ?? null,
         }))
         setSaved(true)
 
@@ -318,6 +326,8 @@ export default function InvoiceBuilder() {
     invoice_notes: [inv.notes1, inv.notes2, inv.notes3].filter(Boolean).join('\n') || null,
     warranty_included: !!inv.warranty_included,
     warranty_excluded_reason: inv.warranty_included ? null : (inv.warranty_no_reason || null),
+    technician_signature_url: inv.technician_signature_url ?? null,
+    customer_signature_url: inv.customer_signature_url ?? null,
     updated_at: new Date().toISOString(),
     ...extra,
   })
@@ -380,6 +390,28 @@ export default function InvoiceBuilder() {
     window.print()
   }
 
+  const handleSignaturesComplete = async (techUrl, custUrl) => {
+    setInv(v => ({ ...v, technician_signature_url: techUrl, customer_signature_url: custUrl }))
+    setShowSigCapture(false)
+    try {
+      await supabase.from('invoices').update({
+        technician_signature_url: techUrl,
+        customer_signature_url: custUrl,
+        updated_at: new Date().toISOString(),
+      }).eq('id', inv.id)
+      await db.invoices.where('id').equals(inv.id).modify({
+        technician_signature_url: techUrl,
+        customer_signature_url: custUrl,
+      })
+      setToast('Signatures saved ✓')
+      setTimeout(() => setToast(''), 2800)
+    } catch (err) {
+      console.error('Signature save error:', err)
+      setToast('Signatures uploaded but not saved to record — try again')
+      setTimeout(() => setToast(''), 3500)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-[#F3F4F6]">
       {/* Top nav — hidden on print */}
@@ -389,6 +421,14 @@ export default function InvoiceBuilder() {
         <div className="flex gap-2">
           <Button variant="secondary" className="text-white border-white/30 py-1.5 px-3" onClick={save} disabled={saving}>
             <Save size={14} /> {saving ? '…' : 'Save'}
+          </Button>
+          <Button
+            variant="secondary"
+            className="text-white border-white/30 py-1.5 px-3"
+            onClick={() => setShowSigCapture(true)}
+            disabled={!saved || !inv.id}
+          >
+            Sign
           </Button>
           <Button variant="gold" className="py-1.5 px-3" onClick={print} disabled={saving}>
             <Printer size={14} /> Print
@@ -683,13 +723,19 @@ export default function InvoiceBuilder() {
           <div className="sig-row">
             <div>
               <div className="sig-title">Technician Signature</div>
-              <div className="sig-line"></div>
+              {inv.technician_signature_url
+                ? <img src={inv.technician_signature_url} alt="Technician signature" style={{ height: '26px', objectFit: 'contain', objectPosition: 'left' }} />
+                : <div className="sig-line"></div>
+              }
               <div className="sig-sub">Print Name &amp; Date</div>
               <div className="sig-name-val">{inv.technician || NBSP}</div>
             </div>
             <div>
               <div className="sig-title">Customer Signature — Work Completed &amp; Accepted</div>
-              <div className="sig-line"></div>
+              {inv.customer_signature_url
+                ? <img src={inv.customer_signature_url} alt="Customer signature" style={{ height: '26px', objectFit: 'contain', objectPosition: 'left' }} />
+                : <div className="sig-line"></div>
+              }
               <div className="sig-sub">Print Name &amp; Date</div>
               <div className="sig-name-val">{inv.customer_name || NBSP}</div>
             </div>
@@ -708,6 +754,16 @@ export default function InvoiceBuilder() {
 
         </div>
       </div>
+
+      {showSigCapture && inv.id && (
+        <SignatureCapture
+          invoiceId={inv.id}
+          technicianName={user?.user_metadata?.full_name || user?.user_metadata?.name || inv.technician}
+          customerName={inv.customer_name}
+          onComplete={handleSignaturesComplete}
+          onClose={() => setShowSigCapture(false)}
+        />
+      )}
     </div>
   )
 }
