@@ -761,6 +761,7 @@ export default function JobDetail() {
         )}
         {job.status === 'completed' && (
           <>
+            <span className="text-[10px] text-red-600">INSIDE-BLOCK</span>
             <Button variant="ghost" className="flex-1" disabled={!invoice}
               onClick={() => invoice && navigate(`/invoices/${invoice.id}`)}>
               View Invoice
