@@ -180,7 +180,7 @@ async function loadJobContext(jobId) {
   return { job, customer, appt }
 }
 
-function Field({ label, value, onChange, type = 'text', className = '' }) {
+function Field({ label, value, onChange, type = 'text', className = '', disabled = false }) {
   return (
     <div className={className}>
       <div className="text-[10px] font-semibold uppercase tracking-wide text-[#6B7280] mb-0.5">{label}</div>
@@ -188,7 +188,8 @@ function Field({ label, value, onChange, type = 'text', className = '' }) {
         type={type}
         value={value}
         onChange={e => onChange(e.target.value)}
-        className="border border-[#E5E7EB] rounded px-2 py-1 text-sm w-full focus:outline-none focus:ring-1 focus:ring-navy"
+        disabled={disabled}
+        className="border border-[#E5E7EB] rounded px-2 py-1 text-sm w-full focus:outline-none focus:ring-1 focus:ring-navy disabled:opacity-60 disabled:bg-gray-50"
       />
     </div>
   )
@@ -328,6 +329,8 @@ export default function InvoiceBuilder() {
   const tax       = taxable * (taxRate / 100)
   const total     = taxable + tax
 
+  const isLocked = !!(inv.technician_signature_url && inv.customer_signature_url)
+
   const togglePayment = (method) => {
     const methods = (inv.payment_methods ?? []).includes(method)
       ? inv.payment_methods.filter(m => m !== method)
@@ -462,6 +465,32 @@ export default function InvoiceBuilder() {
     }
   }
 
+  const handleUnlock = async () => {
+    if (!window.confirm(
+      'Unlock this invoice? This will clear both signatures and require re-signing. This cannot be undone.'
+    )) return
+    const prev = { technician_signature_url: inv.technician_signature_url, customer_signature_url: inv.customer_signature_url }
+    setInv(v => ({ ...v, technician_signature_url: null, customer_signature_url: null }))
+    try {
+      await supabase.from('invoices').update({
+        technician_signature_url: null,
+        customer_signature_url: null,
+        updated_at: new Date().toISOString(),
+      }).eq('id', inv.id)
+      await db.invoices.where('id').equals(inv.id).modify({
+        technician_signature_url: null,
+        customer_signature_url: null,
+      })
+      setToast('Invoice unlocked — signatures cleared')
+      setTimeout(() => setToast(''), 2800)
+    } catch (err) {
+      console.error('Unlock failed:', err)
+      setInv(v => ({ ...v, ...prev }))
+      setToast('Could not unlock — check your connection and try again')
+      setTimeout(() => setToast(''), 3500)
+    }
+  }
+
   const combinedAddress = [inv.customer_address, inv.customer_city]
     .filter(Boolean)
     .join(', ')
@@ -485,17 +514,21 @@ export default function InvoiceBuilder() {
         <button onClick={() => navigate(-1)} className="text-white"><ArrowLeft size={20} /></button>
         <h1 className="text-white font-bold text-base flex-1">Invoice Builder</h1>
         <div className="flex gap-2">
-          <Button variant="secondary" className="text-white border-white/30 py-1.5 px-3" onClick={save} disabled={saving}>
-            <Save size={14} /> {saving ? '…' : 'Save'}
-          </Button>
-          <Button
-            variant="secondary"
-            className="text-white border-white/30 py-1.5 px-3"
-            onClick={() => setShowSigCapture(true)}
-            disabled={!saved || !inv.id}
-          >
-            Sign
-          </Button>
+          {!isLocked && (
+            <Button variant="secondary" className="text-white border-white/30 py-1.5 px-3" onClick={save} disabled={saving}>
+              <Save size={14} /> {saving ? '…' : 'Save'}
+            </Button>
+          )}
+          {!isLocked && (
+            <Button
+              variant="secondary"
+              className="text-white border-white/30 py-1.5 px-3"
+              onClick={() => setShowSigCapture(true)}
+              disabled={!saved || !inv.id}
+            >
+              Sign
+            </Button>
+          )}
           <Button variant="gold" className="py-1.5 px-3" onClick={print} disabled={saving}>
             <Printer size={14} /> Print
           </Button>
@@ -510,23 +543,35 @@ export default function InvoiceBuilder() {
 
       {/* Edit form — no-print */}
       <div className="no-print px-4 py-5 space-y-5 max-w-2xl mx-auto">
+        {isLocked && (
+          <div className="bg-amber-50 border border-amber-300 rounded-xl px-4 py-3 flex items-center justify-between gap-3">
+            <p className="text-sm text-amber-800 font-medium">This invoice has been signed by both parties and is locked.</p>
+            <button
+              onClick={handleUnlock}
+              className="shrink-0 text-xs font-semibold text-amber-700 border border-amber-400 rounded-lg px-3 py-1.5 hover:bg-amber-100 transition-colors"
+            >
+              Unlock
+            </button>
+          </div>
+        )}
         <div className="bg-white rounded-xl border border-[#E5E7EB] shadow-sm p-4 grid grid-cols-2 gap-3">
-          <Field label="Invoice #"    value={inv.invoice_number} onChange={v => set('invoice_number', v)} />
-          <Field label="Invoice Date" value={inv.invoice_date}   onChange={v => set('invoice_date', v)} type="date" />
+          <Field label="Invoice #"    value={inv.invoice_number} onChange={v => set('invoice_number', v)} disabled={isLocked} />
+          <Field label="Invoice Date" value={inv.invoice_date}   onChange={v => set('invoice_date', v)} type="date" disabled={isLocked} />
         </div>
 
         <div className="bg-white rounded-xl border border-[#E5E7EB] shadow-sm p-4 space-y-3">
           <h3 className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Customer</h3>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Full Name"  value={inv.customer_name}    onChange={v => set('customer_name', v)}    className="col-span-2" />
-            <Field label="Phone"      value={inv.customer_phone}   onChange={v => set('customer_phone', v)} />
-            <Field label="Email"      value={inv.customer_email}   onChange={v => set('customer_email', v)} />
+            <Field label="Full Name"  value={inv.customer_name}    onChange={v => set('customer_name', v)}    className="col-span-2" disabled={isLocked} />
+            <Field label="Phone"      value={inv.customer_phone}   onChange={v => set('customer_phone', v)} disabled={isLocked} />
+            <Field label="Email"      value={inv.customer_email}   onChange={v => set('customer_email', v)} disabled={isLocked} />
             <AddressAutocomplete
               label="Address"
               value={combinedAddress}
               onChange={v => set('customer_address', v)}
               onAutocomplete={handleAddressAutocomplete}
               className="col-span-2"
+              disabled={isLocked}
             />
           </div>
         </div>
@@ -534,10 +579,10 @@ export default function InvoiceBuilder() {
         <div className="bg-white rounded-xl border border-[#E5E7EB] shadow-sm p-4 space-y-3">
           <h3 className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Service Details</h3>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Service Date"  value={inv.service_date}  onChange={v => set('service_date', v)}  type="date" />
-            <Field label="Technician"    value={inv.technician}    onChange={v => set('technician', v)} />
-            <Field label="Surface Type"  value={inv.surface_type}  onChange={v => set('surface_type', v)} />
-            <Field label="Surface Color" value={inv.surface_color} onChange={v => set('surface_color', v)} />
+            <Field label="Service Date"  value={inv.service_date}  onChange={v => set('service_date', v)}  type="date" disabled={isLocked} />
+            <Field label="Technician"    value={inv.technician}    onChange={v => set('technician', v)} disabled={isLocked} />
+            <Field label="Surface Type"  value={inv.surface_type}  onChange={v => set('surface_type', v)} disabled={isLocked} />
+            <Field label="Surface Color" value={inv.surface_color} onChange={v => set('surface_color', v)} disabled={isLocked} />
           </div>
         </div>
 
@@ -551,25 +596,25 @@ export default function InvoiceBuilder() {
           </div>
           {inv.line_items.map((item, i) => (
             <div key={i} className="grid grid-cols-12 gap-1">
-              <input value={item.description} onChange={e => setItem(i, 'description', e.target.value)}
-                className="col-span-5 border border-[#E5E7EB] rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-navy" />
-              <input value={item.notes} onChange={e => setItem(i, 'notes', e.target.value)}
-                className="col-span-4 border border-[#E5E7EB] rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-navy" />
-              <input value={item.rate} onChange={e => setItem(i, 'rate', e.target.value)}
-                className="col-span-1 border border-[#E5E7EB] rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-navy" />
-              <input value={item.amount} onChange={e => setItem(i, 'amount', e.target.value)}
-                className="col-span-2 border border-[#E5E7EB] rounded px-2 py-1 text-xs text-right focus:outline-none focus:ring-1 focus:ring-navy" />
+              <input value={item.description} onChange={e => setItem(i, 'description', e.target.value)} disabled={isLocked}
+                className="col-span-5 border border-[#E5E7EB] rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-navy disabled:opacity-60 disabled:bg-gray-50" />
+              <input value={item.notes} onChange={e => setItem(i, 'notes', e.target.value)} disabled={isLocked}
+                className="col-span-4 border border-[#E5E7EB] rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-navy disabled:opacity-60 disabled:bg-gray-50" />
+              <input value={item.rate} onChange={e => setItem(i, 'rate', e.target.value)} disabled={isLocked}
+                className="col-span-1 border border-[#E5E7EB] rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-navy disabled:opacity-60 disabled:bg-gray-50" />
+              <input value={item.amount} onChange={e => setItem(i, 'amount', e.target.value)} disabled={isLocked}
+                className="col-span-2 border border-[#E5E7EB] rounded px-2 py-1 text-xs text-right focus:outline-none focus:ring-1 focus:ring-navy disabled:opacity-60 disabled:bg-gray-50" />
             </div>
           ))}
           <div className="border-t border-[#E5E7EB] pt-2 mt-2 space-y-1 text-sm">
             <div className="flex justify-between"><span className="text-[#6B7280]">Subtotal</span><span className="font-medium">${subtotal.toFixed(2)}</span></div>
             <div className="flex items-center gap-2">
               <span className="text-[#6B7280] flex-1">Discount ($)</span>
-              <input value={inv.discount} onChange={e => set('discount', e.target.value)} className="w-20 border border-[#E5E7EB] rounded px-2 py-1 text-xs text-right focus:outline-none" />
+              <input value={inv.discount} onChange={e => set('discount', e.target.value)} disabled={isLocked} className="w-20 border border-[#E5E7EB] rounded px-2 py-1 text-xs text-right focus:outline-none disabled:opacity-60 disabled:bg-gray-50" />
             </div>
             <div className="flex items-center gap-2">
               <span className="text-[#6B7280] flex-1">Tax (%)</span>
-              <input value={inv.tax_rate} onChange={e => set('tax_rate', e.target.value)} className="w-20 border border-[#E5E7EB] rounded px-2 py-1 text-xs text-right focus:outline-none" />
+              <input value={inv.tax_rate} onChange={e => set('tax_rate', e.target.value)} disabled={isLocked} className="w-20 border border-[#E5E7EB] rounded px-2 py-1 text-xs text-right focus:outline-none disabled:opacity-60 disabled:bg-gray-50" />
             </div>
             <div className="flex justify-between font-bold text-navy text-base pt-1 border-t border-[#E5E7EB]">
               <span>Total</span><span>${total.toFixed(2)}</span>
@@ -582,7 +627,7 @@ export default function InvoiceBuilder() {
           <div className="flex flex-wrap gap-2">
             {PAYMENT_METHODS.map(m => (
               <button key={m} type="button" onClick={() => togglePayment(m)}
-                className={`px-3 py-1.5 rounded-full text-sm border transition-all ${(inv.payment_methods ?? []).includes(m) ? 'bg-navy text-white border-navy' : 'border-[#E5E7EB] text-[#6B7280]'}`}>
+                className={`px-3 py-1.5 rounded-full text-sm border transition-all ${(inv.payment_methods ?? []).includes(m) ? 'bg-navy text-white border-navy' : 'border-[#E5E7EB] text-[#6B7280]'}${isLocked ? ' pointer-events-none opacity-60' : ''}`}>
                 {m}
               </button>
             ))}
@@ -594,7 +639,7 @@ export default function InvoiceBuilder() {
           <div className="flex gap-2">
             {PAYMENT_STATUSES.map(([val, label]) => (
               <button key={val} type="button" onClick={() => set('payment_status', val)}
-                className={`flex-1 py-2 rounded-lg text-sm font-semibold border transition-all ${inv.payment_status === val ? 'bg-navy text-white border-navy' : 'border-[#E5E7EB] text-[#6B7280]'}`}>
+                className={`flex-1 py-2 rounded-lg text-sm font-semibold border transition-all ${inv.payment_status === val ? 'bg-navy text-white border-navy' : 'border-[#E5E7EB] text-[#6B7280]'}${isLocked ? ' pointer-events-none opacity-60' : ''}`}>
                 {label}
               </button>
             ))}
@@ -605,8 +650,8 @@ export default function InvoiceBuilder() {
           <h3 className="text-xs font-semibold uppercase tracking-wide text-[#6B7280] mb-2">Notes</h3>
           {[1,2,3].map(n => (
             <input key={n} value={inv[`notes${n}`]} onChange={e => set(`notes${n}`, e.target.value)}
-              placeholder={`Note line ${n}`}
-              className="w-full border border-[#E5E7EB] rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-navy" />
+              placeholder={`Note line ${n}`} disabled={isLocked}
+              className="w-full border border-[#E5E7EB] rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-navy disabled:opacity-60 disabled:bg-gray-50" />
           ))}
         </div>
 
@@ -614,18 +659,18 @@ export default function InvoiceBuilder() {
           <h3 className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Warranty</h3>
           <div className="flex gap-2">
             <button onClick={() => set('warranty_included', true)}
-              className={`flex-1 py-2 rounded-lg text-sm font-semibold border transition-all ${inv.warranty_included ? 'bg-green-500 text-white border-green-500' : 'border-[#E5E7EB] text-[#6B7280]'}`}>
+              className={`flex-1 py-2 rounded-lg text-sm font-semibold border transition-all ${inv.warranty_included ? 'bg-green-500 text-white border-green-500' : 'border-[#E5E7EB] text-[#6B7280]'}${isLocked ? ' pointer-events-none opacity-60' : ''}`}>
               YES — 2-Year Included
             </button>
             <button onClick={() => set('warranty_included', false)}
-              className={`flex-1 py-2 rounded-lg text-sm font-semibold border transition-all ${!inv.warranty_included ? 'bg-red-500 text-white border-red-500' : 'border-[#E5E7EB] text-[#6B7280]'}`}>
+              className={`flex-1 py-2 rounded-lg text-sm font-semibold border transition-all ${!inv.warranty_included ? 'bg-red-500 text-white border-red-500' : 'border-[#E5E7EB] text-[#6B7280]'}${isLocked ? ' pointer-events-none opacity-60' : ''}`}>
               NO
             </button>
           </div>
           {!inv.warranty_included && (
             <input value={inv.warranty_no_reason} onChange={e => set('warranty_no_reason', e.target.value)}
-              placeholder="Reason warranty not included…"
-              className="w-full border border-[#E5E7EB] rounded px-2 py-1.5 text-sm focus:outline-none" />
+              placeholder="Reason warranty not included…" disabled={isLocked}
+              className="w-full border border-[#E5E7EB] rounded px-2 py-1.5 text-sm focus:outline-none disabled:opacity-60 disabled:bg-gray-50" />
           )}
         </div>
 
