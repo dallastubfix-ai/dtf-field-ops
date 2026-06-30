@@ -735,7 +735,7 @@ export default function JobDetail() {
       </div>
 
       {/* Sticky bottom action bar */}
-      <div className="fixed left-0 right-0 bg-white border-t border-[#E5E7EB] px-4 py-3 flex gap-2 z-30 no-print"
+      <div className="fixed left-0 right-0 bg-white border-t border-[#E5E7EB] pl-4 pr-20 py-3 flex gap-2 z-30 no-print"
            style={{ bottom: 'calc(4rem + env(safe-area-inset-bottom))' }}>
         {(job.status === 'contact' || job.status === 'quote') && (
           <Button variant="gold" className="flex-1" onClick={() => setApptModal(true)}>
