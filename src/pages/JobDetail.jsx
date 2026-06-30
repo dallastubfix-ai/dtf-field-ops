@@ -758,16 +758,10 @@ export default function JobDetail() {
           </Button>
         )}
         {job.status === 'completed' && (
-          <>
-            <Button variant="ghost" className="flex-1" disabled={!invoice}
-              onClick={() => invoice && navigate(`/invoices/${invoice.id}`)}>
-              View Invoice
-            </Button>
-            <Button variant="gold" className="flex-1" disabled={!customer?.phone}
-              onClick={requestReview}>
-              <MessageSquare size={16} /> Request Review
-            </Button>
-          </>
+          <Button variant="gold" className="w-full" disabled={!customer?.phone}
+            onClick={requestReview}>
+            <MessageSquare size={16} /> Request Review
+          </Button>
         )}
       </div>
 
