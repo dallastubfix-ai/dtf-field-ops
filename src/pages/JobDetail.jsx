@@ -439,6 +439,8 @@ export default function JobDetail() {
     (a, b) => (a.image_type === 'before' ? 0 : 1) - (b.image_type === 'before' ? 0 : 1)
   )
 
+  const invoiceLocked = !!(invoice?.technician_signature_url && invoice?.customer_signature_url)
+
   return (
     <div className="min-h-screen bg-[#F3F4F6] pb-40">
       {/* Header */}
@@ -696,7 +698,7 @@ export default function JobDetail() {
                 }
               >
                 <FileText size={16} />
-                {invoice ? 'View Invoice' : 'Build Invoice'}
+                {invoice ? (invoiceLocked ? 'Signed Invoice' : 'View Invoice') : 'Build Invoice'}
               </Button>
               <Button
                 variant="secondary"
@@ -705,7 +707,7 @@ export default function JobDetail() {
                 onClick={() => warranty && navigate(`/warranties/${warranty.id}`)}
               >
                 <Shield size={16} />
-                {warranty ? 'View Warranty' : 'No Warranty'}
+                {warranty ? (invoiceLocked ? 'Signed Warranty' : 'View Warranty') : 'No Warranty'}
               </Button>
             </div>
           </div>
