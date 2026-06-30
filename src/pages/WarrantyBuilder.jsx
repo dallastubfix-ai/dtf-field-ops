@@ -130,7 +130,7 @@ const WARRANTY_PRINT_CSS = `
 }
 `
 
-function Field({ label, value, onChange, type = 'text', className = '' }) {
+function Field({ label, value, onChange, type = 'text', className = '', disabled = false }) {
   return (
     <div className={className}>
       <div className="text-[10px] font-semibold uppercase tracking-wide text-[#6B7280] mb-0.5">{label}</div>
@@ -138,7 +138,8 @@ function Field({ label, value, onChange, type = 'text', className = '' }) {
         type={type}
         value={value}
         onChange={e => onChange(e.target.value)}
-        className="border border-[#E5E7EB] rounded px-2 py-1 text-sm w-full focus:outline-none focus:ring-1 focus:ring-navy"
+        disabled={disabled}
+        className="border border-[#E5E7EB] rounded px-2 py-1 text-sm w-full focus:outline-none focus:ring-1 focus:ring-navy disabled:opacity-60 disabled:bg-gray-50"
       />
     </div>
   )
@@ -157,6 +158,7 @@ export default function WarrantyBuilder() {
     technician: 'John Figueroa Jr.',
   })
   const [loading, setLoading] = useState(true)
+  const [isLocked, setIsLocked] = useState(false)
 
   const set = (key, value) => setW(v => ({ ...v, [key]: value }))
 
@@ -199,6 +201,7 @@ export default function WarrantyBuilder() {
         service_address: appt?.location_address ?? customer?.address ?? '',
         technician: warranty.technician ?? 'John Figueroa Jr.',
       })
+      setIsLocked(!!(invoice?.technician_signature_url && invoice?.customer_signature_url))
       setLoading(false)
     }
     load()
@@ -221,16 +224,21 @@ export default function WarrantyBuilder() {
 
       {/* Edit fields */}
       <div className="no-print px-4 py-5 space-y-4 max-w-lg mx-auto">
+        {isLocked && (
+          <div className="bg-amber-50 border border-amber-300 rounded-xl px-4 py-3">
+            <p className="text-sm text-amber-800 font-medium">This warranty's invoice has been signed by both parties and is locked.</p>
+          </div>
+        )}
         <div className="bg-white rounded-xl border border-[#E5E7EB] shadow-sm p-4 grid grid-cols-2 gap-3">
-          <Field label="Invoice #"     value={w.invoice_number}  onChange={v => set('invoice_number', v)} />
+          <Field label="Invoice #"     value={w.invoice_number}  onChange={v => set('invoice_number', v)} disabled={isLocked} />
           <Field label="Service Date"  value={w.service_date}    onChange={v => {
             set('service_date', v)
             if (v) set('expiry_date', format(addYears(parseISO(v), 2), 'yyyy-MM-dd'))
-          }} type="date" />
-          <Field label="Expiry Date"   value={w.expiry_date}     onChange={v => set('expiry_date', v)} type="date" />
-          <Field label="Technician"    value={w.technician}      onChange={v => set('technician', v)} />
-          <Field label="Customer Name" value={w.customer_name}   onChange={v => set('customer_name', v)} className="col-span-2" />
-          <Field label="Service Address" value={w.service_address} onChange={v => set('service_address', v)} className="col-span-2" />
+          }} type="date" disabled={isLocked} />
+          <Field label="Expiry Date"   value={w.expiry_date}     onChange={v => set('expiry_date', v)} type="date" disabled={isLocked} />
+          <Field label="Technician"    value={w.technician}      onChange={v => set('technician', v)} disabled={isLocked} />
+          <Field label="Customer Name" value={w.customer_name}   onChange={v => set('customer_name', v)} className="col-span-2" disabled={isLocked} />
+          <Field label="Service Address" value={w.service_address} onChange={v => set('service_address', v)} className="col-span-2" disabled={isLocked} />
         </div>
         <p className="text-xs text-[#9CA3AF] text-center">Edit the fields above, then tap Print to save as PDF.</p>
       </div>
