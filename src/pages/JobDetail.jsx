@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, Phone, Camera, Video, FileText, Shield,
-  ChevronDown, ChevronUp, Plus, Calendar, Trash2, X
+  ChevronDown, ChevronUp, Plus, Calendar, Trash2, X, MessageSquare
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { supabase } from '../lib/supabase'
@@ -54,6 +54,8 @@ const LEAD_OPTIONS = [
   { value: 'Repeat Customer', label: 'Repeat Customer' },
   { value: 'Other',           label: 'Other' },
 ]
+
+const REVIEW_LINK = 'https://g.page/r/CZ3g5Gm0_pYiEBM/review'
 
 const toLocalInput = (dt) => {
   if (!dt) return ''
@@ -405,6 +407,17 @@ export default function JobDetail() {
     }
   }
 
+  function requestReview() {
+    if (!customer?.phone) return
+    const digits = customer.phone.replace(/\D/g, '')
+    const e164 = digits.length === 10 ? `+1${digits}` : `+${digits}`
+    const firstName = (customer.full_name || '').split(' ')[0] || 'there'
+    const body = `Hi ${firstName} — thanks again for letting us fix your tub today. If you have a sec, your honest Google review means everything for a new local business: ${REVIEW_LINK}. No pressure either way. — John, Dallas Tub Fix`
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
+    const separator = isIOS ? '&' : '?'
+    window.location.href = `sms:${e164}${separator}body=${encodeURIComponent(body)}`
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -745,10 +758,16 @@ export default function JobDetail() {
           </Button>
         )}
         {job.status === 'completed' && (
-          <Button variant="ghost" className="flex-1" disabled={!invoice}
-            onClick={() => invoice && navigate(`/invoices/${invoice.id}`)}>
-            View Invoice
-          </Button>
+          <>
+            <Button variant="ghost" className="flex-1" disabled={!invoice}
+              onClick={() => invoice && navigate(`/invoices/${invoice.id}`)}>
+              View Invoice
+            </Button>
+            <Button variant="gold" className="flex-1" disabled={!customer?.phone}
+              onClick={requestReview}>
+              <MessageSquare size={16} /> Request Review
+            </Button>
+          </>
         )}
       </div>
 
