@@ -734,6 +734,8 @@ export default function JobDetail() {
         </Section>
       </div>
 
+      {/* TODO: remove — temporary debug line, not a permanent UI element */}
+      <div className="text-center text-xs text-red-500 py-1">DEBUG: job.status = "{String(job?.status)}"</div>
       {/* Sticky bottom action bar */}
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-[#E5E7EB] px-4 py-3 flex gap-2 z-30 no-print"
            style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}>
