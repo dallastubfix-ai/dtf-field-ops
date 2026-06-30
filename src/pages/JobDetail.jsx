@@ -440,7 +440,7 @@ export default function JobDetail() {
   )
 
   return (
-    <div className="min-h-screen bg-[#F3F4F6] pb-28">
+    <div className="min-h-screen bg-[#F3F4F6] pb-40">
       {/* Header */}
       <header className="bg-navy px-4 py-4 flex items-center gap-3 sticky top-0 z-30">
         <button onClick={() => navigate(-1)} className="text-white">
@@ -734,11 +734,9 @@ export default function JobDetail() {
         </Section>
       </div>
 
-      {/* TODO: remove — temporary debug line, not a permanent UI element */}
-      <div className="text-center text-xs text-red-500 py-1">DEBUG: job.status = "{String(job?.status)}"</div>
       {/* Sticky bottom action bar */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-[#E5E7EB] px-4 py-3 flex gap-2 z-30 no-print"
-           style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}>
+      <div className="fixed left-0 right-0 bg-white border-t border-[#E5E7EB] px-4 py-3 flex gap-2 z-30 no-print"
+           style={{ bottom: 'calc(4rem + env(safe-area-inset-bottom))' }}>
         {(job.status === 'contact' || job.status === 'quote') && (
           <Button variant="gold" className="flex-1" onClick={() => setApptModal(true)}>
             <Calendar size={16} /> Schedule Appointment
@@ -761,7 +759,6 @@ export default function JobDetail() {
         )}
         {job.status === 'completed' && (
           <>
-            <span className="text-[10px] text-red-600">INSIDE-BLOCK</span>
             <Button variant="ghost" className="flex-1" disabled={!invoice}
               onClick={() => invoice && navigate(`/invoices/${invoice.id}`)}>
               View Invoice
