@@ -4,6 +4,7 @@ import { ArrowLeft, Circle, Square, RefreshCw, Upload } from 'lucide-react'
 import { format } from 'date-fns'
 import { supabase } from '../lib/supabase'
 import db from '../lib/db'
+import { getValidProviderToken } from '../lib/googleToken'
 import Button from '../components/ui/Button'
 
 function useTimer(running) {
@@ -100,8 +101,7 @@ export default function VideoCapture() {
     if (!blob) return
     setUploading(true)
 
-    const { data: { session } } = await supabase.auth.getSession()
-    const providerToken = session?.provider_token || localStorage.getItem('dtf_google_token')
+    const providerToken = await getValidProviderToken()
     if (!providerToken) {
       setNoProvider(true)
       setUploading(false)

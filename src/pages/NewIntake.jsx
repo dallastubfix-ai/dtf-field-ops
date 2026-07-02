@@ -12,8 +12,8 @@ import Select from '../components/ui/Select'
 import Textarea from '../components/ui/Textarea'
 import Modal from '../components/ui/Modal'
 import Button from '../components/ui/Button'
-import { useAuth } from '../context/AuthContext'
 import { createCalendarEvent } from '../lib/googleCalendar'
+import { getValidProviderToken } from '../lib/googleToken'
 import AddressAutocomplete from '../components/ui/AddressAutocomplete'
 
 function formatPhone(value) {
@@ -53,7 +53,6 @@ const LEAD_OPTIONS = [
 export default function NewIntake() {
   const navigate = useNavigate()
   const isOnline = useOnlineStatus()
-  const { providerToken } = useAuth()
   const nameRef = useRef(null)
 
   const [form, setForm] = useState({
@@ -166,10 +165,12 @@ export default function NewIntake() {
         await writeRecord('appointments', apptPayload, isOnline)
       } catch (e) { console.error('Appointment write failed:', e) }
 
-      if (isOnline && providerToken && apptPayload) {
+      if (isOnline && apptPayload) {
         try {
+          const token = await getValidProviderToken()
+          if (!token) return
           const [apptDate, apptTime] = form.appointment_datetime.split('T')
-          const eventId = await createCalendarEvent(providerToken, {
+          const eventId = await createCalendarEvent(token, {
             customerName: form.full_name,
             address: form.location_address || '',
             appointmentDate: apptDate,
