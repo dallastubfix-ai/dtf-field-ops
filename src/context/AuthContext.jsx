@@ -21,6 +21,7 @@ export function AuthProvider({ children }) {
         setUser(session?.user ?? null)
         if (session?.provider_token) {
           localStorage.setItem('dtf_google_token', session.provider_token)
+          localStorage.setItem('dtf_google_token_obtained_at', Date.now().toString())
           setProviderToken(session.provider_token)
         }
         if (session?.provider_refresh_token) {
