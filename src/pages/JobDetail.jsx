@@ -17,8 +17,8 @@ import Modal from '../components/ui/Modal'
 import Input from '../components/ui/Input'
 import Select from '../components/ui/Select'
 import Textarea from '../components/ui/Textarea'
-import { useAuth } from '../context/AuthContext'
 import { createCalendarEvent, updateCalendarEvent } from '../lib/googleCalendar'
+import { getValidProviderToken } from '../lib/googleToken'
 import AddressAutocomplete from '../components/ui/AddressAutocomplete'
 
 const STATUS_OPTIONS = [
@@ -82,7 +82,6 @@ export default function JobDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
   const isOnline = useOnlineStatus()
-  const { providerToken } = useAuth()
 
   const [job, setJob] = useState(null)
   const [customer, setCustomer] = useState(null)
@@ -219,8 +218,7 @@ export default function JobDetail() {
   const deleteVideo = async (v) => {
     if (!window.confirm('Delete this video? It will also be removed from Google Drive.')) return
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      const providerToken = session?.provider_token || localStorage.getItem('dtf_google_token')
+      const providerToken = await getValidProviderToken()
       if (providerToken && v.google_drive_file_id) {
         await fetch(`https://www.googleapis.com/drive/v3/files/${v.google_drive_file_id}`, {
           method: 'DELETE',
@@ -335,8 +333,13 @@ export default function JobDetail() {
     await updateRecord('appointments', updated, isOnline)
     setEditApptId(null)
     setSaving(false)
-    if (isOnline && providerToken) {
+    if (isOnline) {
       try {
+        const token = await getValidProviderToken()
+        if (!token) {
+          flashToast('Appointment saved. Calendar sync failed — sign in again to reconnect.')
+          return
+        }
         const [apptDate, apptTime] = apptVal.appointment_datetime.split('T')
         const appointmentData = {
           customerName: customer?.full_name || '',
@@ -348,9 +351,9 @@ export default function JobDetail() {
         }
         let eventId
         if (updated.google_calendar_event_id) {
-          eventId = await updateCalendarEvent(providerToken, updated.google_calendar_event_id, appointmentData)
+          eventId = await updateCalendarEvent(token, updated.google_calendar_event_id, appointmentData)
         } else {
-          eventId = await createCalendarEvent(providerToken, appointmentData)
+          eventId = await createCalendarEvent(token, appointmentData)
         }
         if (eventId && typeof eventId === 'string') {
           const withEventId = { ...updated, google_calendar_event_id: eventId }
@@ -385,10 +388,15 @@ export default function JobDetail() {
     setNewAppt({ appointment_datetime: '', location_address: '' })
     setSaving(false)
     flashToast('Appointment added')
-    if (isOnline && providerToken) {
+    if (isOnline) {
       try {
+        const token = await getValidProviderToken()
+        if (!token) {
+          flashToast('Calendar sync failed — sign in again to reconnect.')
+          return
+        }
         const [apptDate, apptTime] = newAppt.appointment_datetime.split('T')
-        const eventId = await createCalendarEvent(providerToken, {
+        const eventId = await createCalendarEvent(token, {
           customerName: customer?.full_name || '',
           address: newAppt.location_address || '',
           appointmentDate: apptDate,
