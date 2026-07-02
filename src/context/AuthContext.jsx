@@ -33,7 +33,11 @@ export function AuthProvider({ children }) {
       provider: 'google',
       options: {
         scopes: 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/drive.file',
-        redirectTo: window.location.origin
+        redirectTo: window.location.origin,
+        queryParams: {
+          access_type: 'offline',
+          prompt: 'consent'
+        }
       }
     })
 
