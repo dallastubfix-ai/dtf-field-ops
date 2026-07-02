@@ -23,6 +23,21 @@ export function AuthProvider({ children }) {
           localStorage.setItem('dtf_google_token', session.provider_token)
           setProviderToken(session.provider_token)
         }
+        if (session?.provider_refresh_token) {
+          fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/store-google-token`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({ refresh_token: session.provider_refresh_token }),
+          }).catch((error) => {
+            console.error(error)
+            window.alert(
+              'Google connection could not be saved fully — if Calendar or video features stop working later, sign out and sign back in.'
+            )
+          })
+        }
       }
     )
     return () => subscription.unsubscribe()
