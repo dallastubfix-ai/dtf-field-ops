@@ -21,6 +21,18 @@ import { createCalendarEvent, updateCalendarEvent } from '../lib/googleCalendar'
 import { getValidProviderToken } from '../lib/googleToken'
 import AddressAutocomplete from '../components/ui/AddressAutocomplete'
 
+function describeCalendarError(result) {
+  if (!result?.error) return 'Unknown error'
+  if (result.error === 'token_expired') return 'sign in again to reconnect'
+  if (result.error === 'request_failed') {
+    return `Google error ${result.status}: ${(result.detail || '').slice(0, 100)}`
+  }
+  if (result.error === 'network_error') {
+    return `Network error: ${(result.detail || '').slice(0, 100)}`
+  }
+  return 'Unknown error'
+}
+
 const STATUS_OPTIONS = [
   { value: 'contact',     label: 'Contact'     },
   { value: 'quote',       label: 'Quote'       },
@@ -359,8 +371,8 @@ export default function JobDetail() {
           const withEventId = { ...updated, google_calendar_event_id: eventId }
           setAppointments(list => list.map(x => (x.id || x._localId) === key ? withEventId : x))
           await updateRecord('appointments', withEventId, isOnline)
-        } else if (eventId?.error === 'token_expired') {
-          flashToast('Appointment saved. Calendar sync failed — sign in again to reconnect.')
+        } else if (eventId?.error) {
+          flashToast(`Appointment saved. Calendar sync failed — ${describeCalendarError(eventId)}`)
           return
         }
       } catch (e) { console.error('Calendar sync failed:', e) }
@@ -408,8 +420,8 @@ export default function JobDetail() {
           const withEventId = { ...payload, google_calendar_event_id: eventId }
           setAppointments(prev => prev.map(a => a.id === payload.id ? withEventId : a))
           await updateRecord('appointments', withEventId, isOnline)
-        } else if (eventId?.error === 'token_expired') {
-          flashToast('Calendar sync failed — sign in again to reconnect.')
+        } else if (eventId?.error) {
+          flashToast(`Calendar sync failed — ${describeCalendarError(eventId)}`)
         }
       } catch (e) { console.error('Calendar sync failed:', e) }
     }

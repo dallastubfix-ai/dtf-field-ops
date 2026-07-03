@@ -41,9 +41,12 @@ export async function createCalendarEvent(token, appointmentData) {
       const data = await res.json()
       return data.id
     }
-    return null
-  } catch {
-    return null
+    const errBody = await res.text()
+    console.error('Calendar API request failed:', res.status, errBody)
+    return { error: 'request_failed', status: res.status, detail: errBody.slice(0, 200) }
+  } catch (err) {
+    console.error('Calendar API network error:', err)
+    return { error: 'network_error', detail: err?.message || 'Unknown error' }
   }
 }
 
@@ -59,9 +62,12 @@ export async function updateCalendarEvent(token, eventId, appointmentData) {
     })
     if (res.status === 401) return { error: 'token_expired' }
     if (res.status === 200) return eventId
-    return null
-  } catch {
-    return null
+    const errBody = await res.text()
+    console.error('Calendar API request failed:', res.status, errBody)
+    return { error: 'request_failed', status: res.status, detail: errBody.slice(0, 200) }
+  } catch (err) {
+    console.error('Calendar API network error:', err)
+    return { error: 'network_error', detail: err?.message || 'Unknown error' }
   }
 }
 
