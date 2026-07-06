@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, Printer, Save, Shield } from 'lucide-react'
 import { format, addYears } from 'date-fns'
 import { supabase } from '../lib/supabase'
@@ -198,6 +198,7 @@ function Field({ label, value, onChange, type = 'text', className = '', disabled
 export default function InvoiceBuilder() {
   const { id, jobId } = useParams()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const { user } = useAuth()
   const isNew = !!jobId
 
@@ -312,6 +313,12 @@ export default function InvoiceBuilder() {
     }
     load()
   }, [id, jobId])
+
+  useEffect(() => {
+    if (searchParams.get('sign') === '1' && inv.id && !showSigCapture) {
+      setShowSigCapture(true)
+    }
+  }, [searchParams, inv.id])
 
   const set = (key, value) => setInv(v => ({ ...v, [key]: value }))
 
@@ -437,6 +444,7 @@ export default function InvoiceBuilder() {
       })
       setToast('Signatures saved ✓')
       setTimeout(() => setToast(''), 2800)
+      navigate(-1)
     } catch (err) {
       console.error('Signature save error:', err)
       setToast('Signatures uploaded but not saved to record — try again')
@@ -476,6 +484,7 @@ export default function InvoiceBuilder() {
       setInv(v => ({ ...v, technician_signature_url: techUrl }))
       setToast('Technician signature saved')
       setTimeout(() => setToast(''), 3500)
+      navigate(-1)
     } catch (err) {
       console.error('Technician signature save error:', err)
       setToast('Signature uploaded but not saved to record — try again')
@@ -535,16 +544,6 @@ export default function InvoiceBuilder() {
           {!isLocked && (
             <Button variant="secondary" className="text-white border-white/30 py-1.5 px-3" onClick={save} disabled={saving}>
               <Save size={14} /> {saving ? '…' : 'Save'}
-            </Button>
-          )}
-          {!isLocked && (
-            <Button
-              variant="secondary"
-              className="text-white border-white/30 py-1.5 px-3"
-              onClick={() => setShowSigCapture(true)}
-              disabled={!saved || !inv.id}
-            >
-              Sign
             </Button>
           )}
           <Button variant="gold" className="py-1.5 px-3" onClick={print} disabled={saving}>
@@ -935,6 +934,7 @@ export default function InvoiceBuilder() {
           onClose={() => setShowSigCapture(false)}
           onSendToCustomer={generateSigningLink}
           onTechnicianSigned={handleTechnicianSigned}
+          existingTechnicianUrl={inv.technician_signature_url || null}
           sigLinkState={sigLinkState}
         />
       )}
