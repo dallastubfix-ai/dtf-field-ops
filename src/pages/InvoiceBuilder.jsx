@@ -474,6 +474,8 @@ export default function InvoiceBuilder() {
       if (error) throw error
       await db.invoices.where('id').equals(inv.id).modify({ technician_signature_url: techUrl })
       setInv(v => ({ ...v, technician_signature_url: techUrl }))
+      setToast('Technician signature saved')
+      setTimeout(() => setToast(''), 3500)
     } catch (err) {
       console.error('Technician signature save error:', err)
       setToast('Signature uploaded but not saved to record — try again')
