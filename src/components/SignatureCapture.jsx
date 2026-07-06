@@ -2,13 +2,14 @@ import { useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import SignaturePad from './SignaturePad'
 
-export default function SignatureCapture({ invoiceId, technicianName, customerName, onComplete, onClose, onSendToCustomer, sigLinkState }) {
+export default function SignatureCapture({ invoiceId, technicianName, customerName, onComplete, onClose, onSendToCustomer, onTechnicianSigned, sigLinkState }) {
   const [step, setStep] = useState('technician')
   const [techDataURL, setTechDataURL] = useState(null)
   const [custName, setCustName] = useState(customerName || '')
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState(null)
   const [copied, setCopied] = useState(false)
+  const [savingTech, setSavingTech] = useState(false)
   const techPadRef = useRef(null)
   const custPadRef = useRef(null)
 
@@ -57,6 +58,32 @@ export default function SignatureCapture({ invoiceId, technicianName, customerNa
       setError('Upload failed. Please try again.')
       setUploading(false)
     }
+  }
+
+  const handleSendToCustomerClick = async () => {
+    if (!techDataURL) return
+    setSavingTech(true)
+    setError(null)
+    try {
+      const techBlob = await (await fetch(techDataURL)).blob()
+      const techPath = `signatures/${invoiceId}/technician.png`
+      const { error: upErr } = await supabase.storage
+        .from('job-images')
+        .upload(techPath, techBlob, { contentType: 'image/png', upsert: true })
+      if (upErr) throw upErr
+      const { data: signedData, error: signErr } = await supabase.storage
+        .from('job-images')
+        .createSignedUrl(techPath, 31536000)
+      if (signErr) throw signErr
+      if (onTechnicianSigned) onTechnicianSigned(signedData.signedUrl)
+    } catch (err) {
+      console.error('Technician signature save error:', err)
+      setError('Failed to save technician signature. Please try again.')
+      setSavingTech(false)
+      return
+    }
+    setSavingTech(false)
+    onSendToCustomer()
   }
 
   return (
@@ -141,11 +168,11 @@ export default function SignatureCapture({ invoiceId, technicianName, customerNa
           </button>
           {step === 'customer' && onSendToCustomer && (
             <button
-              onClick={onSendToCustomer}
-              disabled={sigLinkState?.status === 'generating'}
+              onClick={handleSendToCustomerClick}
+              disabled={savingTech || sigLinkState?.status === 'generating'}
               className="px-4 py-2 text-sm font-semibold text-[#1E40AF] border border-[#1E40AF] rounded-lg disabled:opacity-60"
             >
-              {sigLinkState?.status === 'generating' ? '…' : 'Send to Customer'}
+              {savingTech ? 'Saving…' : sigLinkState?.status === 'generating' ? '…' : 'Send to Customer'}
             </button>
           )}
           {step === 'technician' ? (

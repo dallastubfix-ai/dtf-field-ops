@@ -465,6 +465,22 @@ export default function InvoiceBuilder() {
     }
   }
 
+  const handleTechnicianSigned = async (techUrl) => {
+    try {
+      const { error } = await supabase.from('invoices').update({
+        technician_signature_url: techUrl,
+        updated_at: new Date().toISOString(),
+      }).eq('id', inv.id)
+      if (error) throw error
+      await db.invoices.where('id').equals(inv.id).modify({ technician_signature_url: techUrl })
+      setInv(v => ({ ...v, technician_signature_url: techUrl }))
+    } catch (err) {
+      console.error('Technician signature save error:', err)
+      setToast('Signature uploaded but not saved to record — try again')
+      setTimeout(() => setToast(''), 3500)
+    }
+  }
+
   const handleUnlock = async () => {
     if (!window.confirm(
       'Unlock this invoice? This will clear both signatures and require re-signing. This cannot be undone.'
@@ -915,6 +931,7 @@ export default function InvoiceBuilder() {
           onComplete={handleSignaturesComplete}
           onClose={() => setShowSigCapture(false)}
           onSendToCustomer={generateSigningLink}
+          onTechnicianSigned={handleTechnicianSigned}
           sigLinkState={sigLinkState}
         />
       )}
