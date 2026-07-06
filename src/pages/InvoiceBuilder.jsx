@@ -928,6 +928,7 @@ export default function InvoiceBuilder() {
       {showSigCapture && inv.id && (
         <SignatureCapture
           invoiceId={inv.id}
+          initialStep={inv.technician_signature_url ? 'customer' : 'technician'}
           technicianName={user?.user_metadata?.full_name || user?.user_metadata?.name || inv.technician}
           customerName={inv.customer_name}
           onComplete={handleSignaturesComplete}

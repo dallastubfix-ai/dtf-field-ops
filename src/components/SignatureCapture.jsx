@@ -2,8 +2,8 @@ import { useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import SignaturePad from './SignaturePad'
 
-export default function SignatureCapture({ invoiceId, technicianName, customerName, onComplete, onClose, onSendToCustomer, onTechnicianSigned, sigLinkState }) {
-  const [step, setStep] = useState('technician')
+export default function SignatureCapture({ invoiceId, technicianName, customerName, onComplete, onClose, onSendToCustomer, onTechnicianSigned, sigLinkState, initialStep = 'technician' }) {
+  const [step, setStep] = useState(initialStep)
   const [techDataURL, setTechDataURL] = useState(null)
   const [custName, setCustName] = useState(customerName || '')
   const [uploading, setUploading] = useState(false)
