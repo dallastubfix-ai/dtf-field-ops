@@ -460,6 +460,10 @@ export default function JobDetail() {
   )
 
   const invoiceLocked = !!(invoice?.technician_signature_url && invoice?.customer_signature_url)
+  const hasInvoice = !!invoice
+  const technicianSigned = !!invoice?.technician_signature_url
+  const customerSigned = !!invoice?.customer_signature_url
+  const hasWarranty = !!warranty
 
   return (
     <div className="min-h-screen bg-[#F3F4F6] pb-40">
