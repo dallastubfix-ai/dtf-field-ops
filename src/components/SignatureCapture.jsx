@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import SignaturePad from './SignaturePad'
 
-export default function SignatureCapture({ invoiceId, technicianName, customerName, onComplete, onClose, onSendToCustomer, onTechnicianSigned, sigLinkState, initialStep = 'technician' }) {
+export default function SignatureCapture({ invoiceId, technicianName, customerName, onComplete, onClose, onSendToCustomer, onTechnicianSigned, sigLinkState, initialStep = 'technician', existingTechnicianUrl = null }) {
   const [step, setStep] = useState(initialStep)
   const [techDataURL, setTechDataURL] = useState(null)
   const [custName, setCustName] = useState(customerName || '')
@@ -32,27 +32,35 @@ export default function SignatureCapture({ invoiceId, technicianName, customerNa
     setError(null)
     try {
       const custDataURL = custPadRef.current.getDataURL()
-      const toBlob = async (dataURL) => (await fetch(dataURL)).blob()
-      const [techBlob, custBlob] = await Promise.all([toBlob(techDataURL), toBlob(custDataURL)])
-
-      const techPath = `signatures/${invoiceId}/technician.png`
+      const custBlob = await (await fetch(custDataURL)).blob()
       const custPath = `signatures/${invoiceId}/customer.png`
 
-      const [tu, cu] = await Promise.all([
-        supabase.storage.from('job-images').upload(techPath, techBlob, { contentType: 'image/png', upsert: true }),
-        supabase.storage.from('job-images').upload(custPath, custBlob, { contentType: 'image/png', upsert: true }),
-      ])
-      if (tu.error) throw tu.error
-      if (cu.error) throw cu.error
+      const { error: custUploadError } = await supabase.storage
+        .from('job-images')
+        .upload(custPath, custBlob, { contentType: 'image/png', upsert: true })
+      if (custUploadError) throw custUploadError
 
-      const [ts, cs] = await Promise.all([
-        supabase.storage.from('job-images').createSignedUrl(techPath, 31536000),
-        supabase.storage.from('job-images').createSignedUrl(custPath, 31536000),
-      ])
-      if (ts.error) throw ts.error
-      if (cs.error) throw cs.error
+      const { data: custSignedData, error: custSignError } = await supabase.storage
+        .from('job-images')
+        .createSignedUrl(custPath, 31536000)
+      if (custSignError) throw custSignError
 
-      onComplete(ts.data.signedUrl, cs.data.signedUrl)
+      let techUrl = existingTechnicianUrl
+      if (!techUrl && techDataURL) {
+        const techBlob = await (await fetch(techDataURL)).blob()
+        const techPath = `signatures/${invoiceId}/technician.png`
+        const { error: techUploadError } = await supabase.storage
+          .from('job-images')
+          .upload(techPath, techBlob, { contentType: 'image/png', upsert: true })
+        if (techUploadError) throw techUploadError
+        const { data: techSignedData, error: techSignError } = await supabase.storage
+          .from('job-images')
+          .createSignedUrl(techPath, 31536000)
+        if (techSignError) throw techSignError
+        techUrl = techSignedData.signedUrl
+      }
+
+      onComplete(techUrl, custSignedData.signedUrl)
     } catch (err) {
       console.error('Signature upload error:', err)
       setError('Upload failed. Please try again.')
