@@ -779,9 +779,44 @@ export default function JobDetail() {
           </>
         )}
         {job.status === 'active' && (
-          <Button variant="gold" className="flex-1" onClick={() => navigate(`/invoices/new/${id}`)}>
-            Build Invoice
-          </Button>
+          <div className="flex flex-col gap-2 flex-1">
+            <div className="flex gap-2">
+              {!hasInvoice && (
+                <Button variant="gold" className="flex-1" onClick={() => navigate(`/invoices/new/${id}`)}>
+                  Build Invoice
+                </Button>
+              )}
+              {hasInvoice && !technicianSigned && (
+                <Button variant="gold" className="flex-1" onClick={() => navigate(`/invoices/${invoice.id}?sign=1`)}>
+                  Technician Sign
+                </Button>
+              )}
+              {hasInvoice && technicianSigned && !customerSigned && (
+                <Button variant="gold" className="flex-1" onClick={() => navigate(`/invoices/${invoice.id}?sign=1`)}>
+                  Customer Sign
+                </Button>
+              )}
+              {hasInvoice && technicianSigned && customerSigned && (
+                <Button variant="primary" className="flex-1" onClick={() => saveStatus('completed')}>
+                  Mark Completed
+                </Button>
+              )}
+            </div>
+            {(hasInvoice || hasWarranty) && (
+              <div className="flex gap-2">
+                {hasInvoice && (
+                  <Button variant="secondary" className="flex-1" onClick={() => navigate(`/invoices/${invoice.id}`)}>
+                    Print Invoice
+                  </Button>
+                )}
+                {hasWarranty && (
+                  <Button variant="secondary" className="flex-1" onClick={() => navigate(`/warranties/${warranty.id}`)}>
+                    Print Warranty
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
         )}
         {job.status === 'completed' && (
           <Button variant="gold" className="w-full" disabled={!customer?.phone}
