@@ -415,7 +415,7 @@ export default function InvoiceBuilder() {
         throw error
       }
       setToast(wasNew ? 'Invoice saved ✓' : 'Invoice updated ✓')
-      if (shouldNavigateBack) navigate(-1)
+      if (shouldNavigateBack) navigate(`/jobs/${inv.job_id}`)
     } catch (err) {
       console.error('Invoice save failed:', err)
       setToast(`Saved locally · ${err.message || 'offline — reopen online to upload'}`)
@@ -445,7 +445,7 @@ export default function InvoiceBuilder() {
       })
       setToast('Signatures saved ✓')
       setTimeout(() => setToast(''), 2800)
-      navigate(-1)
+      navigate(`/jobs/${inv.job_id}`)
     } catch (err) {
       console.error('Signature save error:', err)
       setToast('Signatures uploaded but not saved to record — try again')
@@ -485,7 +485,6 @@ export default function InvoiceBuilder() {
       setInv(v => ({ ...v, technician_signature_url: techUrl }))
       setToast('Technician signature saved')
       setTimeout(() => setToast(''), 3500)
-      navigate(-1)
     } catch (err) {
       console.error('Technician signature save error:', err)
       setToast('Signature uploaded but not saved to record — try again')
@@ -932,7 +931,12 @@ export default function InvoiceBuilder() {
           technicianName={user?.user_metadata?.full_name || user?.user_metadata?.name || inv.technician}
           customerName={inv.customer_name}
           onComplete={handleSignaturesComplete}
-          onClose={() => setShowSigCapture(false)}
+          onClose={() => {
+            setShowSigCapture(false)
+            if (sigLinkState?.status === 'ready') {
+              navigate(`/jobs/${inv.job_id}`)
+            }
+          }}
           onSendToCustomer={generateSigningLink}
           onTechnicianSigned={handleTechnicianSigned}
           existingTechnicianUrl={inv.technician_signature_url || null}
