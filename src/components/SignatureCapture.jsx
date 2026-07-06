@@ -69,6 +69,10 @@ export default function SignatureCapture({ invoiceId, technicianName, customerNa
   }
 
   const handleSendToCustomerClick = async () => {
+    if (existingTechnicianUrl) {
+      onSendToCustomer()
+      return
+    }
     if (!techDataURL) return
     setSavingTech(true)
     setError(null)
