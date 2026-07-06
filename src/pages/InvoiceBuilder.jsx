@@ -390,7 +390,7 @@ export default function InvoiceBuilder() {
     setExistingWarranty(wPayload)
   }
 
-  const save = async () => {
+  const save = async (shouldNavigateBack = true) => {
     setSaving(true)
     const invoiceId = inv.id ?? crypto.randomUUID()
     const payload = buildDbPayload({
@@ -415,6 +415,7 @@ export default function InvoiceBuilder() {
         throw error
       }
       setToast(wasNew ? 'Invoice saved ✓' : 'Invoice updated ✓')
+      if (shouldNavigateBack) navigate(-1)
     } catch (err) {
       console.error('Invoice save failed:', err)
       setToast(`Saved locally · ${err.message || 'offline — reopen online to upload'}`)
@@ -425,7 +426,7 @@ export default function InvoiceBuilder() {
   }
 
   const print = async () => {
-    await save()
+    await save(false)
     window.print()
   }
 
