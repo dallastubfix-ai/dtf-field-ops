@@ -22,12 +22,25 @@ const paymentPill = {
   paid:    'bg-green-100 text-green-700',
 }
 
+const PAYMENT_STATUS_OPTIONS = ['unpaid', 'partial', 'paid']
+
 export default function Invoices() {
   const navigate = useNavigate()
   const [filter, setFilter] = useState('all')
   const [customers, setCustomers] = useState({})
   const [jobs, setJobs] = useState({})
   const [error, setError] = useState(null)
+  const [statusMenuFor, setStatusMenuFor] = useState(null)
+
+  const updatePaymentStatus = async (invoiceId, newStatus) => {
+    await db.invoices.where('id').equals(invoiceId).modify({ payment_status: newStatus })
+    const { error } = await supabase.from('invoices').update({
+      payment_status: newStatus,
+      updated_at: new Date().toISOString(),
+    }).eq('id', invoiceId)
+    if (error) console.error('Failed to update payment status:', error)
+    setStatusMenuFor(null)
+  }
 
   useEffect(() => {
     db.customers.toArray()
@@ -84,6 +97,9 @@ export default function Invoices() {
 
   return (
     <div className="min-h-screen bg-[#F3F4F6]">
+      {statusMenuFor && (
+        <div className="fixed inset-0 z-40" onClick={() => setStatusMenuFor(null)} />
+      )}
       <header className="bg-navy px-4 py-4">
         <h1 className="text-white font-bold text-lg">Invoices</h1>
       </header>
@@ -138,9 +154,35 @@ export default function Invoices() {
                   <span className="font-bold text-[#1F2937] text-base">
                     #{inv.invoice_number ?? job?.job_number ?? '--'}
                   </span>
-                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full capitalize ${paymentPill[inv.payment_status] ?? 'bg-gray-100 text-gray-600'}`}>
-                    {inv.payment_status ?? 'Unpaid'}
-                  </span>
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setStatusMenuFor(statusMenuFor === inv.id ? null : inv.id)
+                      }}
+                      className={`text-xs font-semibold px-2 py-0.5 rounded-full capitalize ${paymentPill[inv.payment_status] ?? 'bg-gray-100 text-gray-600'}`}
+                    >
+                      {inv.payment_status ?? 'Unpaid'}
+                    </button>
+                    {statusMenuFor === inv.id && (
+                      <div className="absolute right-0 top-full mt-1 z-50 bg-white rounded-lg border border-[#E5E7EB] shadow-lg overflow-hidden w-28">
+                        {PAYMENT_STATUS_OPTIONS.map(val => (
+                          <button
+                            key={val}
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              updatePaymentStatus(inv.id, val)
+                            }}
+                            className="w-full text-left px-3 py-2 text-sm capitalize hover:bg-[#F3F4F6] transition-colors"
+                          >
+                            {val}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <div className="text-sm text-[#6B7280]">
                   {customer?.full_name ?? '--'} · {job?.job_number ?? '--'}

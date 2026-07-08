@@ -19,11 +19,6 @@ const DEFAULT_ITEMS = [
 ]
 
 const PAYMENT_METHODS = ['Cash', 'Check', 'Credit/Debit', 'Venmo', 'Zelle', 'Other']
-const PAYMENT_STATUSES = [
-  ['unpaid',  'Unpaid'],
-  ['partial', 'Partial'],
-  ['paid',    'Paid'],
-]
 
 const today = format(new Date(), 'yyyy-MM-dd')
 
@@ -646,18 +641,6 @@ export default function InvoiceBuilder() {
               <button key={m} type="button" onClick={() => togglePayment(m)}
                 className={`px-3 py-1.5 rounded-full text-sm border transition-all ${(inv.payment_methods ?? []).includes(m) ? 'bg-navy text-white border-navy' : 'border-[#E5E7EB] text-[#6B7280]'}${isLocked ? ' pointer-events-none opacity-60' : ''}`}>
                 {m}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl border border-[#E5E7EB] shadow-sm p-4 space-y-3">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Payment Status</h3>
-          <div className="flex gap-2">
-            {PAYMENT_STATUSES.map(([val, label]) => (
-              <button key={val} type="button" onClick={() => set('payment_status', val)}
-                className={`flex-1 py-2 rounded-lg text-sm font-semibold border transition-all ${inv.payment_status === val ? 'bg-navy text-white border-navy' : 'border-[#E5E7EB] text-[#6B7280]'}${isLocked ? ' pointer-events-none opacity-60' : ''}`}>
-                {label}
               </button>
             ))}
           </div>
