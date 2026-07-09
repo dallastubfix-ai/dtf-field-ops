@@ -105,6 +105,7 @@ export default function JobDetail() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState('')
+  const [deleting, setDeleting] = useState(false)
 
   // Edit state per section
   const [editNotes, setEditNotes] = useState(false)
@@ -243,6 +244,31 @@ export default function JobDetail() {
     } catch (err) {
       console.error('Delete video error:', err)
       alert('Failed to delete video. Please try again.')
+    }
+  }
+
+  const handleDeleteTestJob = async () => {
+    if (!window.confirm('Delete this entire test job? This removes the job, its invoice, appointments, photos, and videos permanently. This cannot be undone.')) return
+    setDeleting(true)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-test-job`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({ job_id: id }),
+      })
+      const result = await res.json()
+      if (!res.ok || !result.success) {
+        throw new Error(result?.error || 'Delete failed')
+      }
+      navigate('/jobs')
+    } catch (err) {
+      console.error('Delete test job error:', err)
+      alert('Failed to delete job. Please try again.')
+      setDeleting(false)
     }
   }
 
@@ -474,6 +500,11 @@ export default function JobDetail() {
         </button>
         <span className="text-white font-bold text-base flex-1">{job.job_number}</span>
         <Badge status={job.status} />
+        {job.is_test && (
+          <button onClick={handleDeleteTestJob} className="text-white/80 hover:text-white" disabled={deleting}>
+            <Trash2 size={18} />
+          </button>
+        )}
       </header>
 
       {toast && (
