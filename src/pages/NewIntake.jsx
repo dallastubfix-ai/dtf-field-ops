@@ -61,6 +61,7 @@ export default function NewIntake() {
     schedule_appointment: false,
     appointment_datetime: '', location_address: '',
     notes: '', lead_source: '', referred_by: '',
+    is_test: false,
   })
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState('')
@@ -121,11 +122,16 @@ export default function NewIntake() {
         customerId = saved.id
       }
 
-      // generate_job_number RPC
-      jobNumber = `DTF-${Date.now().toString().slice(-5)}`
-      if (isOnline) {
-        const { data } = await supabase.rpc('generate_job_number')
-        if (data) jobNumber = data
+      // generate_job_number RPC — skipped entirely for test jobs, which use
+      // their own separate identifier scheme and never touch the real sequence.
+      if (form.is_test) {
+        jobNumber = `TEST-${Math.random().toString(36).slice(2, 8).toUpperCase()}`
+      } else {
+        jobNumber = `DTF-${Date.now().toString().slice(-5)}`
+        if (isOnline) {
+          const { data } = await supabase.rpc('generate_job_number')
+          if (data) jobNumber = data
+        }
       }
 
       // job insert
@@ -138,6 +144,7 @@ export default function NewIntake() {
         surface_type: form.surface_type || null,
         surface_color: form.surface_color || null,
         notes: form.notes || null,
+        is_test: form.is_test,
         created_at: new Date().toISOString(),
       }
       savedJob = await writeRecord('jobs', jobPayload, isOnline)
@@ -346,6 +353,23 @@ export default function NewIntake() {
               />
             )}
           </div>
+        </section>
+
+        <section>
+          <label className="flex items-center gap-3 cursor-pointer">
+            <div
+              onClick={() => set('is_test', !form.is_test)}
+              className={`w-10 h-6 rounded-full transition-colors flex items-center px-1 ${form.is_test ? 'bg-amber-500' : 'bg-gray-300'}`}
+            >
+              <div className={`w-4 h-4 rounded-full bg-white shadow transition-transform ${form.is_test ? 'translate-x-4' : 'translate-x-0'}`} />
+            </div>
+            <span className="text-sm font-medium text-[#1F2937]">Mark as Test Job</span>
+          </label>
+          {form.is_test && (
+            <p className="text-xs text-amber-700 mt-2">
+              This job will not use a real job number and can be safely deleted later.
+            </p>
+          )}
         </section>
 
         {/* Submit */}
