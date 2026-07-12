@@ -922,6 +922,7 @@ export default function JobDetail() {
           </div>
           <div
             className="flex-1 flex items-center justify-center px-4"
+            style={{ touchAction: 'none' }}
             onClick={e => e.stopPropagation()}
             onTouchStart={e => {
               touchStartX.current = e.touches[0].clientX
