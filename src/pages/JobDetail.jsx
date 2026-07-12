@@ -940,6 +940,9 @@ export default function JobDetail() {
             <img
               src={lightboxImg.url}
               alt={lightboxImg.img.image_type ?? 'job photo'}
+              draggable={false}
+              style={{ touchAction: 'none' }}
+              onTouchStart={() => alert('IMG TOUCHSTART FIRED')}
               className="max-w-full max-h-full object-contain rounded-lg"
             />
           </div>
