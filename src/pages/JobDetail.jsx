@@ -927,6 +927,7 @@ export default function JobDetail() {
             onTouchEnd={e => {
               if (touchStartX.current === null) return
               const deltaX = e.changedTouches[0].clientX - touchStartX.current
+              flashToast(`touch detected, deltaX=${Math.round(deltaX)}`)
               const SWIPE_THRESHOLD = 50
               if (deltaX > SWIPE_THRESHOLD) goToPhoto('prev')
               else if (deltaX < -SWIPE_THRESHOLD) goToPhoto('next')
