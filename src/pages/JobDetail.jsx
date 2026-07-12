@@ -280,6 +280,16 @@ export default function JobDetail() {
     flashToast(`Status → ${formatEnum(status)}`)
   }
 
+  const handleCancelJob = () => {
+    if (!window.confirm('Cancel this job? It will be marked cancelled and excluded from active work, but not deleted.')) return
+    saveStatus('cancelled')
+  }
+
+  const handleUncancelJob = () => {
+    if (!window.confirm('Restore this job to active status?')) return
+    saveStatus('active')
+  }
+
   const saveNotes = async () => {
     if (!job) return
     const updated = { ...job, notes: notesVal, updated_at: new Date().toISOString() }
@@ -503,6 +513,15 @@ export default function JobDetail() {
         {job.is_test && (
           <button onClick={handleDeleteTestJob} className="text-white/80 hover:text-white" disabled={deleting}>
             <Trash2 size={18} />
+          </button>
+        )}
+        {job.status !== 'cancelled' ? (
+          <button onClick={handleCancelJob} className="text-white/80 hover:text-white">
+            <X size={18} />
+          </button>
+        ) : (
+          <button onClick={handleUncancelJob} className="text-xs text-white/80 hover:text-white underline">
+            Restore
           </button>
         )}
       </header>
