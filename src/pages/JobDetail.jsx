@@ -923,11 +923,15 @@ export default function JobDetail() {
           <div
             className="flex-1 flex items-center justify-center px-4"
             onClick={e => e.stopPropagation()}
-            onTouchStart={e => { touchStartX.current = e.touches[0].clientX }}
+            onTouchStart={e => {
+              touchStartX.current = e.touches[0].clientX
+            }}
             onTouchEnd={e => {
-              if (touchStartX.current === null) return
-              const deltaX = e.changedTouches[0].clientX - touchStartX.current
-              flashToast(`touch detected, deltaX=${Math.round(deltaX)}`)
+              const startX = touchStartX.current
+              const endX = e.changedTouches[0]?.clientX
+              flashToast(`startX=${startX}, endX=${endX}`)
+              if (startX === null) { touchStartX.current = null; return }
+              const deltaX = endX - startX
               const SWIPE_THRESHOLD = 50
               if (deltaX > SWIPE_THRESHOLD) goToPhoto('prev')
               else if (deltaX < -SWIPE_THRESHOLD) goToPhoto('next')
