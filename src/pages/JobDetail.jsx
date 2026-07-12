@@ -945,17 +945,17 @@ export default function JobDetail() {
             />
             <button
               onClick={e => { e.stopPropagation(); goToPhoto('prev') }}
-              className="absolute left-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/40 text-white"
+              className="absolute left-2 top-1/2 -translate-y-1/2 p-4 rounded-full bg-red-600 text-white"
               aria-label="Previous photo"
             >
-              <ChevronLeft size={24} />
+              <ChevronLeft size={40} />
             </button>
             <button
               onClick={e => { e.stopPropagation(); goToPhoto('next') }}
-              className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/40 text-white"
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-4 rounded-full bg-red-600 text-white"
               aria-label="Next photo"
             >
-              <ChevronRight size={24} />
+              <ChevronRight size={40} />
             </button>
           </div>
         </div>
