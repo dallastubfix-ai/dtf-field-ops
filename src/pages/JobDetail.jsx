@@ -124,6 +124,9 @@ export default function JobDetail() {
   const [signedUrls, setSignedUrls] = useState({})
   const [lightboxImg, setLightboxImg] = useState(null)
   const touchStartX = useRef(null)
+  const lightboxContainerRef = useRef(null)
+  const [dragX, setDragX] = useState(0)
+  const [isSettling, setIsSettling] = useState(false)
 
   const flashToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 1800) }
 
@@ -542,7 +545,7 @@ export default function JobDetail() {
       </header>
 
       {toast && (
-        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-[60] bg-green-600 text-white text-sm px-4 py-2 rounded-lg shadow-lg">
+        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-white text-sm px-4 py-2 rounded-lg shadow-lg">
           {toast}
         </div>
       )}
@@ -896,7 +899,14 @@ export default function JobDetail() {
         )}
       </div>
 
-      {lightboxImg && (
+      {lightboxImg && (() => {
+        const currentKey = lightboxImg.img.id || lightboxImg.img._localId
+        const currentIdx = sortedImages.findIndex(img => (img.id || img._localId) === currentKey)
+        const prevImg = currentIdx > 0 ? sortedImages[currentIdx - 1] : null
+        const nextImg = currentIdx >= 0 && currentIdx < sortedImages.length - 1 ? sortedImages[currentIdx + 1] : null
+        const prevUrl = prevImg ? signedUrls[prevImg.id || prevImg._localId] : null
+        const nextUrl = nextImg ? signedUrls[nextImg.id || nextImg._localId] : null
+        return (
         <div
           className="fixed inset-0 z-50 bg-black/95 flex flex-col"
           onClick={() => setLightboxImg(null)}
@@ -921,31 +931,75 @@ export default function JobDetail() {
             </div>
           </div>
           <div
-            className="flex-1 flex items-center justify-center px-4"
+            ref={lightboxContainerRef}
+            className="flex-1 relative overflow-hidden"
             onClick={e => e.stopPropagation()}
             onTouchStart={e => {
               touchStartX.current = e.touches[0].clientX
             }}
-            onTouchEnd={e => {
-              const startX = touchStartX.current
-              const endX = e.changedTouches[0]?.clientX
-              flashToast(`SWIPE TEST v2: startX=${startX}, endX=${endX}`)
-              if (startX === null) { touchStartX.current = null; return }
-              const deltaX = endX - startX
-              const SWIPE_THRESHOLD = 50
-              if (deltaX > SWIPE_THRESHOLD) goToPhoto('prev')
-              else if (deltaX < -SWIPE_THRESHOLD) goToPhoto('next')
+            onTouchMove={e => {
+              if (touchStartX.current === null) return
+              let delta = e.touches[0].clientX - touchStartX.current
+              if (delta > 0 && !prevImg) delta *= 0.3
+              if (delta < 0 && !nextImg) delta *= 0.3
+              setDragX(delta)
+            }}
+            onTouchEnd={() => {
+              if (touchStartX.current === null) return
+              const containerWidth = lightboxContainerRef.current?.offsetWidth || window.innerWidth
+              const threshold = containerWidth * 0.3
+              const direction = dragX < 0 ? 'next' : 'prev'
+              const hasTarget = direction === 'next' ? !!nextImg : !!prevImg
+              if (Math.abs(dragX) > threshold && hasTarget) {
+                setIsSettling(true)
+                setDragX(direction === 'next' ? -containerWidth : containerWidth)
+                setTimeout(() => {
+                  goToPhoto(direction)
+                  setIsSettling(false)
+                  setDragX(0)
+                }, 280)
+              } else {
+                setIsSettling(true)
+                setDragX(0)
+                setTimeout(() => setIsSettling(false), 280)
+              }
               touchStartX.current = null
             }}
           >
-            <img
-              src={lightboxImg.url}
-              alt={lightboxImg.img.image_type ?? 'job photo'}
-              className="max-w-full max-h-full object-contain rounded-lg"
-            />
+            <div
+              className="absolute inset-0 flex items-center justify-center"
+              style={{
+                transform: `translateX(${dragX}px)`,
+                transition: isSettling ? 'transform 280ms ease-out' : 'none',
+              }}
+            >
+              {prevUrl && (
+                <img
+                  src={prevUrl}
+                  alt="previous"
+                  className="absolute w-full h-full object-contain rounded-lg px-4"
+                  style={{ left: '-100%' }}
+                />
+              )}
+              <img
+                src={lightboxImg.url}
+                alt={lightboxImg.img.image_type ?? 'job photo'}
+                className="absolute w-full h-full object-contain rounded-lg px-4"
+                style={{ left: '0' }}
+              />
+              {nextUrl && (
+                <img
+                  src={nextUrl}
+                  alt="next"
+                  className="absolute w-full h-full object-contain rounded-lg px-4"
+                  style={{ left: '100%' }}
+                />
+              )}
+            </div>
           </div>
         </div>
-      )}
+        )
+      })()}
 
       {/* Add Appointment Modal */}
       <Modal open={apptModal} onClose={() => setApptModal(false)} title="Add Appointment">
