@@ -868,6 +868,11 @@ export default function JobDetail() {
             )}
           </div>
         )}
+        {job.status === 'cancelled' && (
+          <div className="w-full text-center py-2 text-sm text-[#6B7280] bg-gray-100 rounded-lg">
+            This job has been cancelled. Tap Restore in the header to reactivate it.
+          </div>
+        )}
         {job.status === 'completed' && (
           <Button variant="gold" className="w-full" disabled={!customer?.phone}
             onClick={requestReview}>
