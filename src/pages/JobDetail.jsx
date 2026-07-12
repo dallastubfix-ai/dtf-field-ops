@@ -937,6 +937,7 @@ export default function JobDetail() {
             className="flex-1 relative overflow-hidden"
             onClick={e => e.stopPropagation()}
             onTouchStart={e => {
+              alert('touchstart fired')
               touchStartX.current = e.touches[0].clientX
             }}
             onTouchMove={e => {
