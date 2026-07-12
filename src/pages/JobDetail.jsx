@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, Phone, Camera, Video, FileText, Shield,
-  ChevronDown, ChevronUp, Plus, Calendar, Trash2, X, MessageSquare
+  ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Plus, Calendar, Trash2, X, MessageSquare
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { supabase } from '../lib/supabase'
@@ -921,11 +921,10 @@ export default function JobDetail() {
             </div>
           </div>
           <div
-            className="flex-1 flex items-center justify-center px-4"
+            className="flex-1 flex items-center justify-center px-4 relative"
             style={{ touchAction: 'none' }}
             onClick={e => e.stopPropagation()}
             onTouchStart={e => {
-              alert('TOUCHSTART FIRED')
               touchStartX.current = e.touches[0].clientX
             }}
             onTouchEnd={e => {
@@ -942,9 +941,22 @@ export default function JobDetail() {
               alt={lightboxImg.img.image_type ?? 'job photo'}
               draggable={false}
               style={{ touchAction: 'none' }}
-              onTouchStart={() => alert('IMG TOUCHSTART FIRED')}
               className="max-w-full max-h-full object-contain rounded-lg"
             />
+            <button
+              onClick={e => { e.stopPropagation(); goToPhoto('prev') }}
+              className="absolute left-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/40 text-white"
+              aria-label="Previous photo"
+            >
+              <ChevronLeft size={24} />
+            </button>
+            <button
+              onClick={e => { e.stopPropagation(); goToPhoto('next') }}
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/40 text-white"
+              aria-label="Next photo"
+            >
+              <ChevronRight size={24} />
+            </button>
           </div>
         </div>
       )}
