@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, Phone, Camera, Video, FileText, Shield,
@@ -123,6 +123,7 @@ export default function JobDetail() {
   // Signed URLs for private bucket images (id/_localId -> url)
   const [signedUrls, setSignedUrls] = useState({})
   const [lightboxImg, setLightboxImg] = useState(null)
+  const touchStartX = useRef(null)
 
   const flashToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 1800) }
 
@@ -226,6 +227,20 @@ export default function JobDetail() {
       console.error('Delete photo error:', err)
       alert('Failed to delete photo. Please try again.')
     }
+  }
+
+  const goToPhoto = (direction) => {
+    if (!lightboxImg) return
+    const currentKey = lightboxImg.img.id || lightboxImg.img._localId
+    const currentIndex = sortedImages.findIndex(img => (img.id || img._localId) === currentKey)
+    if (currentIndex === -1) return
+    const newIndex = currentIndex + (direction === 'next' ? 1 : -1)
+    if (newIndex < 0 || newIndex >= sortedImages.length) return
+    const newImg = sortedImages[newIndex]
+    const newKey = newImg.id || newImg._localId
+    const newUrl = signedUrls[newKey]
+    if (!newUrl) return
+    setLightboxImg({ url: newUrl, img: newImg })
   }
 
   const deleteVideo = async (v) => {
@@ -905,7 +920,19 @@ export default function JobDetail() {
               </button>
             </div>
           </div>
-          <div className="flex-1 flex items-center justify-center px-4" onClick={e => e.stopPropagation()}>
+          <div
+            className="flex-1 flex items-center justify-center px-4"
+            onClick={e => e.stopPropagation()}
+            onTouchStart={e => { touchStartX.current = e.touches[0].clientX }}
+            onTouchEnd={e => {
+              if (touchStartX.current === null) return
+              const deltaX = e.changedTouches[0].clientX - touchStartX.current
+              const SWIPE_THRESHOLD = 50
+              if (deltaX > SWIPE_THRESHOLD) goToPhoto('prev')
+              else if (deltaX < -SWIPE_THRESHOLD) goToPhoto('next')
+              touchStartX.current = null
+            }}
+          >
             <img
               src={lightboxImg.url}
               alt={lightboxImg.img.image_type ?? 'job photo'}
