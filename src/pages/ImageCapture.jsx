@@ -102,7 +102,7 @@ export default function ImageCapture() {
 
       // HEIC/HEIF → JPEG (best-effort) before upload
       const file = await toUploadableJpeg(item.file)
-      const filename = `${job?.job_number ?? id}-${item.type.toUpperCase()}-${ts}.jpg`
+      const filename = `${job?.job_number ?? id}-${item.type.toUpperCase()}-${ts}-${item.id.slice(0, 8)}.jpg`
       const storagePath = `${id}/${filename}`
 
       const { error: uploadError } = await supabase.storage
@@ -145,7 +145,7 @@ export default function ImageCapture() {
 
     const ok = pending.length - failed
     if (failed > 0) {
-      setToast(`${ok} uploaded · ${failed} failed — check connection`)
+      setToast(`${ok} uploaded · ${failed} failed — please try again`)
       return
     }
     setToast(`${ok} photo${ok > 1 ? 's' : ''} uploaded!`)
