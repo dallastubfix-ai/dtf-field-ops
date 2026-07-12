@@ -925,6 +925,7 @@ export default function JobDetail() {
             style={{ touchAction: 'none' }}
             onClick={e => e.stopPropagation()}
             onTouchStart={e => {
+              alert('TOUCHSTART FIRED')
               touchStartX.current = e.touches[0].clientX
             }}
             onTouchEnd={e => {
