@@ -929,7 +929,7 @@ export default function JobDetail() {
             onTouchEnd={e => {
               const startX = touchStartX.current
               const endX = e.changedTouches[0]?.clientX
-              flashToast(`startX=${startX}, endX=${endX}`)
+              flashToast(`SWIPE TEST v2: startX=${startX}, endX=${endX}`)
               if (startX === null) { touchStartX.current = null; return }
               const deltaX = endX - startX
               const SWIPE_THRESHOLD = 50
