@@ -899,6 +899,7 @@ export default function JobDetail() {
         )}
       </div>
 
+      {/* Lightbox with sliding-strip swipe animation */}
       {lightboxImg && (() => {
         const currentKey = lightboxImg.img.id || lightboxImg.img._localId
         const currentIdx = sortedImages.findIndex(img => (img.id || img._localId) === currentKey)
