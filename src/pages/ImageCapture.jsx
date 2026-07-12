@@ -100,45 +100,52 @@ export default function ImageCapture() {
     for (const item of pending) {
       setProgress(p => ({ ...p, [item.id]: 'uploading' }))
 
-      // HEIC/HEIF → JPEG (best-effort) before upload
-      const file = await toUploadableJpeg(item.file)
-      const filename = `${job?.job_number ?? id}-${item.type.toUpperCase()}-${ts}-${item.id.slice(0, 8)}.jpg`
-      const storagePath = `${id}/${filename}`
+      try {
+        // HEIC/HEIF → JPEG (best-effort) before upload
+        const file = await toUploadableJpeg(item.file)
+        const filename = `${job?.job_number ?? id}-${item.type.toUpperCase()}-${ts}-${item.id.slice(0, 8)}.jpg`
+        const storagePath = `${id}/${filename}`
 
-      const { error: uploadError } = await supabase.storage
-        .from('job-images')
-        .upload(storagePath, file, { contentType: file.type || 'image/jpeg', upsert: false })
+        const { error: uploadError } = await supabase.storage
+          .from('job-images')
+          .upload(storagePath, file, { contentType: file.type || 'image/jpeg', upsert: false })
 
-      if (uploadError) {
-        console.error('Storage upload error:', uploadError)
+        if (uploadError) {
+          console.error('Storage upload error:', uploadError)
+          setProgress(p => ({ ...p, [item.id]: 'error' }))
+          failed++
+          continue
+        }
+
+        const record = {
+          id: crypto.randomUUID(),
+          job_id: id,
+          storage_path: storagePath,
+          filename,
+          image_type: item.type,
+          latitude: coords?.lat ?? null,
+          longitude: coords?.lng ?? null,
+          captured_at: new Date().toISOString(),
+        }
+
+        // The images-table row is what makes the photo show up in JobDetail.
+        // If this insert fails the upload is effectively lost, so surface it.
+        const { error: insertError } = await supabase.from('images').insert(record)
+        if (insertError) {
+          console.error('images insert error:', insertError)
+          setProgress(p => ({ ...p, [item.id]: 'error' }))
+          failed++
+          continue
+        }
+
+        await db.images.add({ ...record, _synced: true })
+        setProgress(p => ({ ...p, [item.id]: 'done' }))
+      } catch (err) {
+        console.error('Unexpected upload error:', err)
         setProgress(p => ({ ...p, [item.id]: 'error' }))
         failed++
         continue
       }
-
-      const record = {
-        id: crypto.randomUUID(),
-        job_id: id,
-        storage_path: storagePath,
-        filename,
-        image_type: item.type,
-        latitude: coords?.lat ?? null,
-        longitude: coords?.lng ?? null,
-        captured_at: new Date().toISOString(),
-      }
-
-      // The images-table row is what makes the photo show up in JobDetail.
-      // If this insert fails the upload is effectively lost, so surface it.
-      const { error: insertError } = await supabase.from('images').insert(record)
-      if (insertError) {
-        console.error('images insert error:', insertError)
-        setProgress(p => ({ ...p, [item.id]: 'error' }))
-        failed++
-        continue
-      }
-
-      await db.images.add({ ...record, _synced: true })
-      setProgress(p => ({ ...p, [item.id]: 'done' }))
     }
 
     setUploading(false)
