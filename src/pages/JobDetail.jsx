@@ -545,7 +545,7 @@ export default function JobDetail() {
       </header>
 
       {toast && (
-        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-white text-sm px-4 py-2 rounded-lg shadow-lg">
+        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-[60] bg-green-600 text-white text-sm px-4 py-2 rounded-lg shadow-lg">
           {toast}
         </div>
       )}
@@ -946,6 +946,7 @@ export default function JobDetail() {
               setDragX(delta)
             }}
             onTouchEnd={() => {
+              flashToast(`dragX=${Math.round(dragX)}, hasStart=${touchStartX.current !== null}`)
               if (touchStartX.current === null) return
               const containerWidth = lightboxContainerRef.current?.offsetWidth || window.innerWidth
               const threshold = containerWidth * 0.3
