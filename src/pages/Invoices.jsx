@@ -8,6 +8,7 @@ import { supabase } from '../lib/supabase'
 import { upsertLocal } from '../lib/sync'
 import EmptyState from '../components/ui/EmptyState'
 import LoadingSpinner from '../components/ui/LoadingSpinner'
+import Badge from '../components/ui/Badge'
 
 const FILTERS = [
   { label: 'All',     value: 'all'     },
@@ -81,6 +82,7 @@ export default function Invoices() {
 
   const outstanding = (invoices ?? [])
     .filter(i => i.payment_status === 'unpaid' || i.payment_status === 'partial')
+    .filter(i => jobs[i.job_id]?.status !== 'cancelled')
     .reduce((sum, i) => sum + (Number(i.total) || 0), 0)
 
   if (error) return (
@@ -184,6 +186,11 @@ export default function Invoices() {
                     )}
                   </div>
                 </div>
+                {job?.status === 'cancelled' && (
+                  <div className="mt-1">
+                    <Badge status="cancelled" />
+                  </div>
+                )}
                 <div className="text-sm text-[#6B7280]">
                   {customer?.full_name ?? '--'} · {job?.job_number ?? '--'}
                 </div>
