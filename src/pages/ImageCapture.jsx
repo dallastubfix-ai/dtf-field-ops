@@ -5,6 +5,7 @@ import { ArrowLeft, Camera, Image, X, Upload } from 'lucide-react'
 import { format } from 'date-fns'
 import { supabase } from '../lib/supabase'
 import db from '../lib/db'
+import { getValidProviderToken } from '../lib/googleToken'
 import heic2any from 'heic2any'
 import Button from '../components/ui/Button'
 
@@ -91,45 +92,94 @@ export default function ImageCapture() {
   const upload = async () => {
     if (captured.length === 0) return
     setUploading(true)
+
+    const providerToken = await getValidProviderToken()
+    if (!providerToken) {
+      setToast('Google Drive not connected — please try again')
+      setUploading(false)
+      return
+    }
+
+    // Ensure this job has a Drive subfolder; create one if it doesn't exist yet.
+    let folderId = job?.drive_folder_id
+    if (!folderId) {
+      try {
+        const topFolderId = import.meta.env.VITE_GOOGLE_DRIVE_PHOTOS_FOLDER_ID
+        const folderMeta = {
+          name: job?.job_number ?? id,
+          mimeType: 'application/vnd.google-apps.folder',
+          ...(topFolderId ? { parents: [topFolderId] } : {}),
+        }
+        const folderRes = await fetch('https://www.googleapis.com/drive/v3/files', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${providerToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(folderMeta),
+        })
+        if (!folderRes.ok) {
+          const errBody = await folderRes.text()
+          throw new Error(`Folder creation failed: ${folderRes.status} - ${errBody.slice(0, 150)}`)
+        }
+        const { id: newFolderId } = await folderRes.json()
+        folderId = newFolderId
+        await supabase.from('jobs').update({ drive_folder_id: folderId }).eq('id', id)
+        await db.jobs.where('id').equals(id).modify({ drive_folder_id: folderId })
+      } catch (err) {
+        console.error('Drive folder creation error:', err)
+        setToast('Could not create Drive folder — please try again')
+        setUploading(false)
+        return
+      }
+    }
+
     const ts = format(new Date(), "yyyy-MM-dd'T'HH-mm-ss")
-
     let failed = 0
-    // On a retry, skip photos that already uploaded successfully
     const pending = captured.filter(i => progress[i.id] !== 'done')
-
     for (const item of pending) {
       setProgress(p => ({ ...p, [item.id]: 'uploading' }))
-
       try {
-        // HEIC/HEIF → JPEG (best-effort) before upload
         const file = await toUploadableJpeg(item.file)
         const filename = `${job?.job_number ?? id}-${item.type.toUpperCase()}-${ts}-${item.id.slice(0, 8)}.jpg`
-        const storagePath = `${id}/${filename}`
 
-        const { error: uploadError } = await supabase.storage
-          .from('job-images')
-          .upload(storagePath, file, { contentType: file.type || 'image/jpeg', upsert: false })
+        const driveMeta = {
+          name: filename,
+          mimeType: file.type || 'image/jpeg',
+          parents: [folderId],
+        }
+        const form = new FormData()
+        form.append('metadata', new Blob([JSON.stringify(driveMeta)], { type: 'application/json' }))
+        form.append('file', file)
 
-        if (uploadError) {
-          console.error('Storage upload error:', uploadError)
+        const uploadRes = await fetch(
+          'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id',
+          {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${providerToken}` },
+            body: form,
+          }
+        )
+        if (!uploadRes.ok) {
+          const errBody = await uploadRes.text()
+          console.error('Drive upload error:', errBody)
           setProgress(p => ({ ...p, [item.id]: 'error' }))
           failed++
           continue
         }
+        const { id: driveFileId } = await uploadRes.json()
 
         const record = {
           id: crypto.randomUUID(),
           job_id: id,
-          storage_path: storagePath,
+          storage_path: null,
+          google_drive_file_id: driveFileId,
           filename,
           image_type: item.type,
           latitude: coords?.lat ?? null,
           longitude: coords?.lng ?? null,
           captured_at: new Date().toISOString(),
         }
-
-        // The images-table row is what makes the photo show up in JobDetail.
-        // If this insert fails the upload is effectively lost, so surface it.
         const { error: insertError } = await supabase.from('images').insert(record)
         if (insertError) {
           console.error('images insert error:', insertError)
@@ -137,7 +187,6 @@ export default function ImageCapture() {
           failed++
           continue
         }
-
         await db.images.add({ ...record, _synced: true })
         setProgress(p => ({ ...p, [item.id]: 'done' }))
       } catch (err) {
@@ -147,9 +196,7 @@ export default function ImageCapture() {
         continue
       }
     }
-
     setUploading(false)
-
     const ok = pending.length - failed
     if (failed > 0) {
       setToast(`${ok} uploaded · ${failed} failed — please try again`)

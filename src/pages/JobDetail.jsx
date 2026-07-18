@@ -196,15 +196,32 @@ export default function JobDetail() {
       if (!images || images.length === 0) { setSignedUrls({}); return }
       const entries = await Promise.all(images.map(async (img) => {
         const key = img.id || img._localId
-        if (!img.storage_path) return [key, null]
-        try {
-          const { data } = await supabase.storage
-            .from('job-images')
-            .createSignedUrl(img.storage_path, 3600)
-          return [key, data?.signedUrl ?? null]
-        } catch {
-          return [key, null]
+        if (img.storage_path) {
+          try {
+            const { data } = await supabase.storage
+              .from('job-images')
+              .createSignedUrl(img.storage_path, 3600)
+            return [key, data?.signedUrl ?? null]
+          } catch {
+            return [key, null]
+          }
         }
+        if (img.google_drive_file_id) {
+          try {
+            const token = await getValidProviderToken()
+            if (!token) return [key, null]
+            const res = await fetch(
+              `https://www.googleapis.com/drive/v3/files/${img.google_drive_file_id}?alt=media`,
+              { headers: { Authorization: `Bearer ${token}` } }
+            )
+            if (!res.ok) return [key, null]
+            const blob = await res.blob()
+            return [key, URL.createObjectURL(blob)]
+          } catch {
+            return [key, null]
+          }
+        }
+        return [key, null]
       }))
       if (!cancelled) setSignedUrls(Object.fromEntries(entries))
     }
@@ -217,6 +234,19 @@ export default function JobDetail() {
     try {
       if (img.storage_path) {
         await supabase.storage.from('job-images').remove([img.storage_path])
+      }
+      if (img.google_drive_file_id) {
+        try {
+          const token = await getValidProviderToken()
+          if (token) {
+            await fetch(`https://www.googleapis.com/drive/v3/files/${img.google_drive_file_id}`, {
+              method: 'DELETE',
+              headers: { Authorization: `Bearer ${token}` },
+            })
+          }
+        } catch (driveErr) {
+          console.error('Drive delete error (continuing to remove DB record):', driveErr)
+        }
       }
       const imgId = img.id
       if (imgId) await supabase.from('images').delete().eq('id', imgId)
