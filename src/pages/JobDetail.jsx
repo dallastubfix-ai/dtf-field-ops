@@ -597,7 +597,7 @@ export default function JobDetail() {
                   href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${customer.address} ${customer.city_state_zip ?? ''}`.trim())}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-navy text-sm font-medium pt-1"
+                  className="inline-flex items-center gap-1 bg-red-600 text-white text-base font-bold px-3 py-2 rounded-lg mt-2"
                 >
                   <MapPin size={14} /> Open in Maps
                 </a>
