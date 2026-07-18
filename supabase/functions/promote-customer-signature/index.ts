@@ -125,6 +125,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
   const invoiceId = record.invoice_id as string;
   const customerSignaturePath = record.customer_signature_path as string;
   const customerName = record.customer_name as string | null | undefined;
+  const customerSignedAt = record.used_at as string;
 
   // --- Step 6: Admin client (service role — bypasses RLS) --------------------
   const adminClient = createClient(
@@ -149,6 +150,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     .from("invoices")
     .update({
       customer_signature_url: signedUrlData.signedUrl,
+      customer_signed_at: customerSignedAt,
       updated_at: new Date().toISOString(),
     })
     .eq("id", invoiceId);

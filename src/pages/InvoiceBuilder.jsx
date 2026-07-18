@@ -427,17 +427,22 @@ export default function InvoiceBuilder() {
   }
 
   const handleSignaturesComplete = async (techUrl, custUrl) => {
-    setInv(v => ({ ...v, technician_signature_url: techUrl, customer_signature_url: custUrl }))
+    const signedAt = new Date().toISOString()
+    setInv(v => ({ ...v, technician_signature_url: techUrl, customer_signature_url: custUrl, technician_signed_at: signedAt, customer_signed_at: signedAt }))
     setShowSigCapture(false)
     try {
       await supabase.from('invoices').update({
         technician_signature_url: techUrl,
         customer_signature_url: custUrl,
+        technician_signed_at: signedAt,
+        customer_signed_at: signedAt,
         updated_at: new Date().toISOString(),
       }).eq('id', inv.id)
       await db.invoices.where('id').equals(inv.id).modify({
         technician_signature_url: techUrl,
         customer_signature_url: custUrl,
+        technician_signed_at: signedAt,
+        customer_signed_at: signedAt,
       })
       setToast('Signatures saved ✓')
       setTimeout(() => setToast(''), 2800)
@@ -845,7 +850,10 @@ export default function InvoiceBuilder() {
                 : <div className="sig-line"></div>
               }
               <div className="sig-sub">Print Name &amp; Date</div>
-              <div className="sig-name-val">{inv.technician || NBSP}</div>
+              <div className="sig-name-val">
+                {inv.technician || NBSP}
+                {inv.technician_signed_at ? ` · ${format(new Date(inv.technician_signed_at), 'MMM d, yyyy')}` : ''}
+              </div>
             </div>
             <div>
               <div className="sig-title">Customer Signature — Work Completed &amp; Accepted</div>
@@ -854,7 +862,10 @@ export default function InvoiceBuilder() {
                 : <div className="sig-line"></div>
               }
               <div className="sig-sub">Print Name &amp; Date</div>
-              <div className="sig-name-val">{inv.customer_name || NBSP}</div>
+              <div className="sig-name-val">
+                {inv.customer_name || NBSP}
+                {inv.customer_signed_at ? ` · ${format(new Date(inv.customer_signed_at), 'MMM d, yyyy')}` : ''}
+              </div>
             </div>
           </div>
 
