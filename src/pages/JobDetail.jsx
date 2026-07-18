@@ -590,18 +590,6 @@ export default function JobDetail() {
                 </a>
               )}
               {customer?.email && <div className="text-sm text-[#6B7280]">{customer.email}</div>}
-              {customer?.address && <div className="text-sm text-[#6B7280]">{customer.address}</div>}
-              {customer?.city_state_zip && <div className="text-sm text-[#6B7280]">{customer.city_state_zip}</div>}
-              {customer?.address && (
-                <a
-                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${customer.address} ${customer.city_state_zip ?? ''}`.trim())}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 bg-red-600 text-white text-base font-bold px-3 py-2 rounded-lg mt-2"
-                >
-                  <MapPin size={14} /> Open in Maps
-                </a>
-              )}
               {customer?.lead_source && (
                 <div className="text-xs text-[#9CA3AF] pt-1">
                   Lead: {customer.lead_source}{customer.referred_by ? ` · ${customer.referred_by}` : ''}
