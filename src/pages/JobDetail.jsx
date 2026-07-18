@@ -504,29 +504,6 @@ export default function JobDetail() {
     window.location.href = `sms:${e164}${separator}body=${encodeURIComponent(body)}`
   }
 
-  const testDriveRead = async () => {
-    const token = await getValidProviderToken()
-    if (!token) {
-      alert('FAILED: no token')
-      return
-    }
-    try {
-      const res = await fetch(
-        'https://www.googleapis.com/drive/v3/files/13enZ_oNPvI3lY3SDMJH_A3eqL1NonynP?alt=media',
-        { headers: { Authorization: `Bearer ${token}` } }
-      )
-      if (!res.ok) {
-        const body = await res.text()
-        alert(`FAILED: ${res.status} - ${body.slice(0, 150)}`)
-        return
-      }
-      const blob = await res.blob()
-      alert(`SUCCESS: got ${blob.size} bytes, type ${blob.type}`)
-    } catch (err) {
-      alert(`FAILED: ${err.message}`)
-    }
-  }
-
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -578,10 +555,6 @@ export default function JobDetail() {
           </button>
         )}
       </header>
-
-      <button onClick={testDriveRead} style={{ position: 'fixed', top: 60, left: 10, zIndex: 9999, background: 'red', color: 'white', padding: '10px', fontWeight: 'bold' }}>
-        TEST DRIVE READ
-      </button>
 
       {toast && (
         <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-white text-sm px-4 py-2 rounded-lg shadow-lg">
