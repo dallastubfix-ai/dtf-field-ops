@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, Phone, Camera, Video, FileText, Shield,
-  ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Plus, Calendar, Trash2, X, MessageSquare
+  ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Plus, Calendar, Trash2, X, MessageSquare, MapPin
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { supabase } from '../lib/supabase'
@@ -592,6 +592,16 @@ export default function JobDetail() {
               {customer?.email && <div className="text-sm text-[#6B7280]">{customer.email}</div>}
               {customer?.address && <div className="text-sm text-[#6B7280]">{customer.address}</div>}
               {customer?.city_state_zip && <div className="text-sm text-[#6B7280]">{customer.city_state_zip}</div>}
+              {customer?.address && (
+                <a
+                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${customer.address} ${customer.city_state_zip ?? ''}`.trim())}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-navy text-sm font-medium pt-1"
+                >
+                  <MapPin size={14} /> Open in Maps
+                </a>
+              )}
               {customer?.lead_source && (
                 <div className="text-xs text-[#9CA3AF] pt-1">
                   Lead: {customer.lead_source}{customer.referred_by ? ` · ${customer.referred_by}` : ''}
