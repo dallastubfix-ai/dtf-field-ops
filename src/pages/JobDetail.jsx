@@ -690,7 +690,17 @@ export default function JobDetail() {
                           {format(new Date(a.appointment_datetime), 'EEE, MMM d · h:mm a')}
                         </div>
                         {a.location_address && (
-                          <div className="text-xs text-[#6B7280] mt-0.5">{a.location_address}</div>
+                          <>
+                            <div className="text-xs text-[#6B7280] mt-0.5">{a.location_address}</div>
+                            <a
+                              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(a.location_address)}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-navy text-xs font-medium mt-1"
+                            >
+                              <MapPin size={12} /> Open in Maps
+                            </a>
+                          </>
                         )}
                         {a.notes && (
                           <div className="text-xs text-[#6B7280] mt-0.5 whitespace-pre-wrap">{a.notes}</div>
