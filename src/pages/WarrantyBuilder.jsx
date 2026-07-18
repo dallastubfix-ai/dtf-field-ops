@@ -218,10 +218,8 @@ export default function WarrantyBuilder() {
         <button onClick={() => navigate(-1)} className="text-white"><ArrowLeft size={20} /></button>
         <h1 className="text-white font-bold text-base flex-1">Warranty Builder</h1>
         <Button variant="gold" className="py-1.5 px-3" onClick={() => {
-          const originalTitle = document.title
           document.title = `${w.invoice_number || 'warranty'}-warranty`
           window.print()
-          document.title = originalTitle
         }}>
           <Printer size={14} /> Print
         </Button>

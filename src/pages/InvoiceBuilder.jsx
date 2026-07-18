@@ -422,10 +422,8 @@ export default function InvoiceBuilder() {
 
   const print = async () => {
     await save(false)
-    const originalTitle = document.title
     document.title = `${inv.invoice_number || 'invoice'}-invoice`
     window.print()
-    document.title = originalTitle
   }
 
   const handleSignaturesComplete = async (techUrl, custUrl) => {
