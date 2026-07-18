@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, Phone, Camera, Video, FileText, Shield,
-  ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Plus, Calendar, Trash2, X, MessageSquare, MapPin
+  ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Plus, Calendar, Trash2, X, MessageSquare, MapPin, ArrowLeftRight
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { supabase } from '../lib/supabase'
@@ -927,9 +927,10 @@ export default function JobDetail() {
           <div className="flex items-center justify-between px-4 py-3" onClick={e => e.stopPropagation()}>
             <button
               onClick={e => { e.stopPropagation(); toggleImageType(lightboxImg.img) }}
-              className={`text-xs font-bold px-2 py-1 rounded ${lightboxImg.img.image_type === 'before' ? 'bg-green-500 text-white' : 'bg-gold text-white'}`}
+              className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-1 rounded ${lightboxImg.img.image_type === 'before' ? 'bg-green-500 text-white' : 'bg-gold text-white'}`}
             >
               {lightboxImg.img.image_type?.toUpperCase()}
+              <ArrowLeftRight size={12} />
             </button>
             <div className="flex items-center gap-3">
               <button
