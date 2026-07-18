@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { FileText } from 'lucide-react'
+import { FileText, ChevronDown } from 'lucide-react'
 import { format } from 'date-fns'
 import { useLiveQuery } from 'dexie-react-hooks'
 import db from '../lib/db'
@@ -165,7 +165,10 @@ export default function Invoices() {
                       }}
                       className={`text-xs font-semibold px-2 py-0.5 rounded-full capitalize ${paymentPill[inv.payment_status] ?? 'bg-gray-100 text-gray-600'}`}
                     >
-                      {inv.payment_status ?? 'Unpaid'}
+                      <span className="inline-flex items-center gap-0.5">
+                        {inv.payment_status ?? 'Unpaid'}
+                        <ChevronDown size={12} />
+                      </span>
                     </button>
                     {statusMenuFor === inv.id && (
                       <div className="absolute right-0 top-full mt-1 z-50 bg-white rounded-lg border border-[#E5E7EB] shadow-lg overflow-hidden w-28">
