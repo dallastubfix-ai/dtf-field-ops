@@ -229,6 +229,21 @@ export default function JobDetail() {
     }
   }
 
+  const toggleImageType = async (img) => {
+    const newType = img.image_type === 'before' ? 'after' : 'before'
+    try {
+      await supabase.from('images').update({ image_type: newType }).eq('id', img.id)
+      await db.images.where('id').equals(img.id).modify({ image_type: newType })
+      setImages(prev => prev.map(i =>
+        (i.id || i._localId) === (img.id || img._localId) ? { ...i, image_type: newType } : i
+      ))
+      setLightboxImg(prev => prev ? { ...prev, img: { ...prev.img, image_type: newType } } : prev)
+    } catch (err) {
+      console.error('toggleImageType error:', err)
+      alert('Failed to update photo tag. Please try again.')
+    }
+  }
+
   const goToPhoto = (direction) => {
     if (!lightboxImg) return
     const currentKey = lightboxImg.img.id || lightboxImg.img._localId
@@ -910,9 +925,12 @@ export default function JobDetail() {
           onClick={() => setLightboxImg(null)}
         >
           <div className="flex items-center justify-between px-4 py-3" onClick={e => e.stopPropagation()}>
-            <span className={`text-xs font-bold px-2 py-1 rounded ${lightboxImg.img.image_type === 'before' ? 'bg-green-500 text-white' : 'bg-gold text-white'}`}>
+            <button
+              onClick={e => { e.stopPropagation(); toggleImageType(lightboxImg.img) }}
+              className={`text-xs font-bold px-2 py-1 rounded ${lightboxImg.img.image_type === 'before' ? 'bg-green-500 text-white' : 'bg-gold text-white'}`}
+            >
               {lightboxImg.img.image_type?.toUpperCase()}
-            </span>
+            </button>
             <div className="flex items-center gap-3">
               <button
                 onClick={() => deletePhoto(lightboxImg.img)}
