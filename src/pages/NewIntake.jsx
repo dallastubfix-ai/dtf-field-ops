@@ -17,7 +17,9 @@ import { getValidProviderToken } from '../lib/googleToken'
 import AddressAutocomplete from '../components/ui/AddressAutocomplete'
 
 function formatPhone(value) {
-  const digits = value.replace(/\D/g, '').slice(0, 10)
+  let raw = value.replace(/\D/g, '')
+  if (raw.length === 11 && raw.startsWith('1')) raw = raw.slice(1)
+  const digits = raw.slice(0, 10)
   if (digits.length <= 3) return digits
   if (digits.length <= 6) return `(${digits.slice(0,3)}) ${digits.slice(3)}`
   return `(${digits.slice(0,3)}) ${digits.slice(3,6)}-${digits.slice(6)}`
