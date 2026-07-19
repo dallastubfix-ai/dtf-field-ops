@@ -275,10 +275,6 @@ export default function JobDetail() {
   }
 
   const migrateJobPhotosToDrive = async () => {
-    if (job?.job_number !== 'DTF-26010') {
-      alert('This migration button is scoped to DTF-26010 only.')
-      return
-    }
     if (!window.confirm('Migrate all Supabase-stored photos on this job to Google Drive? This will download and re-upload each photo.')) return
 
     const token = await getValidProviderToken()
@@ -683,7 +679,7 @@ export default function JobDetail() {
         )}
       </header>
 
-      {job?.job_number === 'DTF-26010' && (
+      {images.some(img => img.storage_path && !img.google_drive_file_id) && (
         <button onClick={migrateJobPhotosToDrive} style={{ position: 'fixed', top: 60, left: 10, zIndex: 9999, background: 'purple', color: 'white', padding: '10px', fontWeight: 'bold' }}>
           MIGRATE TO DRIVE
         </button>
