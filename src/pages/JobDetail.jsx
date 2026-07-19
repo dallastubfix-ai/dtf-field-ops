@@ -495,7 +495,11 @@ export default function JobDetail() {
     setApptModal(false)
     setNewAppt({ appointment_datetime: '', location_address: '' })
     setSaving(false)
-    flashToast('Appointment added')
+    if (job?.status === 'contact' || job?.status === 'quote') {
+      await saveStatus('appointment')
+    } else {
+      flashToast('Appointment added')
+    }
     if (isOnline) {
       try {
         const token = await getValidProviderToken()
