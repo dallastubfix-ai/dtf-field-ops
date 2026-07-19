@@ -214,6 +214,7 @@ export default function InvoiceBuilder() {
     job_id: jobId ?? null,
   })
   const [saving, setSaving] = useState(false)
+  const [printAsQuote, setPrintAsQuote] = useState(false)
   const [saved, setSaved] = useState(false)
   const [existingWarranty, setExistingWarranty] = useState(null)
   const [toast, setToast] = useState('')
@@ -421,8 +422,15 @@ export default function InvoiceBuilder() {
   }
 
   const print = async () => {
+    setPrintAsQuote(false)
     await save(false)
     document.title = `${inv.invoice_number || 'invoice'}-invoice`
+    window.print()
+  }
+  const printAsQuoteHandler = async () => {
+    setPrintAsQuote(true)
+    await save(false)
+    document.title = `${inv.invoice_number || 'quote'}-quote`
     window.print()
   }
 
@@ -549,6 +557,9 @@ export default function InvoiceBuilder() {
           )}
           <Button variant="gold" className="py-1.5 px-3" onClick={print} disabled={saving}>
             <Printer size={14} /> Print
+          </Button>
+          <Button variant="secondary" className="text-white border-white/30 py-1.5 px-3" onClick={printAsQuoteHandler} disabled={saving}>
+            <Printer size={14} /> Print as Quote
           </Button>
         </div>
       </header>
@@ -704,7 +715,12 @@ export default function InvoiceBuilder() {
               <div className="ctc">(469) 592-0018 · dallastubfix.com · Lavon, TX</div>
             </div>
             <div className="inv-id-block">
-              <div className="inv-big-label">INVOICE</div>
+              <div className="inv-big-label">{printAsQuote ? 'QUOTE' : 'INVOICE'}</div>
+              {printAsQuote && (
+                <div style={{ fontSize: '8pt', fontWeight: 700, color: 'var(--red, #dc2626)', marginTop: '2px' }}>
+                  This is a quote only — not an invoice
+                </div>
+              )}
               <div className="inv-field-row">
                 <span className="inv-field-label">Invoice #</span>
                 <span className="iv iv-navy">{inv.invoice_number || NBSP}</span>
@@ -840,34 +856,38 @@ export default function InvoiceBuilder() {
             </div>
           </div>
 
-          {/* SIGNATURES */}
-          <hr className="rule-light" />
-          <div className="sig-row">
-            <div>
-              <div className="sig-title">Technician Signature</div>
-              {inv.technician_signature_url
-                ? <img src={inv.technician_signature_url} alt="Technician signature" style={{ height: '26px', objectFit: 'contain', objectPosition: 'left' }} />
-                : <div className="sig-line"></div>
-              }
-              <div className="sig-sub">Print Name &amp; Date</div>
-              <div className="sig-name-val">
-                {inv.technician || NBSP}
-                {inv.technician_signed_at ? ` · ${format(new Date(inv.technician_signed_at), 'MMM d, yyyy')}` : ''}
+          {!printAsQuote && (
+            <>
+              {/* SIGNATURES */}
+              <hr className="rule-light" />
+              <div className="sig-row">
+                <div>
+                  <div className="sig-title">Technician Signature</div>
+                  {inv.technician_signature_url
+                    ? <img src={inv.technician_signature_url} alt="Technician signature" style={{ height: '26px', objectFit: 'contain', objectPosition: 'left' }} />
+                    : <div className="sig-line"></div>
+                  }
+                  <div className="sig-sub">Print Name &amp; Date</div>
+                  <div className="sig-name-val">
+                    {inv.technician || NBSP}
+                    {inv.technician_signed_at ? ` · ${format(new Date(inv.technician_signed_at), 'MMM d, yyyy')}` : ''}
+                  </div>
+                </div>
+                <div>
+                  <div className="sig-title">Customer Signature — Work Completed &amp; Accepted</div>
+                  {inv.customer_signature_url
+                    ? <img src={inv.customer_signature_url} alt="Customer signature" style={{ height: '26px', objectFit: 'contain', objectPosition: 'left' }} />
+                    : <div className="sig-line"></div>
+                  }
+                  <div className="sig-sub">Print Name &amp; Date</div>
+                  <div className="sig-name-val">
+                    {inv.customer_name || NBSP}
+                    {inv.customer_signed_at ? ` · ${format(new Date(inv.customer_signed_at), 'MMM d, yyyy')}` : ''}
+                  </div>
+                </div>
               </div>
-            </div>
-            <div>
-              <div className="sig-title">Customer Signature — Work Completed &amp; Accepted</div>
-              {inv.customer_signature_url
-                ? <img src={inv.customer_signature_url} alt="Customer signature" style={{ height: '26px', objectFit: 'contain', objectPosition: 'left' }} />
-                : <div className="sig-line"></div>
-              }
-              <div className="sig-sub">Print Name &amp; Date</div>
-              <div className="sig-name-val">
-                {inv.customer_name || NBSP}
-                {inv.customer_signed_at ? ` · ${format(new Date(inv.customer_signed_at), 'MMM d, yyyy')}` : ''}
-              </div>
-            </div>
-          </div>
+            </>
+          )}
 
           {/* FOOTER */}
           <div className="inv-footer">
