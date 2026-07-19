@@ -274,6 +274,103 @@ export default function JobDetail() {
     }
   }
 
+  const migrateJobPhotosToDrive = async () => {
+    if (job?.job_number !== 'DTF-26010') {
+      alert('This migration button is scoped to DTF-26010 only.')
+      return
+    }
+    if (!window.confirm('Migrate all Supabase-stored photos on this job to Google Drive? This will download and re-upload each photo.')) return
+
+    const token = await getValidProviderToken()
+    if (!token) {
+      alert('No Google token — cannot migrate.')
+      return
+    }
+
+    const photosToMigrate = images.filter(img => img.storage_path && !img.google_drive_file_id)
+    if (photosToMigrate.length === 0) {
+      alert('No photos need migration.')
+      return
+    }
+
+    let folderId = job?.drive_folder_id
+    if (!folderId) {
+      try {
+        const topFolderId = import.meta.env.VITE_GOOGLE_DRIVE_PHOTOS_FOLDER_ID
+        const folderMeta = {
+          name: job?.job_number ?? id,
+          mimeType: 'application/vnd.google-apps.folder',
+          ...(topFolderId ? { parents: [topFolderId] } : {}),
+        }
+        const folderRes = await fetch('https://www.googleapis.com/drive/v3/files', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify(folderMeta),
+        })
+        if (!folderRes.ok) throw new Error(`Folder creation failed: ${folderRes.status}`)
+        const { id: newFolderId } = await folderRes.json()
+        folderId = newFolderId
+        await supabase.from('jobs').update({ drive_folder_id: folderId }).eq('id', id)
+        await db.jobs.where('id').equals(id).modify({ drive_folder_id: folderId })
+      } catch (err) {
+        alert(`Folder creation failed: ${err.message}`)
+        return
+      }
+    }
+
+    let migrated = 0
+    let failed = 0
+    const results = []
+    for (const img of photosToMigrate) {
+      try {
+        const { data: fileBlob, error: downloadError } = await supabase.storage
+          .from('job-images')
+          .download(img.storage_path)
+        if (downloadError || !fileBlob) throw new Error(downloadError?.message ?? 'download failed')
+
+        const driveMeta = {
+          name: img.filename,
+          mimeType: fileBlob.type || 'image/jpeg',
+          parents: [folderId],
+        }
+        const form = new FormData()
+        form.append('metadata', new Blob([JSON.stringify(driveMeta)], { type: 'application/json' }))
+        form.append('file', fileBlob)
+
+        const uploadRes = await fetch(
+          'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id',
+          { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: form }
+        )
+        if (!uploadRes.ok) throw new Error(`Drive upload failed: ${uploadRes.status}`)
+        const { id: driveFileId } = await uploadRes.json()
+
+        await supabase.from('images').update({
+          google_drive_file_id: driveFileId,
+          storage_path: null,
+        }).eq('id', img.id)
+        await db.images.where('id').equals(img.id).modify({
+          google_drive_file_id: driveFileId,
+          storage_path: null,
+        })
+
+        results.push({ id: img.id, driveFileId })
+
+        migrated++
+        console.log(`Migrated ${img.filename}`)
+      } catch (err) {
+        failed++
+        console.error(`Failed to migrate ${img.filename}:`, err)
+      }
+    }
+
+    setImages(prev => prev.map(i => {
+      const result = results.find(r => r.id === i.id)
+      return result ? { ...i, storage_path: null, google_drive_file_id: result.driveFileId } : i
+    }))
+
+    alert(`Migration complete: ${migrated} migrated, ${failed} failed. Original Supabase files were NOT deleted — verify photos display correctly, then clean up separately.`)
+  }
+
   const goToPhoto = (direction) => {
     if (!lightboxImg) return
     const currentKey = lightboxImg.img.id || lightboxImg.img._localId
@@ -585,6 +682,12 @@ export default function JobDetail() {
           </button>
         )}
       </header>
+
+      {job?.job_number === 'DTF-26010' && (
+        <button onClick={migrateJobPhotosToDrive} style={{ position: 'fixed', top: 60, left: 10, zIndex: 9999, background: 'purple', color: 'white', padding: '10px', fontWeight: 'bold' }}>
+          MIGRATE TO DRIVE
+        </button>
+      )}
 
       {toast && (
         <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-white text-sm px-4 py-2 rounded-lg shadow-lg">
