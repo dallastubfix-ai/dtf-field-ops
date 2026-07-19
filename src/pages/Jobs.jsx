@@ -143,7 +143,13 @@ export default function Jobs() {
                 className="bg-white rounded-xl border border-[#E5E7EB] shadow-sm p-4 cursor-pointer hover:shadow-md transition-shadow"
               >
                 <div className="flex items-start justify-between mb-1">
-                  <span className="text-xs font-semibold text-navy">{job.job_number}</span>
+                  <div className="flex items-center gap-1.5">
+                    <span
+                      className={`w-1.5 h-1.5 rounded-full ${job._synced === false ? 'bg-amber-400' : 'bg-green-500'}`}
+                      title={job._synced === false ? 'Pending sync' : 'Synced'}
+                    />
+                    <span className="text-xs font-semibold text-navy">{job.job_number}</span>
+                  </div>
                   <Badge status={job.status} />
                 </div>
                 <div className="font-bold text-[#1F2937]">
