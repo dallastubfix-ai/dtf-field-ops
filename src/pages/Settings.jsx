@@ -108,8 +108,8 @@ export default function Settings() {
   const pendingCount = useLiveQuery(() => db.sync_queue.count(), []) ?? 0
 
   const debugJobCount = useLiveQuery(() => db.jobs.count(), [])
-  const debugRecentJobs = useLiveQuery(
-    () => db.jobs.orderBy('created_at').reverse().limit(3).toArray(),
+  const debugTestJobs = useLiveQuery(
+    () => db.jobs.filter(j => j.job_number?.startsWith('TEST')).toArray(),
     []
   )
 
@@ -179,9 +179,9 @@ export default function Settings() {
           </h2>
           <p className="text-xs text-[#6B7280] mb-2">db.jobs count: {debugJobCount ?? '…'}</p>
           <div className="space-y-1">
-            {(debugRecentJobs ?? []).map(j => (
-              <p key={j.id ?? j._localId} className="text-xs font-mono text-[#1F2937]">
-                {(j.id ?? '').slice(0, 8)} · {j.job_number} · {j.status} · _synced={String(j._synced)}
+            {(debugTestJobs ?? []).map(j => (
+              <p key={j._localId} className="text-xs font-mono text-[#1F2937]">
+                _localId={j._localId} · id={(j.id ?? '').slice(0,8)} · {j.job_number} · {j.status} · _synced={String(j._synced)}
               </p>
             ))}
           </div>
