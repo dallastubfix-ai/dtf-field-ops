@@ -83,6 +83,7 @@ export default function Invoices() {
   const outstanding = (invoices ?? [])
     .filter(i => i.payment_status === 'unpaid' || i.payment_status === 'partial')
     .filter(i => jobs[i.job_id]?.status !== 'cancelled')
+    .filter(i => jobs[i.job_id]?.status !== 'quote')
     .reduce((sum, i) => sum + (Number(i.total) || 0), 0)
 
   if (error) return (
