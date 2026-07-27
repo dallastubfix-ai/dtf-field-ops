@@ -155,6 +155,7 @@ export default function NewIntake() {
       navigate(`/jobs/${savedJob.id}`, { replace: true })
     } catch (err) {
       console.error('Job save failed:', err)
+      alert(`SAVE FAILED: ${err?.message || err?.toString() || 'unknown error'}`)
       setToast('Error saving. Try again.')
       setSaving(false)
       return
