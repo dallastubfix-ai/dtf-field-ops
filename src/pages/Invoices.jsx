@@ -21,9 +21,10 @@ const paymentPill = {
   unpaid:  'bg-red-100 text-red-600',
   partial: 'bg-amber-100 text-amber-700',
   paid:    'bg-green-100 text-green-700',
+  quote:   'bg-blue-100 text-blue-700',
 }
 
-const PAYMENT_STATUS_OPTIONS = ['unpaid', 'partial', 'paid']
+const PAYMENT_STATUS_OPTIONS = ['unpaid', 'partial', 'paid', 'quote']
 
 export default function Invoices() {
   const navigate = useNavigate()
