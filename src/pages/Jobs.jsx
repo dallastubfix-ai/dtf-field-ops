@@ -70,6 +70,8 @@ export default function Jobs() {
     return all
   }, [filter, query, customers])
 
+  const debugTotalCount = useLiveQuery(() => db.jobs.count(), [])
+
   return (
     <div className="min-h-screen bg-[#F3F4F6]">
       {/* Header */}
@@ -127,6 +129,9 @@ export default function Jobs() {
 
       {/* Job list */}
       <div className="px-4 py-4 space-y-3">
+        <p className="text-xs font-mono text-red-500 mb-2">
+          DEBUG: db.jobs.count={debugTotalCount ?? '…'} | rendered jobs.length={jobs?.length ?? '…'}
+        </p>
         {!jobs || jobs.length === 0 ? (
           <EmptyState
             icon={Briefcase}
