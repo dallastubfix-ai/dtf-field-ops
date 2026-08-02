@@ -274,6 +274,20 @@ export default function JobDetail() {
     }
   }
 
+  const toggleVideoType = async (video) => {
+    const newType = video.video_type === 'before' ? 'after' : 'before'
+    try {
+      await supabase.from('videos').update({ video_type: newType }).eq('id', video.id)
+      await db.videos.where('id').equals(video.id).modify({ video_type: newType })
+      setVideos(prev => prev.map(v =>
+        (v.id || v._localId) === (video.id || video._localId) ? { ...v, video_type: newType } : v
+      ))
+    } catch (err) {
+      console.error('toggleVideoType error:', err)
+      alert('Failed to update video tag. Please try again.')
+    }
+  }
+
   const goToPhoto = (direction) => {
     if (!lightboxImg) return
     const currentKey = lightboxImg.img.id || lightboxImg.img._localId
@@ -803,7 +817,13 @@ export default function JobDetail() {
                 <div key={v.id || v._localId} className="flex items-center gap-2 border border-[#E5E7EB] rounded-lg p-3">
                   <Video size={14} className="text-navy" />
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium">{v.video_type?.toUpperCase()} video</div>
+                    <button
+                      onClick={e => { e.stopPropagation(); toggleVideoType(v) }}
+                      className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-1 rounded ${v.video_type === 'before' ? 'bg-green-500 text-white' : 'bg-gold text-white'}`}
+                    >
+                      {v.video_type?.toUpperCase()}
+                      <ArrowLeftRight size={12} />
+                    </button>
                     {v.google_drive_view_url && (
                       <a href={v.google_drive_view_url} target="_blank" rel="noreferrer" className="text-xs text-navy underline">
                         View in Drive
