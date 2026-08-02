@@ -107,12 +107,6 @@ export default function Settings() {
 
   const pendingCount = useLiveQuery(() => db.sync_queue.count(), []) ?? 0
 
-  const debugJobCount = useLiveQuery(() => db.jobs.count(), [])
-  const debugTestJobs = useLiveQuery(
-    () => db.jobs.filter(j => j.job_number?.startsWith('TEST')).toArray(),
-    []
-  )
-
   const clearSyncQueue = async () => {
     await db.sync_queue.clear()
   }
@@ -171,21 +165,6 @@ export default function Settings() {
             </Button>
           </div>
         )}
-
-        {/* DEBUG — TEMPORARY */}
-        <div className="bg-white rounded-xl border border-red-300 shadow-sm p-4">
-          <h2 className="font-semibold text-red-500 text-xs uppercase tracking-wide mb-2">
-            DEBUG — TEMPORARY
-          </h2>
-          <p className="text-xs text-[#6B7280] mb-2">db.jobs count: {debugJobCount ?? '…'}</p>
-          <div className="space-y-1">
-            {(debugTestJobs ?? []).map(j => (
-              <p key={j._localId} className="text-xs font-mono text-[#1F2937]">
-                _localId={j._localId} · id={(j.id ?? '').slice(0,8)} · {j.job_number} · {j.status} · _synced={String(j._synced)}
-              </p>
-            ))}
-          </div>
-        </div>
 
         {/* Account */}
         <div className="bg-white rounded-xl border border-[#E5E7EB] shadow-sm p-4">

@@ -155,7 +155,6 @@ export default function NewIntake() {
       navigate(`/jobs/${savedJob.id}`, { replace: true })
     } catch (err) {
       console.error('Job save failed:', err)
-      alert(`SAVE FAILED: ${err?.message || err?.toString() || 'unknown error'}`)
       setToast('Error saving. Try again.')
       setSaving(false)
       return
@@ -206,10 +205,6 @@ export default function NewIntake() {
           <X size={22} />
         </button>
       </header>
-
-      <p className="text-xs font-mono text-red-500 px-4 py-1">
-        DEBUG: isOnline={String(isOnline)} | navigator.onLine={String(navigator.onLine)}
-      </p>
 
       {toast && (
         <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-white text-sm px-4 py-2 rounded-lg shadow-lg">
