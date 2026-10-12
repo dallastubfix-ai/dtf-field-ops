@@ -1,11 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, Printer, Save, Shield } from 'lucide-react'
-import { format, addYears } from 'date-fns'
+import { format } from 'date-fns'
 import { supabase } from '../lib/supabase'
 import db from '../lib/db'
 import { upsertLocal } from '../lib/sync'
-import { normalize as normalizeWarrantyYears } from '../lib/warranty'
+import { normalize as normalizeWarrantyYears, warrantyExpiry } from '../lib/warranty'
 import { formatEnum } from '../lib/formatEnum'
 import Button from '../components/ui/Button'
 import AddressAutocomplete from '../components/ui/AddressAutocomplete'
@@ -223,6 +223,9 @@ export default function InvoiceBuilder() {
   const [showSigCapture, setShowSigCapture] = useState(false)
   const [sigLinkState, setSigLinkState] = useState(null)
   // sigLinkState: null | { status: 'generating' } | { status: 'ready', url: string } | { status: 'error' }
+  // Warranty length as of the last load / successful save. Only a change from
+  // this value is allowed to move an existing warranty's expiry date.
+  const savedWarrantyYears = useRef(2)
 
   useEffect(() => {
     const load = async () => {
@@ -277,6 +280,7 @@ export default function InvoiceBuilder() {
           customer_signature_url: existing.customer_signature_url ?? null,
         }))
         setSaved(true)
+        savedWarrantyYears.current = normalizeWarrantyYears(existing.warranty_years)
 
         // Check for completed remote customer signature
         const { data: sigReq } = await supabase
@@ -381,7 +385,7 @@ export default function InvoiceBuilder() {
       customer_name: inv.customer_name || null,
       service_address: [inv.customer_address, inv.customer_city].filter(Boolean).join(', ') || null,
       service_date: inv.service_date,
-      expiry_date: format(addYears(new Date(inv.service_date), 2), 'yyyy-MM-dd'),
+      expiry_date: warrantyExpiry(inv.service_date, warrantyYears),
       technician: inv.technician || null,
       created_at: new Date().toISOString(),
     }
@@ -391,14 +395,100 @@ export default function InvoiceBuilder() {
     setExistingWarranty(wPayload)
   }
 
+  // Signature columns straight from Supabase, so a customer signature that
+  // arrived after this page loaded is not missed. Returns null when there is
+  // no usable answer (offline, request failed, invoice not uploaded yet).
+  const fetchServerSignatures = async (invoiceId) => {
+    if (!navigator.onLine) return null
+    try {
+      const { data, error } = await supabase
+        .from('invoices')
+        .select('technician_signature_url, customer_signature_url')
+        .eq('id', invoiceId)
+        .maybeSingle()
+      return error ? null : (data ?? null)
+    } catch {
+      return null
+    }
+  }
+
+  // Move an existing warranty's expiry date to match a changed warranty length.
+  // Writes ONLY expiry_date. Never throws: returns a message to show when the
+  // server copy could not be confirmed, or null when there is nothing to report.
+  const updateWarrantyExpiry = async (invoiceUploaded) => {
+    try {
+      // Counted from the warranty's own service date so the warranty document
+      // stays consistent with itself; the invoice's date is only a fallback.
+      const expiry_date = warrantyExpiry(existingWarranty.service_date || inv.service_date, warrantyYears)
+      if (!expiry_date) return null
+      const warrantyId = existingWarranty.id
+
+      // Local first so this device's warranty always matches its invoice.
+      await db.warranties.where('id').equals(warrantyId).modify({ expiry_date, _synced: false })
+      setExistingWarranty(w => ({ ...w, expiry_date }))
+
+      const queueUpload = () => db.sync_queue.add({
+        table_name: 'warranties',
+        operation: 'update',
+        payload: { id: warrantyId, expiry_date },
+        created_at: new Date().toISOString(),
+      })
+
+      if (!invoiceUploaded) {
+        await queueUpload()
+        savedWarrantyYears.current = warrantyYears
+        return null
+      }
+
+      const { data, error } = await supabase
+        .from('warranties')
+        .update({ expiry_date })
+        .eq('id', warrantyId)
+        .select('id')
+
+      if (error) {
+        await queueUpload()
+        savedWarrantyYears.current = warrantyYears
+        return 'Invoice saved. The new warranty expiry date is saved on this device and will upload when the connection is back.'
+      }
+      // No error but nothing changed: the server refused or has no such warranty.
+      if (!data || data.length === 0) {
+        return 'Invoice saved, but the warranty expiry date was not updated on the server. It is correct on this device. Tap Save again to retry.'
+      }
+      await db.warranties.where('id').equals(warrantyId).modify({ _synced: true })
+      savedWarrantyYears.current = warrantyYears
+      return null
+    } catch {
+      return 'Invoice saved, but the warranty expiry date could not be updated. Tap Save again to retry.'
+    }
+  }
+
   const save = async (shouldNavigateBack = true) => {
     setSaving(true)
+    let toastMs = 2800
     const invoiceId = inv.id ?? crypto.randomUUID()
     const payload = buildDbPayload({
       id: invoiceId,
       created_at: inv.created_at ?? new Date().toISOString(),
     })
+    // Only a changed length on an invoice that already has a warranty moves its expiry.
+    const lengthChanged = !!existingWarranty && warrantyYears !== savedWarrantyYears.current
     try {
+      if (lengthChanged) {
+        // Checked BEFORE anything is written: saving sends this page's copy of the
+        // signatures, so a signature added since the page loaded would be wiped.
+        const server = await fetchServerSignatures(invoiceId)
+        const signed = server
+          ? !!(server.technician_signature_url && server.customer_signature_url)
+          : isLocked
+        if (signed) {
+          setInv(v => ({ ...v, ...(server ?? {}), warranty_years: savedWarrantyYears.current }))
+          toastMs = 6000
+          setToast('This invoice is already signed, so the warranty length was not changed and nothing was saved.')
+          return false
+        }
+      }
+
       // Local first so nothing is lost, even offline.
       await upsertLocal('invoices', { ...payload, _synced: !!navigator.onLine })
       const wasNew = !inv.id
@@ -407,13 +497,23 @@ export default function InvoiceBuilder() {
 
       if (inv.warranty_included && inv.service_date && !existingWarranty) {
         await createWarranty(invoiceId)
+        savedWarrantyYears.current = warrantyYears
       }
 
       // upsert handles both create and update against Supabase by primary key.
       const { error } = await supabase.from('invoices').upsert(payload)
       if (error) {
         await db.invoices.where('id').equals(invoiceId).modify({ _synced: false })
+        // Invoice is on this device only: keep its warranty in step locally and queue the upload.
+        if (lengthChanged) await updateWarrantyExpiry(false)
         throw error
+      }
+      const warrantyNote = lengthChanged ? await updateWarrantyExpiry(true) : null
+      if (warrantyNote) {
+        // Stay on the page so the message can be read.
+        toastMs = 6000
+        setToast(warrantyNote)
+        return
       }
       setToast(wasNew ? 'Invoice saved ✓' : 'Invoice updated ✓')
       if (shouldNavigateBack) navigate(`/jobs/${inv.job_id}`)
@@ -422,19 +522,19 @@ export default function InvoiceBuilder() {
       setToast(`Saved locally · ${err.message || 'offline — reopen online to upload'}`)
     } finally {
       setSaving(false)
-      setTimeout(() => setToast(''), 2800)
+      setTimeout(() => setToast(''), toastMs)
     }
   }
 
   const print = async () => {
     setPrintAsQuote(false)
-    await save(false)
+    if ((await save(false)) === false) return
     document.title = `${inv.invoice_number || 'invoice'}-invoice`
     window.print()
   }
   const printAsQuoteHandler = async () => {
     setPrintAsQuote(true)
-    await save(false)
+    if ((await save(false)) === false) return
     document.title = `${inv.invoice_number || 'quote'}-quote`
     window.print()
   }
