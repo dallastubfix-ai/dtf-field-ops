@@ -336,6 +336,7 @@ export default function InvoiceBuilder() {
   const total     = taxable + tax
 
   const isLocked = !!(inv.technician_signature_url && inv.customer_signature_url)
+  const warrantyYears = normalizeWarrantyYears(inv.warranty_years)
 
   const togglePayment = (method) => {
     const methods = (inv.payment_methods ?? []).includes(method)
@@ -681,12 +682,20 @@ export default function InvoiceBuilder() {
           <div className="flex gap-2">
             <button onClick={() => set('warranty_included', true)}
               className={`flex-1 py-2 rounded-lg text-sm font-semibold border transition-all ${inv.warranty_included ? 'bg-green-500 text-white border-green-500' : 'border-[#E5E7EB] text-[#6B7280]'}${isLocked ? ' pointer-events-none opacity-60' : ''}`}>
-              YES — 2-Year Included
+              YES — {warrantyYears}-Year Included
             </button>
             <button onClick={() => set('warranty_included', false)}
               className={`flex-1 py-2 rounded-lg text-sm font-semibold border transition-all ${!inv.warranty_included ? 'bg-red-500 text-white border-red-500' : 'border-[#E5E7EB] text-[#6B7280]'}${isLocked ? ' pointer-events-none opacity-60' : ''}`}>
               NO
             </button>
+          </div>
+          <div className="flex gap-2">
+            {[2, 6].map(n => (
+              <button key={n} onClick={() => set('warranty_years', n)} disabled={isLocked}
+                className={`flex-1 py-2 rounded-lg text-sm font-semibold border transition-all ${warrantyYears === n ? 'bg-navy text-white border-navy' : 'border-[#E5E7EB] text-[#6B7280]'}${isLocked ? ' pointer-events-none opacity-60' : ''}`}>
+                {n} Years
+              </button>
+            ))}
           </div>
           {!inv.warranty_included && (
             <input value={inv.warranty_no_reason} onChange={e => set('warranty_no_reason', e.target.value)}
@@ -841,7 +850,7 @@ export default function InvoiceBuilder() {
               <div className="wtitle g">Warranty Status</div>
               <div className="wcb-row">
                 <input type="checkbox" readOnly checked={!!inv.warranty_included} style={{ accentColor: '#16a34a' }} />
-                <span className="wcb-lbl g">2-Year Warranty Included</span>
+                <span className="wcb-lbl g">{warrantyYears}-Year Warranty Included</span>
               </div>
               <div className="wsub">100% covered — labor, supplies &amp; travel. Warranty doc provided.</div>
             </div>
