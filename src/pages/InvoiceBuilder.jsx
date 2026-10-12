@@ -5,6 +5,7 @@ import { format, addYears } from 'date-fns'
 import { supabase } from '../lib/supabase'
 import db from '../lib/db'
 import { upsertLocal } from '../lib/sync'
+import { normalize as normalizeWarrantyYears } from '../lib/warranty'
 import { formatEnum } from '../lib/formatEnum'
 import Button from '../components/ui/Button'
 import AddressAutocomplete from '../components/ui/AddressAutocomplete'
@@ -208,6 +209,7 @@ export default function InvoiceBuilder() {
     payment_methods: [],
     notes1: '', notes2: '', notes3: '',
     warranty_included: true, warranty_no_reason: '',
+    warranty_years: 2,
     payment_status: 'unpaid',
     technician_signature_url: null,
     customer_signature_url: null,
@@ -260,6 +262,7 @@ export default function InvoiceBuilder() {
           tax_rate: String(existing.tax_rate ?? '0'),
           notes1: nlines[0] ?? '', notes2: nlines[1] ?? '', notes3: nlines[2] ?? '',
           warranty_included: existing.warranty_included ?? true,
+          warranty_years: normalizeWarrantyYears(existing.warranty_years),
           warranty_no_reason: existing.warranty_excluded_reason ?? '',
           ...customerFields(customer),
           // Address comes from the appointment location first, customer profile second
@@ -361,6 +364,7 @@ export default function InvoiceBuilder() {
     invoice_notes: [inv.notes1, inv.notes2, inv.notes3].filter(Boolean).join('\n') || null,
     warranty_included: !!inv.warranty_included,
     warranty_excluded_reason: inv.warranty_included ? null : (inv.warranty_no_reason || null),
+    warranty_years: normalizeWarrantyYears(inv.warranty_years),
     technician_signature_url: inv.technician_signature_url ?? null,
     customer_signature_url: inv.customer_signature_url ?? null,
     updated_at: new Date().toISOString(),
