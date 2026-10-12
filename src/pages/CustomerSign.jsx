@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react'
 import { useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import SignaturePad from '../components/SignaturePad'
+import { normalize as normalizeWarrantyYears } from '../lib/warranty'
 
 export default function CustomerSign() {
   const { token } = useParams()
@@ -133,6 +134,7 @@ export default function CustomerSign() {
           const inv = invoice
           const lineItems = (inv.line_items || []).filter(i => i.description && i.amount)
           const hasDiscount = parseFloat(inv.discount) > 0
+          const warrantyYears = normalizeWarrantyYears(inv.warranty_years)
           return (
             <div className="bg-[#F3F4F6] rounded-xl p-4 mb-4 space-y-3">
               <div className="text-xs font-bold uppercase tracking-wide text-[#1E40AF] mb-1">Invoice Summary</div>
@@ -184,7 +186,7 @@ export default function CustomerSign() {
               <div className="flex items-center gap-2 pt-1">
                 <div className={`w-2 h-2 rounded-full ${inv.warranty_included ? 'bg-green-500' : 'bg-gray-300'}`} />
                 <span className="text-xs font-semibold text-[#6B7280]">
-                  {inv.warranty_included ? '2-Year Warranty Included' : 'No Warranty'}
+                  {inv.warranty_included ? `${warrantyYears}-Year Warranty Included` : `Warranty Not Applicable (${warrantyYears}-Year)`}
                 </span>
               </div>
             </div>
