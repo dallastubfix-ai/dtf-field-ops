@@ -167,7 +167,7 @@ export default function NewIntake() {
         apptPayload = {
           id: generateId(),
           job_id: savedJob.id,
-          appointment_datetime: form.appointment_datetime,
+          appointment_datetime: new Date(form.appointment_datetime).toISOString(),
           location_address: form.location_address || null,
           created_at: new Date().toISOString(),
         }
