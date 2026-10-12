@@ -21,6 +21,8 @@ const DEFAULT_ITEMS = [
 
 const PAYMENT_METHODS = ['Cash', 'Check', 'Credit/Debit', 'Venmo', 'Zelle', 'Other']
 
+const SIGNED_WHILE_OPEN_MSG = 'This invoice was signed while it was open, so nothing was saved. Go back and reopen the invoice to see and print the signed copy.'
+
 const today = format(new Date(), 'yyyy-MM-dd')
 
 const NBSP = ' '
@@ -226,8 +228,13 @@ export default function InvoiceBuilder() {
   // Warranty length as of the last load / successful save. Only a change from
   // this value is allowed to move an existing warranty's expiry date.
   const savedWarrantyYears = useRef(2)
+  // Set once the server is found to hold a signature this page does not have.
+  // From then on every save() on this page is refused, so unsaved edits are
+  // never written onto a signed invoice. Reopening the invoice clears it.
+  const signedWhileOpen = useRef(false)
 
   useEffect(() => {
+    signedWhileOpen.current = false
     const load = async () => {
       if (isNew) {
         const { job, customer, appt } = await loadJobContext(jobId)
@@ -370,8 +377,11 @@ export default function InvoiceBuilder() {
     warranty_included: !!inv.warranty_included,
     warranty_excluded_reason: inv.warranty_included ? null : (inv.warranty_no_reason || null),
     warranty_years: normalizeWarrantyYears(inv.warranty_years),
-    technician_signature_url: inv.technician_signature_url ?? null,
-    customer_signature_url: inv.customer_signature_url ?? null,
+    // A save may add a signature but never send a blank one. A missing key
+    // leaves the server's and this device's value untouched. Clearing is
+    // done only by handleUnlock, with its own write.
+    ...(inv.technician_signature_url ? { technician_signature_url: inv.technician_signature_url } : {}),
+    ...(inv.customer_signature_url ? { customer_signature_url: inv.customer_signature_url } : {}),
     updated_at: new Date().toISOString(),
     ...extra,
   })
@@ -397,18 +407,24 @@ export default function InvoiceBuilder() {
 
   // Signature columns straight from Supabase, so a customer signature that
   // arrived after this page loaded is not missed. Returns null when there is
-  // no usable answer (offline, request failed, invoice not uploaded yet).
+  // no usable answer (offline, request failed, no reply within 5 seconds,
+  // invoice not uploaded yet).
   const fetchServerSignatures = async (invoiceId) => {
     if (!navigator.onLine) return null
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 5000)
     try {
       const { data, error } = await supabase
         .from('invoices')
-        .select('technician_signature_url, customer_signature_url')
+        .select('technician_signature_url, customer_signature_url, technician_signed_at, customer_signed_at')
         .eq('id', invoiceId)
+        .abortSignal(controller.signal)
         .maybeSingle()
       return error ? null : (data ?? null)
     } catch {
       return null
+    } finally {
+      clearTimeout(timer)
     }
   }
 
@@ -474,10 +490,39 @@ export default function InvoiceBuilder() {
     // Only a changed length on an invoice that already has a warranty moves its expiry.
     const lengthChanged = !!existingWarranty && warrantyYears !== savedWarrantyYears.current
     try {
+      // Already found signed on the server during an earlier save on this page.
+      if (signedWhileOpen.current) {
+        toastMs = 6000
+        setToast(SIGNED_WHILE_OPEN_MSG)
+        return false
+      }
+
+      // Checked BEFORE anything is written. Existing invoices only: a signing
+      // link cannot exist before the invoice has an id.
+      const server = inv.id ? await fetchServerSignatures(inv.id) : null
+      if (server && (
+        (server.customer_signature_url && !inv.customer_signature_url) ||
+        (server.technician_signature_url && !inv.technician_signature_url)
+      )) {
+        signedWhileOpen.current = true
+        try {
+          // This device's copy only, so reopening shows the signed version.
+          await db.invoices.where('id').equals(inv.id).modify({
+            technician_signature_url: server.technician_signature_url ?? null,
+            customer_signature_url: server.customer_signature_url ?? null,
+            technician_signed_at: server.technician_signed_at ?? null,
+            customer_signed_at: server.customer_signed_at ?? null,
+          })
+        } catch {
+          // Could not update this device's copy. Nothing was saved either way,
+          // and the job page refreshes it from the server when reopened.
+        }
+        toastMs = 6000
+        setToast(SIGNED_WHILE_OPEN_MSG)
+        return false
+      }
+
       if (lengthChanged) {
-        // Checked BEFORE anything is written: saving sends this page's copy of the
-        // signatures, so a signature added since the page loaded would be wiped.
-        const server = await fetchServerSignatures(invoiceId)
         const signed = server
           ? !!(server.technician_signature_url && server.customer_signature_url)
           : isLocked
@@ -613,11 +658,14 @@ export default function InvoiceBuilder() {
     const prev = { technician_signature_url: inv.technician_signature_url, customer_signature_url: inv.customer_signature_url }
     setInv(v => ({ ...v, technician_signature_url: null, customer_signature_url: null }))
     try {
-      await supabase.from('invoices').update({
+      const { data, error } = await supabase.from('invoices').update({
         technician_signature_url: null,
         customer_signature_url: null,
         updated_at: new Date().toISOString(),
-      }).eq('id', inv.id)
+      }).eq('id', inv.id).select('id')
+      if (error) throw error
+      // No error but no row changed: the server refused or has no such invoice.
+      if (!data || data.length === 0) throw new Error('Unlock was not applied')
       await db.invoices.where('id').equals(inv.id).modify({
         technician_signature_url: null,
         customer_signature_url: null,
@@ -627,7 +675,7 @@ export default function InvoiceBuilder() {
     } catch (err) {
       console.error('Unlock failed:', err)
       setInv(v => ({ ...v, ...prev }))
-      setToast('Could not unlock — check your connection and try again')
+      setToast('Could not unlock the invoice. Check your connection and try again.')
       setTimeout(() => setToast(''), 3500)
     }
   }
