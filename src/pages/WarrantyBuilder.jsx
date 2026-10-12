@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Printer } from 'lucide-react'
-import { format, addYears, parseISO } from 'date-fns'
+import { normalize as normalizeWarrantyYears, YEARS_WORD, warrantyExpiry } from '../lib/warranty'
 import { supabase } from '../lib/supabase'
 import db from '../lib/db'
 import Button from '../components/ui/Button'
@@ -17,8 +17,8 @@ function fmtDate(s) {
   return `${m}/${d}/${y}`
 }
 
-const W_COVERED = [
-  'Failure, peeling, or cracking of the repaired area within 2 years of service date',
+const buildCovered = (years) => [
+  `Failure, peeling, or cracking of the repaired area within ${years} years of service date`,
   'Color or finish degradation of the repair within normal use',
   'All labor costs for any warranty service call',
   'All materials and supplies required to re-complete the repair',
@@ -35,8 +35,8 @@ const W_NOT_COVERED = [
   'Pre-existing conditions noted at time of service; plumbing, caulking, or water damage behind the tub',
 ]
 
-const W_TERMS = [
-  'Valid for two (2) years from the original service date. Covers the specific repair area(s) completed on that date. Non-transferable to subsequent owners.',
+const buildTerms = (years) => [
+  `Valid for ${YEARS_WORD[years]} (${years}) years from the original service date. Covers the specific repair area(s) completed on that date. Non-transferable to subsequent owners.`,
   'To submit a claim, call (469) 592-0018. Dallas Tub Fix will schedule a return visit at no cost — labor, materials, and travel included.',
   'The repaired surface may show natural variation in texture and sheen compared to the surrounding area. This is inherent to spot repair and does not constitute a warranty defect.',
   'Dallas Tub Fix reserves the right to determine whether a reported issue falls within warranty coverage. Claims outside covered conditions will be quoted as standard repair work.',
@@ -156,9 +156,11 @@ export default function WarrantyBuilder() {
     customer_name: '',
     service_address: '',
     technician: 'John Figueroa Jr.',
+    warranty_years: 2,
   })
   const [loading, setLoading] = useState(true)
   const [isLocked, setIsLocked] = useState(false)
+  const [invoiceUnconfirmed, setInvoiceUnconfirmed] = useState(false)
 
   const set = (key, value) => setW(v => ({ ...v, [key]: value }))
 
@@ -191,7 +193,8 @@ export default function WarrantyBuilder() {
         : null
 
       const sd = warranty.service_date ?? invoice?.service_date ?? ''
-      const exp = warranty.expiry_date ?? (sd ? format(addYears(parseISO(sd), 2), 'yyyy-MM-dd') : '')
+      const years = normalizeWarrantyYears(invoice?.warranty_years)
+      const exp = warranty.expiry_date ?? (sd ? warrantyExpiry(sd, years) : '')
 
       setW({
         invoice_number: invoice?.invoice_number ?? job?.job_number ?? '',
@@ -200,7 +203,9 @@ export default function WarrantyBuilder() {
         customer_name: customer?.full_name ?? '',
         service_address: appt?.location_address ?? customer?.address ?? '',
         technician: warranty.technician ?? 'John Figueroa Jr.',
+        warranty_years: years,
       })
+      setInvoiceUnconfirmed(!invoice)
       setIsLocked(!!(invoice?.technician_signature_url && invoice?.customer_signature_url))
       setLoading(false)
     }
@@ -232,11 +237,16 @@ export default function WarrantyBuilder() {
             <p className="text-sm text-amber-800 font-medium">This warranty's invoice has been signed by both parties and is locked.</p>
           </div>
         )}
+        {invoiceUnconfirmed && (
+          <div className="bg-amber-50 border border-amber-300 rounded-xl px-4 py-3">
+            <p className="text-sm text-amber-800 font-medium">The warranty length could not be confirmed from the invoice, so 2 years is shown. Check the length before printing.</p>
+          </div>
+        )}
         <div className="bg-white rounded-xl border border-[#E5E7EB] shadow-sm p-4 grid grid-cols-2 gap-3">
           <Field label="Invoice #"     value={w.invoice_number}  onChange={v => set('invoice_number', v)} disabled={isLocked} />
           <Field label="Service Date"  value={w.service_date}    onChange={v => {
             set('service_date', v)
-            if (v) set('expiry_date', format(addYears(parseISO(v), 2), 'yyyy-MM-dd'))
+            if (v) set('expiry_date', warrantyExpiry(v, w.warranty_years))
           }} type="date" disabled={isLocked} />
           <Field label="Expiry Date"   value={w.expiry_date}     onChange={v => set('expiry_date', v)} type="date" disabled={isLocked} />
           <Field label="Technician"    value={w.technician}      onChange={v => set('technician', v)} disabled={isLocked} />
@@ -263,7 +273,7 @@ export default function WarrantyBuilder() {
               <div className="hd-sub" style={{ marginTop: '1px' }}>(469) 592-0018 · dallastubfix.com · Lavon, TX</div>
             </div>
             <div className="w-badge">
-              <div className="badge-num">2</div>
+              <div className="badge-num">{w.warranty_years}</div>
               <div className="badge-year">Year Warranty</div>
               <div className="badge-sub">Workmanship &amp; Materials</div>
             </div>
@@ -318,7 +328,7 @@ export default function WarrantyBuilder() {
             <div className="cov-box green">
               <div className="cov-title g"><div className="cov-icon g">✓</div>What Is Covered</div>
               <ul className="cov-list">
-                {W_COVERED.map((t, i) => <li key={i}>{t}</li>)}
+                {buildCovered(w.warranty_years).map((t, i) => <li key={i}>{t}</li>)}
               </ul>
             </div>
             <div className="cov-box red">
@@ -333,7 +343,7 @@ export default function WarrantyBuilder() {
           <div className="terms-sec">
             <div className="sec-label">Warranty Terms &amp; Conditions</div>
             <ol className="terms-list">
-              {W_TERMS.map((t, i) => (
+              {buildTerms(w.warranty_years).map((t, i) => (
                 <li key={i}><span className="t-num">{i + 1}.</span><span>{t}</span></li>
               ))}
             </ol>
