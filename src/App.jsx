@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
-import { onMessage } from 'firebase/messaging'
 import { Bell, X } from 'lucide-react'
 import { AuthProvider, useAuth } from './context/AuthContext'
-import { messaging } from './lib/firebase'
+import { attachForegroundListener, ensurePushRegistration } from './lib/push'
 import AppShell from './components/layout/AppShell'
 import LoadingSpinner from './components/ui/LoadingSpinner'
 import ErrorBoundary from './components/ErrorBoundary'
@@ -40,6 +39,12 @@ function AuthGuard({ children }) {
 
 function AppRoutes() {
   const { user, loading } = useAuth()
+
+  // Push: verify this phone is registered on every app open while signed in,
+  // and again right after sign-in.
+  useEffect(() => {
+    if (user?.id) ensurePushRegistration()
+  }, [user?.id])
 
   if (loading) {
     return (
@@ -144,13 +149,12 @@ export default function App() {
   const [foregroundNotif, setForegroundNotif] = useState(null)
 
   useEffect(() => {
-    const unsubscribe = onMessage(messaging, (payload) => {
+    return attachForegroundListener((payload) => {
       const title = payload.notification?.title ?? 'DTF Field Ops'
       const body = payload.notification?.body ?? ''
       setForegroundNotif({ title, body })
       setTimeout(() => setForegroundNotif(null), 5000)
     })
-    return unsubscribe
   }, [])
 
   return (

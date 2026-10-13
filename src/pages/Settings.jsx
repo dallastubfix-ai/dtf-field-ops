@@ -2,83 +2,33 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Bell, LogOut, Info, Trash2 } from 'lucide-react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { getToken } from 'firebase/messaging'
+import { format } from 'date-fns'
 import { useAuth } from '../context/AuthContext'
-import { supabase } from '../lib/supabase'
-import { messaging } from '../lib/firebase'
+import { ensurePushRegistration, getPushStatus, subscribePushStatus } from '../lib/push'
 import db from '../lib/db'
 import Button from '../components/ui/Button'
 
 export default function Settings() {
   const { user, signOut } = useAuth()
   const navigate = useNavigate()
-  const [pushEnabled, setPushEnabled] = useState(false)
-  const [pushLoading, setPushLoading] = useState(false)
-  const [pushStatus, setPushStatus] = useState('')
+  const [push, setPush] = useState(getPushStatus())
+  const [testStatus, setTestStatus] = useState(null)
 
   useEffect(() => {
-    const checkExistingSubscription = async () => {
-      try {
-        const stored = localStorage.getItem('pushEnabled')
-        if (stored === 'true') {
-          setPushEnabled(true)
-          return
-        }
-        if (Notification.permission === 'granted') {
-          const { getToken } = await import('firebase/messaging')
-          const { messaging } = await import('../lib/firebase')
-          const token = await getToken(messaging, {
-            vapidKey: import.meta.env.VITE_VAPID_PUBLIC_KEY
-          })
-          if (token) {
-            setPushEnabled(true)
-            localStorage.setItem('pushEnabled', 'true')
-          }
-        }
-      } catch (err) {
-        console.error('Push check failed:', err)
-      }
-    }
-    checkExistingSubscription()
+    const unsubscribe = subscribePushStatus(setPush)
+    ensurePushRegistration()
+    return unsubscribe
   }, [])
 
-  const togglePush = async () => {
-    if (pushEnabled) { setPushEnabled(false); return }
-    if (!('Notification' in window)) { setPushStatus('Notifications not supported in this browser.'); return }
-
-    setPushLoading(true)
-    try {
-      const permission = await Notification.requestPermission()
-      if (permission !== 'granted') { setPushStatus('Permission denied.'); return }
-
-      const token = await getToken(messaging, {
-        vapidKey: import.meta.env.VITE_VAPID_PUBLIC_KEY,
-      })
-
-      if (!token) { setPushStatus('Failed to get FCM token.'); return }
-
-      const { error } = await supabase.from('push_subscriptions').upsert({
-        endpoint: token,
-        p256dh:   'fcm',
-        auth_key: 'fcm',
-      }, { onConflict: 'endpoint' })
-
-      if (error) throw error
-
-      setPushEnabled(true)
-      setPushStatus('Push notifications enabled!')
-      localStorage.setItem('pushEnabled', 'true')
-    } catch (err) {
-      console.error('Push setup error:', err)
-      setPushStatus('Error: ' + err.message)
-    } finally {
-      setPushLoading(false)
-    }
-  }
+  const checkedLabel = push.checkedAt
+    ? (Date.now() - push.checkedAt.getTime() < 60000
+        ? 'checked just now'
+        : `checked ${format(push.checkedAt, 'h:mm a')}`)
+    : ''
 
   const sendTestNotification = async () => {
     try {
-      setPushStatus('Sending...')
+      setTestStatus({ ok: true, text: 'Sending...' })
       const res = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-notification`,
         {
@@ -94,14 +44,19 @@ export default function Settings() {
           })
         }
       )
+      if (!res.ok) {
+        setTestStatus({ ok: false, text: 'The test could not be sent. Please try again in a minute.' })
+        return
+      }
       const data = await res.json()
       if (data.sent > 0) {
-        setPushStatus('Test notification sent!')
+        setTestStatus({ ok: true, text: 'Test notification sent!' })
       } else {
-        setPushStatus(`Test failed: sent=${data.sent} failed=${data.failed}`)
+        setTestStatus({ ok: false, text: "The test did not reach any phone. Rechecking this phone's registration..." })
+        ensurePushRegistration()
       }
-    } catch (err) {
-      setPushStatus('Test failed: ' + err.message)
+    } catch {
+      setTestStatus({ ok: false, text: 'The test could not be sent. Check your connection and try again.' })
     }
   }
 
@@ -130,25 +85,28 @@ export default function Settings() {
             <Bell size={18} className="text-navy" />
             <h2 className="font-semibold text-[#1F2937]">Notifications</h2>
           </div>
-          <label className="flex items-center justify-between cursor-pointer">
-            <span className="text-sm text-[#1F2937]">Enable Push Notifications</span>
-            <div
-              onClick={togglePush}
-              className={`w-10 h-6 rounded-full transition-colors flex items-center px-1 ${pushEnabled ? 'bg-navy' : 'bg-gray-300'}`}
-            >
-              <div className={`w-4 h-4 rounded-full bg-white shadow transition-transform ${pushEnabled ? 'translate-x-4' : 'translate-x-0'}`} />
-            </div>
-          </label>
-          {pushLoading && <p className="text-xs text-[#6B7280] mt-2">Setting up…</p>}
-          {pushStatus && (
-            <p className={`text-xs mt-2 ${pushStatus.includes('enabled') || pushStatus.includes('sent') ? 'text-green-600' : 'text-red-500'}`}>
-              {pushStatus}
-            </p>
+          <p className={`text-sm ${
+            push.state === 'registered' ? 'text-green-600'
+              : push.state === 'checking' ? 'text-[#6B7280]'
+              : 'text-red-500'
+          }`}>
+            {push.message}
+            {push.state === 'registered' && checkedLabel && ` - ${checkedLabel}`}
+          </p>
+          {push.state === 'needs_permission' && (
+            <Button className="w-full mt-3" onClick={() => ensurePushRegistration({ prompt: true })}>
+              Turn on notifications
+            </Button>
           )}
-          {pushEnabled && (
+          {push.state === 'registered' && (
             <Button className="w-full mt-3" onClick={sendTestNotification}>
               Send Test Notification
             </Button>
+          )}
+          {testStatus && (
+            <p className={`text-xs mt-2 ${testStatus.ok ? 'text-green-600' : 'text-red-500'}`}>
+              {testStatus.text}
+            </p>
           )}
         </div>
 
