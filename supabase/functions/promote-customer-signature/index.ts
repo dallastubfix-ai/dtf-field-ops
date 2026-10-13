@@ -168,20 +168,17 @@ Deno.serve(async (req: Request): Promise<Response> => {
   // A failure anywhere in here must NOT fail the overall response — the invoice
   // update above already succeeded and is the important part.
   try {
-    // Step 12: single-technician design for now (known limitation).
+    // Step 12: every registered phone.
     const { data: subscriptions, error: subError } = await adminClient
       .from("push_subscriptions")
-      .select("endpoint")
-      .limit(1);
+      .select("id, endpoint");
 
     if (subError) {
       throw new Error(`push_subscriptions query failed: ${subError.message}`);
     }
 
-    const endpoint = subscriptions?.[0]?.endpoint as string | undefined;
-
     // Step 13: nothing to notify.
-    if (!endpoint) {
+    if (!subscriptions || subscriptions.length === 0) {
       console.log("No push subscription found, skipping notification");
     } else {
       // Step 14: build the signed service-account JWT.
@@ -208,36 +205,77 @@ Deno.serve(async (req: Request): Promise<Response> => {
         throw new Error("Token exchange returned no access_token");
       }
 
-      // Step 16: send the FCM push.
+      // Step 16: send a data-only FCM push to each phone. The app's push
+      // worker builds the notification from these fields.
       const projectId = Deno.env.get("FIREBASE_PROJECT_ID");
-      const fcmResp = await fetch(
-        `https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            message: {
-              token: endpoint,
-              notification: {
-                title: "Signature Received",
-                body: `${customerName || "Customer"} signed the invoice`,
-              },
-            },
-          }),
+      const message = {
+        data: {
+          title: "Signature Received",
+          body: `${customerName || "Customer"} signed the invoice`,
+          url: `/invoices/${invoiceId}`,
+          tag: `invoice-signed-${invoiceId}`,
         },
+        webpush: { headers: { Urgency: "high", TTL: "86400" } },
+      };
+
+      const results = await Promise.all(
+        subscriptions.map(async (sub): Promise<"sent" | "unregistered" | "failed"> => {
+          // Token is stored directly or as a legacy FCM URL.
+          const endpoint = sub.endpoint as string;
+          const fcmToken = endpoint.startsWith("https://")
+            ? endpoint.split("/").pop()
+            : endpoint;
+          if (!fcmToken) return "failed";
+          try {
+            const fcmResp = await fetch(
+              `https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`,
+              {
+                method: "POST",
+                headers: {
+                  Authorization: `Bearer ${accessToken}`,
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ message: { token: fcmToken, ...message } }),
+              },
+            );
+            if (fcmResp.ok) {
+              await fcmResp.body?.cancel();
+              return "sent";
+            }
+            // Read only the error code. Never log this body.
+            const err = await fcmResp.json().catch(() => null);
+            const details = err?.error?.details;
+            const unregistered = Array.isArray(details) &&
+              details.some((d: { errorCode?: string }) => d?.errorCode === "UNREGISTERED");
+            return unregistered ? "unregistered" : "failed";
+          } catch {
+            return "failed";
+          }
+        }),
       );
 
-      if (fcmResp.ok) {
-        console.log(`Push notification sent for invoice ${invoiceId}`);
-      } else {
-        // Do not log the response body.
-        console.error(
-          `Push notification failed for invoice ${invoiceId} with status ${fcmResp.status}`,
-        );
+      const sent = results.filter((r) => r === "sent").length;
+      const staleIds = subscriptions
+        .filter((_, i) => results[i] === "unregistered")
+        .map((s) => s.id as string);
+
+      // Remove only the tokens Firebase says are unregistered.
+      let removed = 0;
+      if (staleIds.length > 0) {
+        const { error: cleanupError, count } = await adminClient
+          .from("push_subscriptions")
+          .delete({ count: "exact" })
+          .in("id", staleIds);
+        if (cleanupError) {
+          console.error(`Stale push registration cleanup failed for invoice ${invoiceId}`);
+        } else {
+          removed = count ?? 0;
+        }
       }
+
+      console.log(
+        `Push for invoice ${invoiceId}: sent=${sent} failed=${results.length - sent - removed} removed=${removed}`,
+      );
     }
   } catch (pushError) {
     // Best-effort only: log a safe message and continue to the final return.

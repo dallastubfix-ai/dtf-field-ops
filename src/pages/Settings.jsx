@@ -5,6 +5,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { format } from 'date-fns'
 import { useAuth } from '../context/AuthContext'
 import { ensurePushRegistration, getPushStatus, subscribePushStatus } from '../lib/push'
+import { supabase } from '../lib/supabase'
 import db from '../lib/db'
 import Button from '../components/ui/Button'
 
@@ -26,31 +27,45 @@ export default function Settings() {
         : `checked ${format(push.checkedAt, 'h:mm a')}`)
     : ''
 
-  const sendTestNotification = async () => {
+  const sendTestNotification = async (delaySeconds = 0) => {
     try {
       setTestStatus({ ok: true, text: 'Sending...' })
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) {
+        setTestStatus({ ok: false, text: 'You are signed out. Sign in again, then send the test.' })
+        return
+      }
       const res = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-notification`,
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+            'Authorization': `Bearer ${session.access_token}`,
           },
           body: JSON.stringify({
-            type: 'test',
             title: 'DTF Field Ops',
-            body: 'Push notifications are working!'
+            body: 'Push notifications are working!',
+            url: '/',
+            tag: 'dtf-test',
+            ttl_seconds: 60,
+            delay_seconds: delaySeconds,
           })
         }
       )
+      if (res.status === 401) {
+        setTestStatus({ ok: false, text: 'Your sign-in has expired. Close and reopen the app, then try again.' })
+        return
+      }
       if (!res.ok) {
         setTestStatus({ ok: false, text: 'The test could not be sent. Please try again in a minute.' })
         return
       }
       const data = await res.json()
-      if (data.sent > 0) {
-        setTestStatus({ ok: true, text: 'Test notification sent!' })
+      if (data.scheduled) {
+        setTestStatus({ ok: true, text: `Test scheduled for ${data.devices} device(s). It arrives in about ${data.delay_seconds} seconds - lock the phone or switch apps now.` })
+      } else if (data.sent > 0) {
+        setTestStatus({ ok: true, text: `Sent to ${data.sent} device(s)` })
       } else {
         setTestStatus({ ok: false, text: "The test did not reach any phone. Rechecking this phone's registration..." })
         ensurePushRegistration()
@@ -106,9 +121,14 @@ export default function Settings() {
             </Button>
           )}
           {push.state === 'registered' && (
-            <Button className="w-full mt-3" onClick={sendTestNotification}>
-              Send Test Notification
-            </Button>
+            <>
+              <Button className="w-full mt-3" onClick={() => sendTestNotification()}>
+                Send Test Notification
+              </Button>
+              <Button variant="secondary" className="w-full mt-2" onClick={() => sendTestNotification(15)}>
+                Send test in 15 seconds
+              </Button>
+            </>
           )}
           {testStatus && (
             <p className={`text-xs mt-2 ${testStatus.ok ? 'text-green-600' : 'text-red-500'}`}>
