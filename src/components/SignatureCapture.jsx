@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import SignaturePad from './SignaturePad'
 
@@ -12,6 +12,18 @@ export default function SignatureCapture({ invoiceId, technicianName, customerNa
   const [savingTech, setSavingTech] = useState(false)
   const techPadRef = useRef(null)
   const custPadRef = useRef(null)
+  const padBoxRef = useRef(null)
+  const [padSize, setPadSize] = useState(null)
+
+  // Measure the pad box once per step, before the pad mounts. The canvas is
+  // never resized after that: resizing wipes the ink and resets the pen.
+  useLayoutEffect(() => {
+    const box = padBoxRef.current
+    if (!box) return
+    setPadSize({ step, width: box.offsetWidth, height: box.offsetHeight })
+  }, [step])
+
+  const linkReady = step === 'customer' && sigLinkState?.status === 'ready'
 
   const handleTechNext = () => {
     if (!techPadRef.current || techPadRef.current.isEmpty()) {
@@ -99,82 +111,83 @@ export default function SignatureCapture({ invoiceId, technicianName, customerNa
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center">
-      <div className="bg-white rounded-xl p-5"
+    <div
+      className="fixed inset-0 z-[60] bg-black/90 flex items-center justify-center overflow-hidden"
+      style={{
+        paddingTop: 'env(safe-area-inset-top)',
+        paddingBottom: 'env(safe-area-inset-bottom)',
+      }}
+    >
+      <div className="bg-white rounded-xl p-3"
         style={{
-          width: '90vh',
-          maxWidth: '90vh',
-          height: '90vw',
+          width: 'calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 16px)',
+          height: 'calc(100vw - 16px)',
+          flexShrink: 0,
           transform: 'rotate(90deg)',
           transformOrigin: 'center center',
           display: 'flex',
           flexDirection: 'column',
         }}
       >
-        <div className="flex items-center justify-between mb-3">
-          <div>
-            <span className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">
-              Step {step === 'technician' ? '1' : '2'} of 2
-            </span>
-            <h2 className="text-base font-bold text-[#111827] mt-0.5">
-              {step === 'technician' ? 'Technician Signature' : 'Customer Signature'}
-            </h2>
+        <div className="flex items-center gap-3 h-11 shrink-0 mb-2">
+          <h2 className="text-sm font-bold text-[#111827] whitespace-nowrap">
+            Step {step === 'technician' ? '1' : '2'} of 2 - {step === 'technician' ? 'Technician Signature' : 'Customer Signature'}
+          </h2>
+          <div className="flex-1 min-w-0 text-sm font-semibold text-[#111827]">
+            {step === 'technician' ? (
+              <span className="block truncate">{technicianName || 'Technician'}</span>
+            ) : (
+              <input
+                type="text"
+                value={custName}
+                onChange={e => setCustName(e.target.value)}
+                placeholder="Customer name"
+                className="border border-[#E5E7EB] rounded px-2 h-10 text-sm w-full focus:outline-none focus:ring-2 focus:ring-[#1E40AF]"
+              />
+            )}
           </div>
-          <button onClick={onClose} className="text-[#6B7280] text-2xl leading-none px-2">×</button>
+          <button onClick={onClose} className="w-11 h-11 shrink-0 flex items-center justify-center text-[#6B7280] text-2xl leading-none">×</button>
         </div>
 
-        <div className="text-sm font-semibold text-[#111827] mb-2">
-          {step === 'technician' ? (
-            <span>{technicianName || 'Technician'}</span>
-          ) : (
-            <input
-              type="text"
-              value={custName}
-              onChange={e => setCustName(e.target.value)}
-              placeholder="Customer name"
-              className="border border-[#E5E7EB] rounded px-2 py-1 text-sm w-full focus:outline-none focus:ring-2 focus:ring-[#1E40AF]"
+        <div ref={padBoxRef} className="relative flex-1 min-h-0">
+          {!linkReady && padSize?.step === step && (
+            <SignaturePad
+              key={step}
+              ref={step === 'technician' ? techPadRef : custPadRef}
+              width={padSize.width}
+              height={padSize.height}
+              rotated={true}
+              className="absolute inset-0 h-full"
             />
+          )}
+
+          {linkReady && (
+            <div className="absolute inset-0 overflow-auto p-4 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-800 flex flex-col justify-center gap-3">
+              <span className="font-semibold text-sm">Link ready — send to customer:</span>
+              <span className="font-mono break-all">{sigLinkState.url}</span>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(sigLinkState.url)
+                  setCopied(true)
+                  setTimeout(() => setCopied(false), 2000)
+                }}
+                className="self-start px-4 min-h-[44px] bg-[#1E40AF] text-white text-sm font-semibold rounded-lg"
+              >
+                {copied ? 'Copied ✓' : 'Copy Link'}
+              </button>
+            </div>
           )}
         </div>
 
-        {!(step === 'customer' && sigLinkState?.status === 'ready') && (
-          <SignaturePad
-            key={step}
-            ref={step === 'technician' ? techPadRef : custPadRef}
-            width={720}
-            height={360}
-            rotated={true}
-            className="mb-2 flex-1"
-          />
-        )}
-
-        {error && <p className="text-red-600 text-xs mb-2">{error}</p>}
-
-        {step === 'customer' && sigLinkState?.status === 'ready' && (
-          <div className="mb-2 flex-1 p-4 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-800 flex flex-col justify-center gap-3">
-            <span className="font-semibold text-sm">Link ready — send to customer:</span>
-            <span className="font-mono break-all">{sigLinkState.url}</span>
-            <button
-              onClick={() => {
-                navigator.clipboard.writeText(sigLinkState.url)
-                setCopied(true)
-                setTimeout(() => setCopied(false), 2000)
-              }}
-              className="self-start px-4 py-2 bg-[#1E40AF] text-white text-sm font-semibold rounded-lg"
-            >
-              {copied ? 'Copied ✓' : 'Copy Link'}
-            </button>
-          </div>
-        )}
-
-        <div className="flex gap-3 justify-end mt-3">
+        <div className="flex items-center gap-3 shrink-0 mt-2">
+          <p className="flex-1 min-w-0 text-red-600 text-xs">{error}</p>
           <button
             onClick={() => {
               const pad = step === 'technician' ? techPadRef : custPadRef
               pad.current?.clear()
               setError(null)
             }}
-            className="px-4 py-2 text-sm font-semibold text-[#6B7280] border border-[#E5E7EB] rounded-lg"
+            className="px-4 min-h-[44px] text-sm font-semibold text-[#6B7280] border border-[#E5E7EB] rounded-lg whitespace-nowrap"
           >
             Clear
           </button>
@@ -182,7 +195,7 @@ export default function SignatureCapture({ invoiceId, technicianName, customerNa
             <button
               onClick={handleSendToCustomerClick}
               disabled={savingTech || sigLinkState?.status === 'generating'}
-              className="px-4 py-2 text-sm font-semibold text-[#1E40AF] border border-[#1E40AF] rounded-lg disabled:opacity-60"
+              className="px-4 min-h-[44px] text-sm font-semibold text-[#1E40AF] border border-[#1E40AF] rounded-lg whitespace-nowrap disabled:opacity-60"
             >
               {savingTech ? 'Saving…' : sigLinkState?.status === 'generating' ? '…' : 'Send to Customer'}
             </button>
@@ -190,7 +203,7 @@ export default function SignatureCapture({ invoiceId, technicianName, customerNa
           {step === 'technician' ? (
             <button
               onClick={handleTechNext}
-              className="px-5 py-2 text-sm font-bold text-white bg-[#1E40AF] rounded-lg"
+              className="px-5 min-h-[44px] text-sm font-bold text-white bg-[#1E40AF] rounded-lg whitespace-nowrap"
             >
               Next — Customer
             </button>
@@ -198,7 +211,7 @@ export default function SignatureCapture({ invoiceId, technicianName, customerNa
             <button
               onClick={handleConfirm}
               disabled={uploading}
-              className="px-5 py-2 text-sm font-bold text-white bg-[#1E40AF] rounded-lg disabled:opacity-60"
+              className="px-5 min-h-[44px] text-sm font-bold text-white bg-[#1E40AF] rounded-lg whitespace-nowrap disabled:opacity-60"
             >
               {uploading ? 'Saving…' : 'Confirm & Save'}
             </button>
