@@ -93,6 +93,13 @@ export default function Settings() {
             {push.message}
             {push.state === 'registered' && checkedLabel && ` - ${checkedLabel}`}
           </p>
+          {(push.engine === 'current' || push.engine === 'old') && (
+            <p className={`text-xs mt-1 ${push.engine === 'current' ? 'text-[#6B7280]' : 'text-red-500'}`}>
+              {push.engine === 'current'
+                ? 'Notification engine: v2'
+                : 'Notification engine: old version - close and reopen the app'}
+            </p>
+          )}
           {push.state === 'needs_permission' && (
             <Button className="w-full mt-3" onClick={() => ensurePushRegistration({ prompt: true })}>
               Turn on notifications

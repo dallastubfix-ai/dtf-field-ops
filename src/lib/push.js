@@ -1,4 +1,4 @@
-import { getToken, onMessage } from 'firebase/messaging'
+import { getToken } from 'firebase/messaging'
 import { supabase } from './supabase'
 import { messaging } from './firebase'
 
@@ -6,16 +6,24 @@ import { messaging } from './firebase'
 // remove the old row when the token changes. Never log this value.
 const LAST_TOKEN_KEY = 'dtf_push_token'
 
-let status = { state: 'checking', message: 'Checking notifications...', checkedAt: null }
+// The Firebase SDK registers /firebase-messaging-sw.js at this scope.
+const PUSH_SW_SCOPE = '/firebase-cloud-messaging-push-scope'
+const ENGINE_VERSION = 'v2'
+
+// engine: null (not checked yet) | 'none' (no push worker) | 'current' | 'old'
+let status = { state: 'checking', message: 'Checking notifications...', checkedAt: null, engine: null }
 const listeners = new Set()
-let foregroundHandler = null
-let unsubscribeForeground = null
 let inFlight = null
 
 function setStatus(state, message) {
-  status = { state, message, checkedAt: new Date() }
+  status = { ...status, state, message, checkedAt: new Date() }
   listeners.forEach((fn) => fn(status))
   return status
+}
+
+function setEngine(engine) {
+  status = { ...status, engine }
+  listeners.forEach((fn) => fn(status))
 }
 
 export function getPushStatus() {
@@ -27,20 +35,44 @@ export function subscribePushStatus(fn) {
   return () => listeners.delete(fn)
 }
 
-function bindForeground() {
-  if (!foregroundHandler) return
-  unsubscribeForeground?.()
-  unsubscribeForeground = onMessage(messaging, foregroundHandler)
+function waitForActivation(worker, ms) {
+  return new Promise((resolve) => {
+    const done = () => worker.state === 'activated' || worker.state === 'redundant'
+    if (done()) return resolve()
+    const timer = setTimeout(resolve, ms)
+    worker.addEventListener('statechange', () => {
+      if (done()) { clearTimeout(timer); resolve() }
+    })
+  })
 }
 
-// Attached on every app load, and re-attached after each successful registration.
-export function attachForegroundListener(handler) {
-  foregroundHandler = handler
-  bindForeground()
-  return () => {
-    unsubscribeForeground?.()
-    unsubscribeForeground = null
-    foregroundHandler = null
+function askEngineVersion(worker) {
+  return new Promise((resolve) => {
+    const channel = new MessageChannel()
+    const timer = setTimeout(() => resolve(null), 2000)
+    channel.port1.onmessage = (event) => { clearTimeout(timer); resolve(event.data) }
+    worker.postMessage({ type: 'dtf-engine-version' }, [channel.port2])
+  })
+}
+
+// Asks the push worker to check for an update on every app open (its scope is
+// never navigated, so Chrome would otherwise check about once a day), then
+// asks it which version is live.
+async function checkEngine() {
+  try {
+    const registration = await navigator.serviceWorker.getRegistration(PUSH_SW_SCOPE)
+    // getRegistration falls back to the app's own worker (/sw.js) when the push
+    // worker is missing. Never touch that one.
+    if (!registration || new URL(registration.scope).pathname !== PUSH_SW_SCOPE) {
+      return setEngine('none')
+    }
+    await registration.update().catch(() => {})
+    const pending = registration.installing ?? registration.waiting
+    if (pending) await waitForActivation(pending, 10000)
+    const answer = registration.active ? await askEngineVersion(registration.active) : null
+    setEngine(answer === ENGINE_VERSION ? 'current' : 'old')
+  } catch {
+    setEngine('old')
   }
 }
 
@@ -81,6 +113,8 @@ async function run(prompt) {
   } catch (err) {
     console.error('Push: could not get a device token:', err?.code ?? 'unknown')
   }
+  // Not awaited: the registration check below does not depend on it.
+  checkEngine()
   if (!token) {
     return setStatus('error', 'Could not reach the notification service. Check your connection, then close and reopen the app.')
   }
@@ -125,8 +159,6 @@ async function run(prompt) {
   // Keep the old token on failure so the cleanup is retried next app open.
   if (!cleanupFailed) localStorage.setItem(LAST_TOKEN_KEY, token)
   localStorage.removeItem('pushEnabled')
-
-  bindForeground()
 
   return setStatus(
     'registered',

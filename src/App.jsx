@@ -1,8 +1,7 @@
-import { useState, useEffect } from 'react'
-import { Routes, Route, Navigate } from 'react-router-dom'
-import { Bell, X } from 'lucide-react'
+import { useEffect } from 'react'
+import { Routes, Route, Navigate, useNavigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
-import { attachForegroundListener, ensurePushRegistration } from './lib/push'
+import { ensurePushRegistration } from './lib/push'
 import AppShell from './components/layout/AppShell'
 import LoadingSpinner from './components/ui/LoadingSpinner'
 import ErrorBoundary from './components/ErrorBoundary'
@@ -39,12 +38,26 @@ function AuthGuard({ children }) {
 
 function AppRoutes() {
   const { user, loading } = useAuth()
+  const navigate = useNavigate()
 
   // Push: verify this phone is registered on every app open while signed in,
   // and again right after sign-in.
   useEffect(() => {
     if (user?.id) ensurePushRegistration()
   }, [user?.id])
+
+  // Push: a tapped notification with a specific page asks the open app to go there.
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return
+    const onWorkerMessage = (event) => {
+      const { type, url } = event.data ?? {}
+      if (type === 'dtf-notification-click' && typeof url === 'string' && url.startsWith('/')) {
+        navigate(url)
+      }
+    }
+    navigator.serviceWorker.addEventListener('message', onWorkerMessage)
+    return () => navigator.serviceWorker.removeEventListener('message', onWorkerMessage)
+  }, [navigate])
 
   if (loading) {
     return (
@@ -146,35 +159,9 @@ function AppRoutes() {
 }
 
 export default function App() {
-  const [foregroundNotif, setForegroundNotif] = useState(null)
-
-  useEffect(() => {
-    return attachForegroundListener((payload) => {
-      const title = payload.notification?.title ?? 'DTF Field Ops'
-      const body = payload.notification?.body ?? ''
-      setForegroundNotif({ title, body })
-      setTimeout(() => setForegroundNotif(null), 5000)
-    })
-  }, [])
-
   return (
     <AuthProvider>
       <ErrorBoundary>
-        {foregroundNotif && (
-          <div className="fixed top-0 left-0 right-0 z-50 bg-[#1E40AF] text-white py-3 px-4 flex items-start gap-3">
-            <Bell size={18} className="mt-0.5 flex-shrink-0" />
-            <div className="flex-1 min-w-0">
-              <div className="font-bold text-sm">{foregroundNotif.title}</div>
-              <div className="text-xs text-blue-100">{foregroundNotif.body}</div>
-            </div>
-            <button
-              onClick={() => setForegroundNotif(null)}
-              className="text-[#F59E0B] flex-shrink-0"
-            >
-              <X size={18} />
-            </button>
-          </div>
-        )}
         <AppRoutes />
       </ErrorBoundary>
     </AuthProvider>
