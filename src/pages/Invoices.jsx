@@ -15,6 +15,7 @@ const FILTERS = [
   { label: 'Unpaid',  value: 'unpaid'  },
   { label: 'Partial', value: 'partial' },
   { label: 'Paid',    value: 'paid'    },
+  { label: 'Quote',   value: 'quote'   },
 ]
 
 const paymentPill = {
@@ -26,6 +27,9 @@ const paymentPill = {
 
 const PAYMENT_STATUS_OPTIONS = ['unpaid', 'partial', 'paid', 'quote']
 
+const OFFLINE_STATUS_MSG = 'You are offline. The payment status was not changed. Try again when you have signal.'
+const FAILED_STATUS_MSG = 'Could not save the payment status, so it was put back. Check your signal and try again.'
+
 export default function Invoices() {
   const navigate = useNavigate()
   const [filter, setFilter] = useState('all')
@@ -33,15 +37,43 @@ export default function Invoices() {
   const [jobs, setJobs] = useState({})
   const [error, setError] = useState(null)
   const [statusMenuFor, setStatusMenuFor] = useState(null)
+  const [savingStatusFor, setSavingStatusFor] = useState(null)
+  const [toast, setToast] = useState(null) // { text, kind }
+
+  const flash = (text, kind = 'ok') => {
+    setToast({ text, kind })
+    setTimeout(() => setToast(null), kind === 'ok' ? 1800 : 4500)
+  }
 
   const updatePaymentStatus = async (invoiceId, newStatus) => {
-    await db.invoices.where('id').equals(invoiceId).modify({ payment_status: newStatus })
-    const { error } = await supabase.from('invoices').update({
-      payment_status: newStatus,
-      updated_at: new Date().toISOString(),
-    }).eq('id', invoiceId)
-    if (error) console.error('Failed to update payment status:', error)
     setStatusMenuFor(null)
+    const current = await db.invoices.where('id').equals(invoiceId).first()
+    const prevStatus = current?.payment_status
+    if (prevStatus === newStatus) return
+    if (!navigator.onLine) { flash(OFFLINE_STATUS_MSG, 'error'); return }
+
+    setSavingStatusFor(invoiceId)
+    await db.invoices.where('id').equals(invoiceId).modify({ payment_status: newStatus })
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 10000)
+    try {
+      const { data, error } = await supabase.from('invoices').update({
+        payment_status: newStatus,
+        updated_at: new Date().toISOString(),
+      }).eq('id', invoiceId).select('id').abortSignal(controller.signal)
+      if (error) throw error
+      // No error but no row changed: the server refused or has no such invoice.
+      if (!data || data.length !== 1) throw new Error('no_row_changed')
+      flash('Payment status saved')
+    } catch (err) {
+      // Error code only. Postgres error details can contain the whole row.
+      console.error('Payment status update failed:', err?.code || err?.name || 'unknown')
+      await db.invoices.where('id').equals(invoiceId).modify({ payment_status: prevStatus })
+      flash(FAILED_STATUS_MSG, 'error')
+    } finally {
+      clearTimeout(timer)
+      setSavingStatusFor(null)
+    }
   }
 
   useEffect(() => {
@@ -108,6 +140,12 @@ export default function Invoices() {
         <h1 className="text-white font-bold text-lg">Invoices</h1>
       </header>
 
+      {toast && (
+        <div className={`fixed top-16 left-1/2 -translate-x-1/2 z-50 text-white text-sm px-4 py-2 rounded-lg shadow-lg max-w-[90vw] text-center ${toast.kind === 'error' ? 'bg-red-600' : 'bg-green-600'}`}>
+          {toast.text}
+        </div>
+      )}
+
       {/* Summary strip */}
       {outstanding > 0 && (
         <div className="bg-red-50 border-b border-red-100 px-4 py-3 flex items-center justify-between">
@@ -161,11 +199,12 @@ export default function Invoices() {
                   <div className="relative">
                     <button
                       type="button"
+                      disabled={savingStatusFor === inv.id}
                       onClick={(e) => {
                         e.stopPropagation()
                         setStatusMenuFor(statusMenuFor === inv.id ? null : inv.id)
                       }}
-                      className={`text-xs font-semibold px-2 py-0.5 rounded-full capitalize ${paymentPill[inv.payment_status] ?? 'bg-gray-100 text-gray-600'}`}
+                      className={`text-xs font-semibold px-2 py-0.5 rounded-full capitalize ${paymentPill[inv.payment_status] ?? 'bg-gray-100 text-gray-600'}${savingStatusFor === inv.id ? ' opacity-60' : ''}`}
                     >
                       <span className="inline-flex items-center gap-0.5">
                         {inv.payment_status ?? 'Unpaid'}

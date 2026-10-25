@@ -212,7 +212,6 @@ export default function InvoiceBuilder() {
     notes1: '', notes2: '', notes3: '',
     warranty_included: true, warranty_no_reason: '',
     warranty_years: 2,
-    payment_status: 'unpaid',
     technician_signature_url: null,
     customer_signature_url: null,
     job_id: jobId ?? null,
@@ -267,7 +266,6 @@ export default function InvoiceBuilder() {
           ...existing,
           line_items: Array.isArray(existing.line_items) && existing.line_items.length ? existing.line_items : DEFAULT_ITEMS,
           payment_methods: existing.payment_methods ?? [],
-          payment_status: existing.payment_status ?? 'unpaid',
           discount: String(existing.discount ?? '0'),
           tax_rate: String(existing.tax_rate ?? '0'),
           notes1: nlines[0] ?? '', notes2: nlines[1] ?? '', notes3: nlines[2] ?? '',
@@ -372,7 +370,10 @@ export default function InvoiceBuilder() {
     tax_amount: tax,
     total,
     payment_methods: inv.payment_methods ?? [],
-    payment_status: inv.payment_status || 'unpaid',
+    // The builder has no payment status control, so a save never sends one
+    // for an existing invoice; the Invoices list owns that field. New
+    // invoices start as unpaid on both the phone and the server.
+    ...(inv.id ? {} : { payment_status: 'unpaid' }),
     invoice_notes: [inv.notes1, inv.notes2, inv.notes3].filter(Boolean).join('\n') || null,
     warranty_included: !!inv.warranty_included,
     warranty_excluded_reason: inv.warranty_included ? null : (inv.warranty_no_reason || null),

@@ -30,10 +30,17 @@ export default function Home() {
     })
   }, [])
 
-  const unpaidInvoices = useLiveQuery(
-    () => db.invoices.where('payment_status').notEqual('paid').count(),
-    []
-  )
+  // Open invoices only: unpaid or partial, never quotes or test-job invoices.
+  const unpaidInvoices = useLiveQuery(async () => {
+    const testJobIds = new Set(
+      (await db.jobs.filter(j => j.is_test === true).toArray()).map(j => j.id)
+    )
+    const open = await db.invoices.where('payment_status').anyOf('unpaid', 'partial').toArray()
+    return open
+      .filter(inv => !testJobIds.has(inv.job_id))
+      .filter(inv => !String(inv.invoice_number ?? '').startsWith('TEST-'))
+      .length
+  }, [])
 
   const [jobs, setJobs] = useState({})
   const [customers, setCustomers] = useState({})
