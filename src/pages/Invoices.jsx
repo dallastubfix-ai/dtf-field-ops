@@ -6,6 +6,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import db from '../lib/db'
 import { supabase } from '../lib/supabase'
 import { upsertLocal } from '../lib/sync'
+import { cleanupLeftoverInvoices } from '../lib/localCleanup'
 import EmptyState from '../components/ui/EmptyState'
 import LoadingSpinner from '../components/ui/LoadingSpinner'
 import Badge from '../components/ui/Badge'
@@ -103,12 +104,31 @@ export default function Invoices() {
         setCustomers(cs.reduce((m, c) => { m[c.id] = c; return m }, {}))
         const js = await db.jobs.toArray()
         setJobs(js.reduce((m, j) => { m[j.id] = j; return m }, {}))
+
+        // Only after a download that returned rows: an expired sign-in can
+        // return an empty list with no error, and then every server check
+        // below would wrongly say "gone".
+        if (data.length > 0) {
+          try {
+            const removed = await cleanupLeftoverInvoices()
+            if (removed > 0) flash(`Removed ${removed} old test invoice${removed === 1 ? '' : 's'} from this phone`)
+          } catch (err) {
+            console.error('Leftover invoice cleanup failed:', err?.name || 'unknown')
+          }
+        }
       })
       .catch(err => setError(err.message))
   }, [])
 
   const invoices = useLiveQuery(async () => {
-    let all = await db.invoices.orderBy('created_at').reverse().toArray()
+    // Test-job invoices are never listed. The TEST- number also catches
+    // leftovers whose job is no longer on this phone. Hiding only.
+    const testJobIds = new Set(
+      (await db.jobs.filter(j => j.is_test === true).toArray()).map(j => j.id)
+    )
+    let all = (await db.invoices.orderBy('created_at').reverse().toArray())
+      .filter(inv => !testJobIds.has(inv.job_id))
+      .filter(inv => !String(inv.invoice_number ?? '').startsWith('TEST-'))
     if (filter !== 'all') all = all.filter(inv => inv.payment_status === filter)
     return all
   }, [filter])

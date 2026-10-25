@@ -8,6 +8,7 @@ import { format } from 'date-fns'
 import { supabase } from '../lib/supabase'
 import db from '../lib/db'
 import { updateRecord, upsertLocal } from '../lib/sync'
+import { removeJobLocally } from '../lib/localCleanup'
 import { formatEnum } from '../lib/formatEnum'
 import { useOnlineStatus } from '../hooks/useOnlineStatus'
 import Badge from '../components/ui/Badge'
@@ -335,8 +336,18 @@ export default function JobDetail() {
         body: JSON.stringify({ job_id: id }),
       })
       const result = await res.json()
-      if (!res.ok || !result.success) {
+      // Already gone on the server (e.g. deleted from another device): only
+      // this phone's copy is left, and this button only shows for test jobs.
+      const alreadyGone = res.status === 404 && result?.error === 'job_not_found' && job?.is_test === true
+      if (!alreadyGone && (!res.ok || !result.success)) {
         throw new Error(result?.error || 'Delete failed')
+      }
+      try {
+        await removeJobLocally(id)
+      } catch (err) {
+        // The server delete already succeeded. Anything left on this phone is
+        // picked up by the leftover cleanup on the Invoices page.
+        console.error('Local test job cleanup failed:', err?.name || 'unknown')
       }
       navigate('/jobs')
     } catch (err) {
