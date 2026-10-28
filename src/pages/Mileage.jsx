@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useSyncExternalStore } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ChevronLeft, ChevronRight, ChevronDown, Car } from 'lucide-react'
 import { useLiveQuery } from 'dexie-react-hooks'
@@ -8,7 +8,7 @@ import Button from '../components/ui/Button'
 import EmptyState from '../components/ui/EmptyState'
 import LoadingSpinner from '../components/ui/LoadingSpinner'
 import { useOnlineStatus } from '../hooks/useOnlineStatus'
-import { todayKey, monthKeyOf, shiftMonth, monthRange, yearRange, summarizeCalculated, fetchDayGroups, refreshMileageRows, calculateDay, friendlyReason, MAX_AUTO_ATTEMPTS } from '../lib/mileage'
+import { todayKey, monthKeyOf, shiftMonth, monthRange, yearRange, summarizeCalculated, fetchDayGroups, refreshMileageRows, calculateDay, friendlyReason, MAX_AUTO_ATTEMPTS, requestRecalc, getRecalcDays, subscribeRecalc, setStartsFromHome } from '../lib/mileage'
 
 const prettyDay = (key) => {
   const [y, m, d] = key.split('-').map(Number)
@@ -32,6 +32,39 @@ export default function Mileage() {
   const [busy, setBusy] = useState({})
   const [notes, setNotes] = useState({})
   const [open, setOpen] = useState({})
+
+  const recalcDays = useSyncExternalStore(subscribeRecalc, getRecalcDays)
+  const queuedAppointmentOps = useLiveQuery(
+    () => db.sync_queue.where('table_name').equals('appointments').toArray(), [])
+  const [flipped, setFlipped] = useState({}) // appointment id -> true/false
+
+  // Flips still waiting in the sync queue (made offline) keep their position.
+  useEffect(() => {
+    const fromQueue = {}
+    for (const op of queuedAppointmentOps ?? []) {
+      if (op.operation === 'update' && typeof op.payload?.starts_from_home === 'boolean') {
+        fromQueue[op.payload.id] = op.payload.starts_from_home
+      }
+    }
+    if (Object.keys(fromQueue).length) setFlipped(f => ({ ...f, ...fromQueue }))
+  }, [queuedAppointmentOps])
+
+  const isHome = (stop) => flipped[stop.appointment_id] ?? stop.starts_from_home === true
+
+  const handleFlip = async (day, stop) => {
+    const id = stop.appointment_id
+    const prev = isHome(stop)
+    const next = !prev
+    setFlipped(f => ({ ...f, [id]: next }))
+    setNotes(n => ({ ...n, [day]: null }))
+    const result = await setStartsFromHome(id, next)
+    if (!result.ok) {
+      setFlipped(f => (f[id] === next ? { ...f, [id]: prev } : f)) // back to where it was
+      setNotes(n => ({ ...n, [day]: result.message }))
+      return
+    }
+    requestRecalc(day)
+  }
 
   const changeMonth = (n) => {
     setGroups(null)
@@ -79,11 +112,11 @@ export default function Mileage() {
     }
   }
 
-  const statusText = (day, row) => {
+  const statusText = (day, row, status) => {
     if (day > today) return { text: 'Scheduled', cls: 'bg-blue-100 text-blue-700' }
-    if (row?.status === 'calculated') return { text: `${row.total_miles} mi`, cls: 'bg-green-100 text-green-700' }
-    if (row?.status === 'pending') return { text: 'Waiting to calculate', cls: 'bg-amber-100 text-amber-700' }
-    if (row?.status === 'failed') return { text: 'Needs attention', cls: 'bg-red-100 text-red-600' }
+    if (status === 'calculated') return { text: `${row.total_miles} mi`, cls: 'bg-green-100 text-green-700' }
+    if (status === 'pending') return { text: 'Waiting to calculate', cls: 'bg-amber-100 text-amber-700' }
+    if (status === 'failed') return { text: 'Needs attention', cls: 'bg-red-100 text-red-600' }
     return { text: 'Not calculated', cls: 'bg-gray-100 text-gray-600' }
   }
 
@@ -138,7 +171,11 @@ export default function Mileage() {
         ) : dayKeys.map(day => {
           const row = rowByDay.get(day)
           const group = groups?.[day]
-          const chip = statusText(day, row)
+          const stops = group?.stops ?? row?.stops ?? []
+          const canFlip = day <= today && stops.length >= 2
+          const recalcWaiting = day <= today && recalcDays.includes(day)
+          const status = recalcWaiting ? 'pending' : row?.status
+          const chip = statusText(day, row, status)
           const stopCount = row?.stops?.length ?? group?.stops?.length ?? 0
           const skipped = row?.skipped?.length ? row.skipped : (group?.skipped ?? [])
           const isOpen = !!open[day]
@@ -162,6 +199,35 @@ export default function Mileage() {
 
               {isOpen && (
                 <div className="mt-3 space-y-2">
+                  {canFlip && (
+                    <div className="space-y-1">
+                      {stops.map((s, i) => (
+                        <div key={s.appointment_id}>
+                          {i > 0 && (
+                            <div className="flex items-center justify-between gap-3 py-2 pl-4 border-l-2 border-[#E5E7EB]">
+                              <span className="text-xs text-[#6B7280]">Went home in between</span>
+                              <button
+                                type="button"
+                                role="switch"
+                                aria-checked={isHome(s)}
+                                aria-label="Went home in between"
+                                onClick={() => handleFlip(day, s)}
+                                className={`w-10 h-6 rounded-full transition-colors flex items-center px-1 ${isHome(s) ? 'bg-navy' : 'bg-gray-300'}`}
+                              >
+                                <div className={`w-4 h-4 rounded-full bg-white shadow transition-transform ${isHome(s) ? 'translate-x-4' : 'translate-x-0'}`} />
+                              </button>
+                            </div>
+                          )}
+                          <div className="text-xs text-[#1F2937]">
+                            {i + 1}. {s.job_number ?? `Stop ${i + 1}`}{s.city ? `, ${s.city}` : ''}
+                          </div>
+                        </div>
+                      ))}
+                      {recalcWaiting && !isOnline && (
+                        <p className="text-xs text-[#6B7280]">Will recalculate when you're back online.</p>
+                      )}
+                    </div>
+                  )}
                   {row?.status === 'calculated' && row.legs?.length > 0 && (
                     <ul className="space-y-1">
                       {row.legs.map((leg, i) => (
@@ -177,13 +243,13 @@ export default function Mileage() {
                       Not counted (no address): {skipped.map(s => s.job_number ?? 'job').join(', ')}
                     </p>
                   )}
-                  {!(row?.legs?.length > 0) && skipped.length === 0 && (
+                  {!(row?.legs?.length > 0) && skipped.length === 0 && !canFlip && (
                     <p className="text-xs text-[#6B7280]">No trip details yet.</p>
                   )}
                 </div>
               )}
 
-              {(row?.status === 'pending' || row?.status === 'failed') && row.status_reason && (
+              {!recalcWaiting && (row?.status === 'pending' || row?.status === 'failed') && row.status_reason && (
                 <p className="mt-2 text-xs text-[#6B7280]">
                   {row.status === 'pending' && (row.attempts ?? 0) >= MAX_AUTO_ATTEMPTS
                     ? "Couldn't calculate automatically. Tap Try again."
@@ -194,14 +260,14 @@ export default function Mileage() {
 
               {day <= today && (
                 <Button
-                  variant={row?.status === 'calculated' ? 'secondary' : 'primary'}
+                  variant={status === 'calculated' ? 'secondary' : 'primary'}
                   className="w-full mt-3"
                   onClick={() => handleCalculate(day)}
                   disabled={busy[day] || !isOnline}
                 >
                   {busy[day] ? 'Calculating…'
-                    : row?.status === 'calculated' ? 'Recalculate'
-                    : (row?.status === 'pending' || row?.status === 'failed') ? 'Try again'
+                    : status === 'calculated' ? 'Recalculate'
+                    : (status === 'pending' || status === 'failed') ? 'Try again'
                     : 'Calculate'}
                 </Button>
               )}

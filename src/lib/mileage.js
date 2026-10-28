@@ -82,6 +82,9 @@ const MESSAGES = {
   save: 'The result could not be saved. Please try again.',
   network: 'Could not reach the server. Please try again.',
   budget: 'Daily limit reached. Mileage will continue tomorrow.',
+  recalc: 'Updating after a change.',
+  flip_save: 'Could not save that change. Please try again.',
+  syncing: 'Still saving your latest changes. Try again in a moment.',
 }
 export const friendlyReason = (reason) => MESSAGES[reason] ?? MESSAGES.unknown
 
@@ -359,6 +362,7 @@ const finished = (status, row = null) => ({ ok: true, status, row })
 async function runCalculation(dayKey) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dayKey) || dayKey > todayKey()) return stopped('future')
   if (!navigator.onLine) return stopped('offline') // nothing is written offline
+  if ((await db.sync_queue.count()) > 0) return stopped('syncing')
 
   let existing
   try { existing = await fetchDayRow(dayKey) } catch { return stopped('network') }
@@ -438,6 +442,115 @@ async function failWith(dayKey, existing, found, reason, forceStatus) {
   }
 }
 
+// ---------- the Went-home switch ----------
+
+const flipChains = new Map() // appointment id -> last write, so taps land in order
+
+async function mergeLocalAppointment(id, value, synced) {
+  try {
+    await db.appointments.where('id').equals(id).modify({ starts_from_home: value, _synced: synced })
+  } catch {
+    // the phone's copy is optional
+  }
+}
+
+async function writeStartsFromHome(id, value) {
+  const failed = { ok: false, message: friendlyReason('flip_save') }
+  try {
+    // Offline, or older changes still queued: queue this one behind them so order is kept.
+    if (!navigator.onLine || (await db.sync_queue.count()) > 0) {
+      await db.sync_queue.add({
+        table_name: 'appointments',
+        operation: 'update',
+        payload: { id, starts_from_home: value },
+        created_at: new Date().toISOString(),
+      })
+      await mergeLocalAppointment(id, value, false)
+      return { ok: true, queued: true }
+    }
+    const { data, error } = await supabase
+      .from('appointments')
+      .update({ starts_from_home: value })
+      .eq('id', id)
+      .select('id, starts_from_home')
+      .single()
+    if (error || !data || data.starts_from_home !== value) return failed
+    await mergeLocalAppointment(id, value, true)
+    return { ok: true, queued: false }
+  } catch {
+    return failed
+  }
+}
+
+// Saves only that appointment's starts_from_home. Resolves { ok, queued } or { ok: false, message }.
+export function setStartsFromHome(appointmentId, value) {
+  const prior = flipChains.get(appointmentId) ?? Promise.resolve()
+  const next = prior.then(() => writeStartsFromHome(appointmentId, value))
+  flipChains.set(appointmentId, next.catch(() => {}))
+  return next
+}
+
+// ---------- recalculation requests ----------
+// Phase 7 will call requestRecalc(dayKey) when an appointment changes. Requests are
+// remembered in localStorage (sync, no Dexie schema change, same approach as the
+// budget counter) so they survive offline and reloads.
+
+const RECALC_KEY = 'dtf_mileage_recalc'
+const RECALC_SETTLE_MS = 8000
+let memoryRecalc = {}
+let recalcSnapshot = null
+let recalcWakeTimer = null
+const recalcListeners = new Set()
+
+function readRecalc() {
+  try {
+    const v = JSON.parse(localStorage.getItem(RECALC_KEY))
+    if (v && typeof v === 'object' && !Array.isArray(v)) return v
+  } catch { /* use memory copy */ }
+  return memoryRecalc
+}
+
+function writeRecalc(map) {
+  memoryRecalc = map
+  try { localStorage.setItem(RECALC_KEY, JSON.stringify(map)) } catch { /* memory copy still works this session */ }
+  const days = Object.keys(map).sort()
+  if (!recalcSnapshot || recalcSnapshot.join() !== days.join()) {
+    recalcSnapshot = days
+    recalcListeners.forEach(fn => fn())
+  }
+}
+
+function forgetRecalc(day, at) {
+  const map = { ...readRecalc() }
+  if (map[day] === at) { // a newer request for the same day stays
+    delete map[day]
+    writeRecalc(map)
+  }
+}
+
+// For useSyncExternalStore on the page.
+export const subscribeRecalc = (fn) => { recalcListeners.add(fn); return () => recalcListeners.delete(fn) }
+export function getRecalcDays() {
+  if (!recalcSnapshot) recalcSnapshot = Object.keys(readRecalc()).sort()
+  return recalcSnapshot
+}
+
+// One day key or an array. Future days are ignored (calculated on the day);
+// repeat requests for a day collapse into one entry whose timestamp moves forward.
+export function requestRecalc(dayKeys) {
+  const today = todayKey()
+  const days = (Array.isArray(dayKeys) ? dayKeys : [dayKeys])
+    .filter(d => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d) && d <= today)
+  if (!days.length) return
+  const map = { ...readRecalc() }
+  const now = Date.now()
+  for (const d of days) map[d] = now
+  writeRecalc(map)
+  // Wake the runner once things have settled (restarted by every new request).
+  clearTimeout(recalcWakeTimer)
+  recalcWakeTimer = setTimeout(() => { void runRetryPass() }, RECALC_SETTLE_MS + 500)
+}
+
 // ---------- automatic retry of pending days ----------
 // One module-level runner. AppShell calls startMileageRetry(); mounting twice or
 // re-mounting AppShell never creates a second timer, listener, or overlapping run.
@@ -493,6 +606,26 @@ async function findDuePendingDays() {
   }).map(r => r.id)
 }
 
+// Marks remembered days pending (attempts 0) on the server so the normal retry flow
+// recalculates them. No Google calls. A day is forgotten only after the server confirms.
+async function flushRecalcRequests() {
+  try {
+    const now = Date.now()
+    for (const [day, at] of Object.entries(readRecalc())) {
+      if (now - at < RECALC_SETTLE_MS) continue // still being toggled
+      if ((await db.sync_queue.count()) > 0) return // a change was just queued
+      await saveDayRow({
+        id: day, status: 'pending', status_reason: 'recalc', attempts: 0,
+        updated_at: new Date().toISOString(),
+      })
+      forgetRecalc(day, at)
+      retry.triedAt.delete(day) // lift the 10-minute repeat guard for this day
+    }
+  } catch {
+    logCode('recalc', 'flush')
+  }
+}
+
 // Outcomes specific to one day: the pass carries on to the next day.
 const dayLevelReasons = new Set(['address_not_found', 'too_many_stops'])
 
@@ -501,8 +634,11 @@ export async function runRetryPass() {
   retry.running = true
   try {
     if (!navigator.onLine || !(await hasSession())) return
-    if (retry.sessionRuns >= MAX_SESSION_RUNS || budgetExhausted()) return
     if ((await db.sync_queue.count()) > 0) return // never calculate from stale data
+
+    await flushRecalcRequests() // no Google calls, so no budget check
+
+    if (retry.sessionRuns >= MAX_SESSION_RUNS || budgetExhausted()) return
 
     const due = await findDuePendingDays()
     if (!due.length) return
