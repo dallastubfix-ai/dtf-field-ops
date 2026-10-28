@@ -19,6 +19,7 @@ import InvoiceBuilder  from './pages/InvoiceBuilder'
 import WarrantyBuilder from './pages/WarrantyBuilder'
 import More               from './pages/More'
 import Settings           from './pages/Settings'
+import Mileage            from './pages/Mileage'
 import ChatSessions       from './pages/ChatSessions'
 import ChatSessionDetail  from './pages/ChatSessionDetail'
 import CustomerSign      from './pages/CustomerSign'
@@ -134,6 +135,11 @@ function AppRoutes() {
       <Route path="/more" element={
         <AuthGuard>
           <AppShell><More /></AppShell>
+        </AuthGuard>
+      } />
+      <Route path="/more/mileage" element={
+        <AuthGuard>
+          <AppShell><Mileage /></AppShell>
         </AuthGuard>
       } />
       <Route path="/settings" element={

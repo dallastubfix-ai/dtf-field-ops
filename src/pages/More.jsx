@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import { ChevronRight, Settings, CheckCircle } from 'lucide-react'
+import { ChevronRight, Settings, CheckCircle, Car } from 'lucide-react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import db from '../lib/db'
 
@@ -22,6 +22,23 @@ export default function More() {
             <span className="text-sm text-[#1F2937]">
               {pendingCount > 0 ? `${pendingCount} item${pendingCount > 1 ? 's' : ''} pending sync` : 'All synced ✓'}
             </span>
+          </div>
+        </div>
+
+        {/* Tools */}
+        <div>
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-[#6B7280] mb-3">
+            Tools
+          </h2>
+          <div className="bg-white rounded-xl border border-[#E5E7EB] shadow-sm overflow-hidden">
+            <button
+              onClick={() => navigate('/more/mileage')}
+              className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-[#F3F4F6] transition-colors"
+            >
+              <Car size={18} className="text-navy" />
+              <span className="flex-1 text-sm font-medium text-[#1F2937] text-left">Mileage</span>
+              <ChevronRight size={16} className="text-[#9CA3AF]" />
+            </button>
           </div>
         </div>
 
