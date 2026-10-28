@@ -551,6 +551,79 @@ export function requestRecalc(dayKeys) {
   recalcWakeTimer = setTimeout(() => { void runRetryPass() }, RECALC_SETTLE_MS + 500)
 }
 
+// ---------- appointment / status triggers (Phase 7) ----------
+// Called from the save paths. Fire-and-forget: never throws, never blocks a save.
+
+const JOB_RECALC_KEY = 'dtf_mileage_job_recalc'
+let memoryJobRecalc = {}
+
+function readJobRecalc() {
+  try {
+    const v = JSON.parse(localStorage.getItem(JOB_RECALC_KEY))
+    if (v && typeof v === 'object' && !Array.isArray(v)) return v
+  } catch { /* use memory copy */ }
+  return memoryJobRecalc
+}
+
+function writeJobRecalc(map) {
+  memoryJobRecalc = map
+  try { localStorage.setItem(JOB_RECALC_KEY, JSON.stringify(map)) } catch { /* memory copy still works this session */ }
+}
+
+function forgetJobRecalc(jobId, at) {
+  const map = { ...readJobRecalc() }
+  if (map[jobId] === at) {
+    delete map[jobId]
+    writeJobRecalc(map)
+  }
+}
+
+function requestJobRecalc(jobId) {
+  if (typeof jobId !== 'string' || !jobId) return
+  writeJobRecalc({ ...readJobRecalc(), [jobId]: Date.now() })
+  clearTimeout(recalcWakeTimer)
+  recalcWakeTimer = setTimeout(() => { void runRetryPass() }, RECALC_SETTLE_MS + 500)
+}
+
+// Test jobs cost no Google requests; cancelled jobs are not part of any route.
+const isTracked = (job) => job?.is_test !== true && job?.status !== 'cancelled'
+
+// datetimes: appointment_datetime values (any mix of old and new). Day keys come
+// from chicagoDayKey(); requestRecalc ignores future days.
+export function recalcAfterAppointmentChange(job, datetimes) {
+  try {
+    if (!isTracked(job)) return
+    const days = [...new Set((datetimes ?? []).map(d => (d ? chicagoDayKey(d) : null)).filter(Boolean))]
+    if (days.length) requestRecalc(days)
+  } catch {
+    logCode('trigger', 'appointment')
+  }
+}
+
+// Only a move into or out of 'cancelled' matters.
+export function recalcAfterStatusChange(job, previousStatus, newStatus) {
+  try {
+    if (job?.is_test === true) return
+    if ((previousStatus === 'cancelled') === (newStatus === 'cancelled')) return
+    requestJobRecalc(job.id)
+  } catch {
+    logCode('trigger', 'status')
+  }
+}
+
+// Edit/reschedule: only when the time or address actually changed; old and new day both.
+export function recalcAfterAppointmentEdit(job, before, after) {
+  try {
+    const minute = (v) => Math.floor(Date.parse(v) / 60000)
+    const timeChanged = minute(before?.appointment_datetime) !== minute(after?.appointment_datetime)
+    const addressChanged = (before?.location_address ?? '').trim() !== (after?.location_address ?? '').trim()
+    if (!timeChanged && !addressChanged) return
+    recalcAfterAppointmentChange(job, [before?.appointment_datetime, after?.appointment_datetime])
+  } catch {
+    logCode('trigger', 'edit')
+  }
+}
+
 // ---------- automatic retry of pending days ----------
 // One module-level runner. AppShell calls startMileageRetry(); mounting twice or
 // re-mounting AppShell never creates a second timer, listener, or overlapping run.
@@ -606,6 +679,38 @@ async function findDuePendingDays() {
   }).map(r => r.id)
 }
 
+// Job-level reminders (a job moved into/out of cancelled): resolve the job's appointment
+// days from Supabase, mark each day up to today pending (attempts 0). No Google calls.
+// A reminder is forgotten only after every day is confirmed.
+async function flushJobRecalcRequests() {
+  try {
+    const now = Date.now()
+    for (const [jobId, at] of Object.entries(readJobRecalc())) {
+      if (now - at < RECALC_SETTLE_MS) continue // still being toggled
+      if ((await db.sync_queue.count()) > 0) return // the status change may still be queued
+      const { data, error } = await supabase
+        .from('appointments').select('appointment_datetime').eq('job_id', jobId)
+      if (error) throw new MileageError('network')
+      const today = todayKey()
+      const days = new Set()
+      for (const a of data ?? []) {
+        const k = chicagoDayKey(a.appointment_datetime)
+        if (k && k <= today) days.add(k)
+      }
+      for (const day of days) {
+        await saveDayRow({
+          id: day, status: 'pending', status_reason: 'recalc', attempts: 0,
+          updated_at: new Date().toISOString(),
+        })
+        retry.triedAt.delete(day)
+      }
+      forgetJobRecalc(jobId, at)
+    }
+  } catch {
+    logCode('recalc', 'job_flush')
+  }
+}
+
 // Marks remembered days pending (attempts 0) on the server so the normal retry flow
 // recalculates them. No Google calls. A day is forgotten only after the server confirms.
 async function flushRecalcRequests() {
@@ -636,6 +741,7 @@ export async function runRetryPass() {
     if (!navigator.onLine || !(await hasSession())) return
     if ((await db.sync_queue.count()) > 0) return // never calculate from stale data
 
+    await flushJobRecalcRequests() // resolves a job's days first, so they flush below
     await flushRecalcRequests() // no Google calls, so no budget check
 
     if (retry.sessionRuns >= MAX_SESSION_RUNS || budgetExhausted()) return

@@ -8,6 +8,7 @@ import { format } from 'date-fns'
 import { supabase } from '../lib/supabase'
 import db from '../lib/db'
 import { updateRecord, upsertLocal } from '../lib/sync'
+import { recalcAfterAppointmentChange, recalcAfterAppointmentEdit, recalcAfterStatusChange } from '../lib/mileage'
 import { removeJobLocally } from '../lib/localCleanup'
 import { formatEnum } from '../lib/formatEnum'
 import { useOnlineStatus } from '../hooks/useOnlineStatus'
@@ -76,6 +77,9 @@ const LEAD_OPTIONS = [
 ]
 
 const REVIEW_LINK = 'https://g.page/r/CZ3g5Gm0_pYiEBM/review'
+
+// The Mileage page owns starts_from_home. Never send this page's copy, which can be stale.
+const withoutStartsFromHome = ({ starts_from_home, ...rest }) => rest
 
 const toLocalInput = (dt) => {
   if (!dt) return ''
@@ -366,9 +370,11 @@ export default function JobDetail() {
 
   const saveStatus = async (status) => {
     if (!job) return
+    const previousStatus = job.status
     const updated = { ...job, status, updated_at: new Date().toISOString() }
     setJob(updated)
     await updateRecord('jobs', updated, isOnline)
+    recalcAfterStatusChange(job, previousStatus, status)
     flashToast(`Status → ${formatEnum(status)}`)
   }
 
@@ -470,7 +476,8 @@ export default function JobDetail() {
       updated_at: new Date().toISOString(),
     }
     setAppointments(list => list.map(x => (x.id || x._localId) === key ? updated : x))
-    await updateRecord('appointments', updated, isOnline)
+    await updateRecord('appointments', withoutStartsFromHome(updated), isOnline)
+    recalcAfterAppointmentEdit(job, a, updated)
     setEditApptId(null)
     setSaving(false)
     if (isOnline) {
@@ -498,7 +505,7 @@ export default function JobDetail() {
         if (eventId && typeof eventId === 'string') {
           const withEventId = { ...updated, google_calendar_event_id: eventId }
           setAppointments(list => list.map(x => (x.id || x._localId) === key ? withEventId : x))
-          await updateRecord('appointments', withEventId, isOnline)
+          await updateRecord('appointments', withoutStartsFromHome(withEventId), isOnline)
         } else if (eventId?.error) {
           flashToast(`Appointment saved. Calendar sync failed — ${describeCalendarError(eventId)}`)
           return
@@ -560,6 +567,7 @@ export default function JobDetail() {
     if (outcome === 'saved') {
       try { await db.appointments.where('id').equals(payload.id).modify({ _synced: true }) } catch { /* cosmetic flag */ }
     }
+    recalcAfterAppointmentChange(job, [payload.appointment_datetime])
 
     setAppointments(a => [...a, payload])
     setApptModal(false)

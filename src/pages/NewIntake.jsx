@@ -5,6 +5,7 @@ import { format } from 'date-fns'
 import { supabase } from '../lib/supabase'
 import db from '../lib/db'
 import { writeRecord, updateRecord } from '../lib/sync'
+import { recalcAfterAppointmentChange } from '../lib/mileage'
 import { formatEnum } from '../lib/formatEnum'
 import { useOnlineStatus } from '../hooks/useOnlineStatus'
 import Input from '../components/ui/Input'
@@ -173,6 +174,7 @@ export default function NewIntake() {
         }
         await writeRecord('appointments', apptPayload, isOnline)
       } catch (e) { console.error('Appointment write failed:', e) }
+      if (apptPayload) recalcAfterAppointmentChange(savedJob, [apptPayload.appointment_datetime])
 
       if (isOnline && apptPayload) {
         try {
