@@ -22,6 +22,13 @@ import { createCalendarEvent, updateCalendarEvent } from '../lib/googleCalendar'
 import { getValidProviderToken } from '../lib/googleToken'
 import AddressAutocomplete from '../components/ui/AddressAutocomplete'
 
+// Transient failures (no connection mid-request, expired session, server
+// trouble) are safe to queue and retry. Anything else (RLS, foreign key, bad
+// data) will never succeed on retry.
+function isRetryableInsertError(error, status) {
+  return !error.code || status === 401 || status === 408 || status === 429 || status >= 500
+}
+
 function describeCalendarError(result) {
   if (!result?.error) return 'Unknown error'
   if (result.error === 'token_expired') return 'sign in again to reconnect'
@@ -511,21 +518,63 @@ export default function JobDetail() {
       location_address: newAppt.location_address || null,
       created_at: new Date().toISOString(),
     }
-    await db.appointments.add({ ...payload, _synced: false })
-    if (isOnline) {
-      await supabase.from('appointments').insert(payload)
-      await db.appointments.where('id').equals(payload.id).modify({ _synced: true })
+
+    // Phone copy first (offline-first). If even this fails, nothing was saved.
+    try {
+      await db.appointments.add({ ...payload, _synced: false })
+    } catch {
+      flashToast("Couldn't save the appointment. Please try again.")
+      setSaving(false)
+      return
     }
+
+    // 'saved' = server confirmed, 'queued' = will reach the server through
+    // sync_queue, 'failed' = neither.
+    let outcome
+    try {
+      if (isOnline) {
+        const { error, status } = await supabase.from('appointments').insert(payload)
+        if (!error || error.code === '23505') outcome = 'saved'
+        else outcome = isRetryableInsertError(error, status) ? 'queued' : 'failed'
+      } else {
+        outcome = 'queued'
+      }
+      if (outcome === 'queued') {
+        await db.sync_queue.add({
+          table_name: 'appointments',
+          operation: 'insert',
+          payload,
+          created_at: new Date().toISOString(),
+        })
+      }
+    } catch {
+      outcome = 'failed'
+    }
+
+    if (outcome === 'failed') {
+      try { await db.appointments.where('id').equals(payload.id).delete() } catch { /* nothing more to do */ }
+      flashToast("Couldn't save the appointment. Please try again.")
+      setSaving(false)
+      return // modal stays open with the entered values; no status change, no calendar event
+    }
+    if (outcome === 'saved') {
+      try { await db.appointments.where('id').equals(payload.id).modify({ _synced: true }) } catch { /* cosmetic flag */ }
+    }
+
     setAppointments(a => [...a, payload])
     setApptModal(false)
     setNewAppt({ appointment_datetime: '', location_address: '' })
     setSaving(false)
     if (job?.status === 'contact' || job?.status === 'quote') {
       await saveStatus('appointment')
-    } else {
+    } else if (outcome === 'saved') {
       flashToast('Appointment added')
     }
-    if (isOnline) {
+    if (outcome === 'queued') {
+      flashToast("Saved on this phone. It will sync when you're back online. Add it to Google Calendar yourself; it won't be created automatically.")
+    }
+    // Test jobs never create real calendar events (deleting a test job can't remove them).
+    if (outcome === 'saved' && job?.is_test !== true) {
       try {
         const token = await getValidProviderToken()
         if (!token) {
