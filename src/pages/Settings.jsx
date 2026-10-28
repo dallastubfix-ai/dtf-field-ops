@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Bell, LogOut, Info, Trash2 } from 'lucide-react'
+import { Bell, LogOut, Info, Trash2, Home } from 'lucide-react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { format } from 'date-fns'
 import { useAuth } from '../context/AuthContext'
@@ -8,12 +8,67 @@ import { ensurePushRegistration, getPushStatus, subscribePushStatus } from '../l
 import { supabase } from '../lib/supabase'
 import db from '../lib/db'
 import Button from '../components/ui/Button'
+import AddressAutocomplete from '../components/ui/AddressAutocomplete'
+import { useOnlineStatus } from '../hooks/useOnlineStatus'
+import { loadHomeAddress, saveHomeAddress } from '../lib/appSettings'
 
 export default function Settings() {
   const { user, signOut } = useAuth()
   const navigate = useNavigate()
   const [push, setPush] = useState(getPushStatus())
   const [testStatus, setTestStatus] = useState(null)
+  const isOnline = useOnlineStatus()
+  const [homeAddress, setHomeAddress] = useState('')
+  const [savedAddress, setSavedAddress] = useState('')
+  const [homeSaving, setHomeSaving] = useState(false)
+  const [homeStatus, setHomeStatus] = useState(null)
+  const homeEdited = useRef(false)
+  const homeStatusTimer = useRef(null)
+
+  // Load on open, and again if connectivity changes. Never overwrites text
+  // the user has started editing.
+  useEffect(() => {
+    let cancelled = false
+    loadHomeAddress(isOnline).then(row => {
+      if (cancelled || !row?.home_address) return
+      setSavedAddress(row.home_address)
+      if (!homeEdited.current) setHomeAddress(row.home_address)
+    })
+    return () => { cancelled = true }
+  }, [isOnline])
+
+  useEffect(() => () => clearTimeout(homeStatusTimer.current), [])
+
+  const handleHomeChange = (value) => {
+    homeEdited.current = true
+    setHomeAddress(value)
+    setHomeStatus(null)
+  }
+
+  const handleSaveHome = async () => {
+    setHomeSaving(true)
+    setHomeStatus(null)
+    try {
+      const result = await saveHomeAddress(homeAddress)
+      if (result.ok) {
+        const trimmed = homeAddress.trim()
+        setSavedAddress(trimmed)
+        setHomeAddress(trimmed)
+        homeEdited.current = false
+        setHomeStatus({ ok: true, text: 'Saved' })
+        clearTimeout(homeStatusTimer.current)
+        homeStatusTimer.current = setTimeout(() => setHomeStatus(null), 2500)
+      } else {
+        setHomeStatus({ ok: false, text: result.message })
+      }
+    } catch {
+      setHomeStatus({ ok: false, text: 'Your home address could not be saved. Please try again.' })
+    } finally {
+      setHomeSaving(false)
+    }
+  }
+
+  const homeUnchanged = homeAddress.trim() === savedAddress
 
   useEffect(() => {
     const unsubscribe = subscribePushStatus(setPush)
@@ -133,6 +188,38 @@ export default function Settings() {
           {testStatus && (
             <p className={`text-xs mt-2 ${testStatus.ok ? 'text-green-600' : 'text-red-500'}`}>
               {testStatus.text}
+            </p>
+          )}
+        </div>
+
+        {/* Home Base Address */}
+        <div className="bg-white rounded-xl border border-[#E5E7EB] shadow-sm p-4">
+          <div className="flex items-center gap-3 mb-3">
+            <Home size={18} className="text-navy" />
+            <h2 className="font-semibold text-[#1F2937]">Home Base Address</h2>
+          </div>
+          <p className="text-sm text-[#6B7280] mb-3">
+            Used as the start and end point for automatic mileage tracking.
+          </p>
+          <AddressAutocomplete
+            id="home-base-address"
+            value={homeAddress}
+            onChange={handleHomeChange}
+            placeholder="Start typing your address"
+          />
+          <Button
+            className="w-full mt-3"
+            onClick={handleSaveHome}
+            disabled={homeSaving || !homeAddress.trim() || homeUnchanged || !isOnline}
+          >
+            {homeSaving ? 'Saving…' : 'Save Address'}
+          </Button>
+          {!isOnline && (
+            <p className="text-xs mt-2 text-red-500">Connect to the internet to save your home address.</p>
+          )}
+          {isOnline && homeStatus && (
+            <p className={`text-xs mt-2 ${homeStatus.ok ? 'text-green-600' : 'text-red-500'}`}>
+              {homeStatus.text}
             </p>
           )}
         </div>

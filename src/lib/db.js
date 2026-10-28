@@ -14,4 +14,18 @@ db.version(3).stores({
   auth_cache:   'key'
 })
 
+db.version(5).stores({
+  customers:    '++_localId, id, phone, full_name, created_at',
+  jobs:         '++_localId, id, job_number, customer_id, status, created_at',
+  appointments: '++_localId, id, job_id, appointment_datetime',
+  images:       '++_localId, id, job_id, image_type',
+  videos:       '++_localId, id, job_id',
+  invoices:     '++_localId, id, job_id, payment_status, created_at',
+  warranties:   '++_localId, id, invoice_id, job_id',
+  sync_queue:   '++id, table_name, operation, created_at',
+  auth_cache:   'key',
+  app_settings:  '++_localId, id',
+  daily_mileage: '++_localId, id, status'
+})
+
 export default db
