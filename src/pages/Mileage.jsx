@@ -8,7 +8,7 @@ import Button from '../components/ui/Button'
 import EmptyState from '../components/ui/EmptyState'
 import LoadingSpinner from '../components/ui/LoadingSpinner'
 import { useOnlineStatus } from '../hooks/useOnlineStatus'
-import { todayKey, monthKeyOf, shiftMonth, monthRange, fetchDayGroups, refreshMileageRows, calculateDay, friendlyReason } from '../lib/mileage'
+import { todayKey, monthKeyOf, shiftMonth, monthRange, yearRange, summarizeCalculated, fetchDayGroups, refreshMileageRows, calculateDay, friendlyReason, MAX_AUTO_ATTEMPTS } from '../lib/mileage'
 
 const prettyDay = (key) => {
   const [y, m, d] = key.split('-').map(Number)
@@ -21,7 +21,10 @@ export default function Mileage() {
   const today = todayKey()
   const [monthKey, setMonthKey] = useState(() => monthKeyOf(todayKey()))
   const { start: startKey, end: endKey } = monthRange(monthKey)
-  const monthLabel = format(new Date(Number(monthKey.slice(0, 4)), Number(monthKey.slice(5, 7)) - 1, 1), 'MMMM yyyy')
+  const monthDate = new Date(Number(monthKey.slice(0, 4)), Number(monthKey.slice(5, 7)) - 1, 1)
+  const monthLabel = format(monthDate, 'MMMM yyyy')
+  const monthName = format(monthDate, 'MMMM')
+  const { start: yearStart, end: yearEnd } = yearRange(monthKey)
 
   const rows = useLiveQuery(() => db.daily_mileage.toArray(), [])
   const [groups, setGroups] = useState(null)
@@ -40,11 +43,17 @@ export default function Mileage() {
     if (!isOnline) return
     let cancelled = false
     setLoadFailed(false)
-    Promise.all([fetchDayGroups(startKey, endKey), refreshMileageRows(startKey, endKey)])
-      .then(([g]) => { if (!cancelled) setGroups(g) })
+    fetchDayGroups(startKey, endKey)
+      .then(g => { if (!cancelled) setGroups(g) })
       .catch(() => { if (!cancelled) setLoadFailed(true) })
     return () => { cancelled = true }
   }, [isOnline, startKey, endKey])
+
+  // Whole year, so the year total is right. A failed refresh is silent: Dexie is used.
+  useEffect(() => {
+    if (!isOnline) return
+    refreshMileageRows(yearStart, yearEnd).catch(() => {})
+  }, [isOnline, yearStart, yearEnd])
 
   const rowByDay = new Map((rows ?? []).map(r => [r.id, r]))
   // newest first, only days in the selected month
@@ -52,6 +61,10 @@ export default function Mileage() {
     ...Object.keys(groups ?? {}),
     ...(rows ?? []).map(r => r.id),
   ])].filter(k => k >= startKey && k <= endKey).sort().reverse()
+
+  const monthTotal = summarizeCalculated(rows, startKey, endKey).miles
+  const yearTotal = summarizeCalculated(rows, yearStart, yearEnd).miles
+  const notIncluded = dayKeys.filter(d => d <= today && rowByDay.get(d)?.status !== 'calculated').length
 
   const handleCalculate = async (day) => {
     setBusy(b => ({ ...b, [day]: true }))
@@ -69,7 +82,7 @@ export default function Mileage() {
   const statusText = (day, row) => {
     if (day > today) return { text: 'Scheduled', cls: 'bg-blue-100 text-blue-700' }
     if (row?.status === 'calculated') return { text: `${row.total_miles} mi`, cls: 'bg-green-100 text-green-700' }
-    if (row?.status === 'pending') return { text: 'Waiting to retry', cls: 'bg-amber-100 text-amber-700' }
+    if (row?.status === 'pending') return { text: 'Waiting to calculate', cls: 'bg-amber-100 text-amber-700' }
     if (row?.status === 'failed') return { text: 'Needs attention', cls: 'bg-red-100 text-red-600' }
     return { text: 'Not calculated', cls: 'bg-gray-100 text-gray-600' }
   }
@@ -96,6 +109,21 @@ export default function Mileage() {
       </div>
 
       <div className="px-4 py-4 space-y-3 max-w-lg mx-auto">
+        <div className="grid grid-cols-2 gap-3">
+          <div className="bg-white rounded-xl border border-[#E5E7EB] shadow-sm p-3">
+            <div className="text-xs text-[#6B7280]">{monthName} total</div>
+            <div className="text-lg font-bold text-navy">{monthTotal} mi</div>
+          </div>
+          <div className="bg-white rounded-xl border border-[#E5E7EB] shadow-sm p-3">
+            <div className="text-xs text-[#6B7280]">{yearStart.slice(0, 4)} total</div>
+            <div className="text-lg font-bold text-navy">{yearTotal} mi</div>
+          </div>
+        </div>
+        {notIncluded > 0 && (
+          <p className="text-xs text-amber-600">
+            {notIncluded} day{notIncluded === 1 ? '' : 's'} not included yet
+          </p>
+        )}
         {!isOnline && (
           <p className="text-xs text-red-500">You are offline. Connect to the internet to calculate mileage.</p>
         )}
@@ -156,7 +184,11 @@ export default function Mileage() {
               )}
 
               {(row?.status === 'pending' || row?.status === 'failed') && row.status_reason && (
-                <p className="mt-2 text-xs text-[#6B7280]">{friendlyReason(row.status_reason)}</p>
+                <p className="mt-2 text-xs text-[#6B7280]">
+                  {row.status === 'pending' && (row.attempts ?? 0) >= MAX_AUTO_ATTEMPTS
+                    ? "Couldn't calculate automatically. Tap Try again."
+                    : friendlyReason(row.status_reason)}
+                </p>
               )}
               {notes[day] && <p className="mt-2 text-xs text-red-500">{notes[day]}</p>}
 
@@ -167,7 +199,10 @@ export default function Mileage() {
                   onClick={() => handleCalculate(day)}
                   disabled={busy[day] || !isOnline}
                 >
-                  {busy[day] ? 'Calculating…' : row ? 'Recalculate' : 'Calculate'}
+                  {busy[day] ? 'Calculating…'
+                    : row?.status === 'calculated' ? 'Recalculate'
+                    : (row?.status === 'pending' || row?.status === 'failed') ? 'Try again'
+                    : 'Calculate'}
                 </Button>
               )}
             </div>

@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { NavLink } from 'react-router-dom'
 import { Home, Calendar, Briefcase, FileText, Menu, Settings } from 'lucide-react'
 import BottomNav from './BottomNav'
@@ -5,6 +6,7 @@ import FAB from './FAB'
 import UpdateBanner from './UpdateBanner'
 import OfflineBanner from './OfflineBanner'
 import SyncIndicator from './SyncIndicator'
+import { startMileageRetry } from '../../lib/mileage'
 
 const sidebarLinks = [
   { to: '/',         icon: Home,      label: 'Home'     },
@@ -16,6 +18,8 @@ const sidebarLinks = [
 ]
 
 export default function AppShell({ children }) {
+  useEffect(() => startMileageRetry(), [])
+
   return (
     <div className="flex min-h-screen bg-[#F3F4F6]">
       {/* Desktop sidebar — hidden on mobile and in print */}

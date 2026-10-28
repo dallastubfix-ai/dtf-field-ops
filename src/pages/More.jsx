@@ -2,11 +2,15 @@ import { useNavigate } from 'react-router-dom'
 import { ChevronRight, Settings, CheckCircle, Car } from 'lucide-react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import db from '../lib/db'
+import { todayKey, monthKeyOf, monthRange, summarizeCalculated } from '../lib/mileage'
 
 export default function More() {
   const navigate = useNavigate()
   // Read-only count: the queue itself is processed by AppShell's SyncIndicator.
   const pendingCount = useLiveQuery(() => db.sync_queue.count(), []) ?? 0
+  const mileageRows = useLiveQuery(() => db.daily_mileage.toArray(), [])
+  const { start: monthStart, end: monthEnd } = monthRange(monthKeyOf(todayKey()))
+  const monthSummary = summarizeCalculated(mileageRows, monthStart, monthEnd)
 
   return (
     <div className="min-h-screen bg-[#F3F4F6]">
@@ -37,6 +41,9 @@ export default function More() {
             >
               <Car size={18} className="text-navy" />
               <span className="flex-1 text-sm font-medium text-[#1F2937] text-left">Mileage</span>
+              {monthSummary.days > 0 && (
+                <span className="text-xs font-semibold text-[#6B7280]">{monthSummary.miles} mi</span>
+              )}
               <ChevronRight size={16} className="text-[#9CA3AF]" />
             </button>
           </div>

@@ -1,5 +1,6 @@
 // Mileage engine: Chicago day keys, finding a day's stops, building the route,
 // calling the Maps Routes library, and saving the day row.
+import { liveQuery } from 'dexie'
 import { supabase } from './supabase'
 import db from './db'
 import { upsertLocal } from './sync'
@@ -43,6 +44,23 @@ export function monthRange(monthKey) {
   return { start: `${monthKey}-01`, end: addDays(`${shiftMonth(monthKey, 1)}-01`, -1) }
 }
 
+export function yearRange(monthKey) {
+  const y = monthKey.slice(0, 4)
+  return { start: `${y}-01-01`, end: `${y}-12-31` }
+}
+
+// Calculated days only. Returns { miles, days } for rows with id in [from, to].
+export function summarizeCalculated(rows, from, to) {
+  let total = 0
+  let days = 0
+  for (const r of rows ?? []) {
+    if (r.status !== 'calculated' || r.id < from || r.id > to) continue
+    total += Number(r.total_miles) || 0
+    days += 1
+  }
+  return { miles: Math.round(total * 10) / 10, days }
+}
+
 class MileageError extends Error {
   constructor(reason) { super(reason); this.reason = reason }
 }
@@ -63,6 +81,7 @@ const MESSAGES = {
   future: 'This day has not happened yet.',
   save: 'The result could not be saved. Please try again.',
   network: 'Could not reach the server. Please try again.',
+  budget: 'Daily limit reached. Mileage will continue tomorrow.',
 }
 export const friendlyReason = (reason) => MESSAGES[reason] ?? MESSAGES.unknown
 
@@ -155,6 +174,35 @@ export function buildRoute(home, stops) {
   return { origin: home, destination: home, intermediates, labels }
 }
 
+// ---------- daily request budget ----------
+// Google's quota resets at midnight Pacific, so the counter is keyed by Pacific date.
+// The counter is per device (localStorage); Google's quota is shared across devices.
+
+const BUDGET_KEY = 'dtf_mileage_budget'
+const DAILY_BUDGET = 400
+
+const pacificFormat = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit',
+})
+let memoryBudget = { day: null, count: 0 } // fallback if localStorage is unavailable
+
+function readBudget() {
+  const day = pacificFormat.format(new Date())
+  let stored = null
+  try { stored = JSON.parse(localStorage.getItem(BUDGET_KEY)) } catch { /* use memory copy */ }
+  const src = stored && typeof stored.count === 'number' ? stored : memoryBudget
+  return { day, count: src.day === day ? src.count : 0 }
+}
+
+function countRequest() {
+  const b = readBudget()
+  const next = { day: b.day, count: b.count + 1 }
+  memoryBudget = next
+  try { localStorage.setItem(BUDGET_KEY, JSON.stringify(next)) } catch { /* memory copy still counts */ }
+}
+
+export const budgetExhausted = () => readBudget().count >= DAILY_BUDGET
+
 // ---------- calling Google ----------
 
 function withTimeout(promise, ms, reason) {
@@ -194,6 +242,7 @@ async function computeLegs(plan) {
   }
   if (!Route?.computeRoutes) throw new MileageError('library')
 
+  countRequest()
   const { routes } = await withTimeout(
     Route.computeRoutes({
       origin: plan.origin,
@@ -348,6 +397,7 @@ async function runCalculation(dayKey) {
   if (plan.intermediates.length > MAX_INTERMEDIATES) {
     return failWith(dayKey, existing, found, 'too_many_stops', 'failed')
   }
+  if (budgetExhausted()) return stopped('budget')
 
   let computed
   try {
@@ -385,5 +435,143 @@ async function failWith(dayKey, existing, found, reason, forceStatus) {
     return { ok: false, status, reason, row, message: friendlyReason(reason) }
   } catch {
     return { ok: false, status: 'blocked', reason, message: friendlyReason(reason) }
+  }
+}
+
+// ---------- automatic retry of pending days ----------
+// One module-level runner. AppShell calls startMileageRetry(); mounting twice or
+// re-mounting AppShell never creates a second timer, listener, or overlapping run.
+
+export const MAX_AUTO_ATTEMPTS = 8
+const RETRY_TICK_MS = 2 * 60 * 1000
+const RETRY_PACE_MS = 3000
+const MAX_SESSION_RUNS = 50
+const BACKOFF_CAP_MIN = 360
+const MIN_REPEAT_MS = 10 * 60 * 1000
+
+// attempts 1, 2, 3, 4 ... wait 2, 4, 8, 16 ... minutes, capped at 6 hours
+export const retryWaitMs = (attempts) => Math.min(2 ** attempts, BACKOFF_CAP_MIN) * 60 * 1000
+
+const retry = {
+  mounts: 0,
+  running: false,
+  sessionRuns: 0,
+  timer: null,
+  onOnline: null,
+  queueSub: null,
+  triedAt: new Map(), // dayKey -> last automatic try this session
+}
+
+const sleep = (ms) => new Promise(r => setTimeout(r, ms))
+
+async function hasSession() {
+  try {
+    const { data } = await supabase.auth.getSession()
+    return !!data?.session
+  } catch {
+    return false
+  }
+}
+
+async function findDuePendingDays() {
+  const { data, error } = await supabase
+    .from('daily_mileage')
+    .select('id, attempts, updated_at')
+    .eq('status', 'pending')
+    .lte('id', todayKey())
+    .order('id')
+  if (error) throw new MileageError('network')
+  const now = Date.now()
+  return (data ?? []).filter(r => {
+    const attempts = r.attempts ?? 0
+    if (attempts >= MAX_AUTO_ATTEMPTS) return false
+    const last = retry.triedAt.get(r.id)
+    if (last && now - last < MIN_REPEAT_MS) return false
+    if (attempts === 0) return true
+    const t = Date.parse(r.updated_at)
+    return Number.isNaN(t) || now - t >= retryWaitMs(attempts)
+  }).map(r => r.id)
+}
+
+// Outcomes specific to one day: the pass carries on to the next day.
+const dayLevelReasons = new Set(['address_not_found', 'too_many_stops'])
+
+export async function runRetryPass() {
+  if (retry.running || retry.mounts === 0) return
+  retry.running = true
+  try {
+    if (!navigator.onLine || !(await hasSession())) return
+    if (retry.sessionRuns >= MAX_SESSION_RUNS || budgetExhausted()) return
+    if ((await db.sync_queue.count()) > 0) return // never calculate from stale data
+
+    const due = await findDuePendingDays()
+    if (!due.length) return
+    if (!(await loadHomeAddress(true))?.home_address) return
+
+    for (const dayKey of due) {
+      if (retry.mounts === 0 || !navigator.onLine) break
+      if (retry.sessionRuns >= MAX_SESSION_RUNS || budgetExhausted()) break
+      if ((await db.sync_queue.count()) > 0) break
+
+      retry.sessionRuns += 1
+      retry.triedAt.set(dayKey, Date.now())
+      const result = await calculateDay(dayKey)
+      if (!result.ok && !dayLevelReasons.has(result.reason)) break // quota, denied, offline...
+      await sleep(RETRY_PACE_MS)
+    }
+  } catch {
+    logCode('retry', 'unexpected')
+  } finally {
+    retry.running = false
+  }
+}
+
+// Cheap: one query, no Google calls. Keeps the current month in Dexie.
+async function refreshCurrentMonth() {
+  if (!navigator.onLine || !(await hasSession())) return
+  try {
+    const { start, end } = monthRange(monthKeyOf(todayKey()))
+    await refreshMileageRows(start, end)
+  } catch {
+    logCode('refresh', 'network')
+  }
+}
+
+function activateRetry() {
+  retry.onOnline = () => { void runRetryPass() }
+  window.addEventListener('online', retry.onOnline)
+  retry.timer = setInterval(() => { void runRetryPass() }, RETRY_TICK_MS)
+
+  // sync_queue going from non-empty to empty
+  let wasEmpty = null
+  retry.queueSub = liveQuery(() => db.sync_queue.count()).subscribe({
+    next: (n) => {
+      const empty = n === 0
+      if (empty && wasEmpty === false) void runRetryPass()
+      wasEmpty = empty
+    },
+    error: () => logCode('queue', 'watch'),
+  })
+
+  void refreshCurrentMonth().then(() => runRetryPass())
+}
+
+function deactivateRetry() {
+  window.removeEventListener('online', retry.onOnline)
+  clearInterval(retry.timer)
+  retry.queueSub?.unsubscribe()
+  retry.onOnline = retry.timer = retry.queueSub = null
+}
+
+// Returns a once-only stop function, so it can be used directly as an effect cleanup.
+export function startMileageRetry() {
+  retry.mounts += 1
+  if (retry.mounts === 1) activateRetry()
+  let stoppedOnce = false
+  return () => {
+    if (stoppedOnce) return
+    stoppedOnce = true
+    retry.mounts = Math.max(0, retry.mounts - 1)
+    if (retry.mounts === 0) deactivateRetry()
   }
 }
