@@ -28,6 +28,22 @@ function jsonResponse(body: unknown, status: number): Response {
   });
 }
 
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// Constant-time string comparison: encode both strings as bytes, compare the
+// length, then compare every byte with no early exit.
+function timingSafeEqual(a: string, b: string): boolean {
+  const aBytes = new TextEncoder().encode(a);
+  const bBytes = new TextEncoder().encode(b);
+  if (aBytes.length !== bBytes.length) return false;
+  let diff = 0;
+  for (let i = 0; i < aBytes.length; i++) {
+    diff |= aBytes[i] ^ bBytes[i];
+  }
+  return diff === 0;
+}
+
 // Base64url-encode raw bytes: standard base64, then + -> -, / -> _, no padding.
 function base64urlEncodeBytes(bytes: Uint8Array): string {
   let binary = "";
@@ -93,7 +109,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
   // --- Step 1/2: Authenticate the webhook via shared secret ------------------
   const providedSecret = req.headers.get("X-Webhook-Secret");
   const expectedSecret = Deno.env.get("WEBHOOK_SECRET");
-  if (!expectedSecret || providedSecret !== expectedSecret) {
+  if (
+    !expectedSecret || !providedSecret ||
+    !timingSafeEqual(providedSecret, expectedSecret)
+  ) {
     return jsonResponse({ error: "unauthorized" }, 401);
   }
 
@@ -122,8 +141,15 @@ Deno.serve(async (req: Request): Promise<Response> => {
   }
 
   // --- Step 5: Extract the fields we need ------------------------------------
-  const invoiceId = record.invoice_id as string;
-  const customerSignaturePath = record.customer_signature_path as string;
+  // The row's customer_signature_path is deliberately ignored: the path is
+  // built here from the invoice id, never taken from the row.
+  const rawInvoiceId = record.invoice_id;
+  if (typeof rawInvoiceId !== "string" || !UUID_PATTERN.test(rawInvoiceId)) {
+    console.error("invalid_invoice_id in webhook record");
+    return jsonResponse({ error: "invalid_invoice_id" }, 400);
+  }
+  const invoiceId = rawInvoiceId;
+  const customerSignaturePath = `signatures/${invoiceId}/customer.png`;
   const customerName = record.customer_name as string | null | undefined;
   const customerSignedAt = record.used_at as string;
 
