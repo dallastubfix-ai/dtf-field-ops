@@ -9,7 +9,7 @@ const BORDER = 14
 export const LABEL_FAMILY = 'DTF Collage Label'
 export const DEFAULT_LABEL_POSITION = 8 // 3x3 grid, row-major: 8 = bottom-right
 
-const MAX_DECODE_LONG_SIDE = 1500
+const MAX_DECODE_LONG_SIDE = 2000
 
 const LABEL_SIZE = SHORT_SIDE * 0.042
 const LABEL_TRACKING = 0.2 // em
@@ -68,7 +68,7 @@ function probeSize(url) {
   })
 }
 
-// Decodes a blob: URL into an ImageBitmap no larger than needed (about 1500px
+// Decodes a blob: URL into an ImageBitmap no larger than needed (about 2000px
 // on the long side). The caller owns the bitmap and must close() it.
 export async function decodePhoto(url) {
   const res = await fetch(url)
@@ -228,4 +228,22 @@ export function renderCollage(canvas, { layout, before, after, labelColor }, sca
   const afterBox = drawLabel(ctx, 'AFTER', spec.after, after.labelPosition)
 
   drawMark(ctx, spec.after, afterBox, after.labelPosition % 3)
+}
+
+export const EXPORT_FILENAME = 'dallas-tub-fix-before-after.jpg' // temporary; Phase 3 builds the real name
+
+// Renders the collage at full size onto a throwaway canvas and returns it as a
+// JPEG File. The canvas is released as soon as the JPEG exists, so only one
+// full-size canvas is ever alive. renderCollage has already filled white.
+export async function exportCollage(state) {
+  const canvas = document.createElement('canvas')
+  try {
+    renderCollage(canvas, state, 1)
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.9))
+    if (!blob) throw new Error('export failed')
+    return new File([blob], EXPORT_FILENAME, { type: 'image/jpeg' })
+  } finally {
+    canvas.width = 0
+    canvas.height = 0
+  }
 }

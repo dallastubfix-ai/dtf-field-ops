@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { X } from 'lucide-react'
+import { Share2, X } from 'lucide-react'
 import Button from '../ui/Button'
 import Card from '../ui/Card'
 import {
-  DEFAULT_LABEL_POSITION, LONG_SIDE, decodePhoto, loadLabelFont, renderCollage, supportsBrightness,
+  DEFAULT_LABEL_POSITION, LONG_SIDE, decodePhoto, exportCollage, loadLabelFont, renderCollage, supportsBrightness,
 } from '../../lib/collageRender'
 
 const PREVIEW_SCALE = 800 / LONG_SIDE // preview is about 800px on its long side
 const DEFAULT_CUSTOM_COLOR = '#1E40AF'
+const PRERENDER_DELAY_MS = 600
 const BRIGHTNESS_SUPPORTED = supportsBrightness()
 const ROWS = ['top', 'middle', 'bottom']
 const COLS = ['left', 'center', 'right']
@@ -18,6 +19,18 @@ const orderFirst = (photos, type) => [
   ...photos.filter((p) => p.type === type),
   ...photos.filter((p) => p.type !== type),
 ]
+
+// Fallback when file sharing isn't supported: save the JPEG to the phone's downloads.
+function downloadFile(file) {
+  const url = URL.createObjectURL(file)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = file.name
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 10000) // revoking right away can cancel the download
+}
 
 // Decodes one photo into an ImageBitmap held in a ref (so a redraw never sees a
 // closed bitmap). The previous bitmap stays on screen until the new one is ready.
@@ -153,9 +166,15 @@ export default function CollageMaker({ images, signedUrls, onClose }) {
   const canvasRef = useRef(null)
   const rafRef = useRef(0)
   const pushedRef = useRef(false)
+  const genRef = useRef(0) // bumps on every change; stale exports are discarded
+  const prerenderRef = useRef(0)
+  const exportFileRef = useRef(null) // the one cached export, never more than one
+  const exportChainRef = useRef(Promise.resolve()) // keeps exports one at a time
 
   const [fontStatus, setFontStatus] = useState('loading')
   const [renderError, setRenderError] = useState(false)
+  const [sharing, setSharing] = useState(false)
+  const [shareNote, setShareNote] = useState(null) // { kind: 'info' | 'ok' | 'error', text }
 
   const [layout, setLayout] = useState('stacked')
   const [beforeKey, setBeforeKey] = useState(null)
@@ -243,6 +262,94 @@ export default function CollageMaker({ images, signedUrls, onClose }) {
 
   const busy = before.status === 'loading' || after.status === 'loading'
 
+  const photosReady = before.status === 'ready' && after.status === 'ready'
+  let shareReason = ''
+  if (fontStatus === 'error') shareReason = "The label font didn't load."
+  else if (!enough) shareReason = 'Needs a before and an after photo.'
+  else if (fontStatus !== 'ready') shareReason = 'Getting the label font ready…'
+  else if (before.status === 'error' || after.status === 'error') shareReason = "A photo couldn't be opened. Pick a different one."
+  else if (!photosReady) shareReason = 'Photos are still loading…'
+  else if (renderError) shareReason = "The preview couldn't be drawn. Try different photos."
+  const canExport = !shareReason
+
+  const buildExportState = () => ({
+    layout,
+    before: { bitmap: before.bitmapRef.current, brightness: beforeBright / 100, labelPosition: beforePos },
+    after: { bitmap: after.bitmapRef.current, brightness: afterBright / 100, labelPosition: afterPos },
+    labelColor,
+  })
+
+  // One full-size render at a time. Returns null if settings changed meanwhile.
+  const runExport = (gen) => {
+    const run = exportChainRef.current.then(async () => {
+      if (gen !== genRef.current) return null
+      const state = buildExportState()
+      if (!state.before.bitmap || !state.after.bitmap) return null
+      const file = await exportCollage(state)
+      if (gen !== genRef.current) return null
+      exportFileRef.current = file
+      return file
+    })
+    exportChainRef.current = run.catch(() => {})
+    return run
+  }
+
+  // Any change drops the cached file; then, 600ms after the last change, render the next one.
+  useEffect(() => {
+    genRef.current += 1
+    exportFileRef.current = null
+    setShareNote(null)
+    clearTimeout(prerenderRef.current)
+    if (!canExport) return
+    const gen = genRef.current
+    prerenderRef.current = setTimeout(() => { runExport(gen).catch(() => {}) }, PRERENDER_DELAY_MS)
+    return () => clearTimeout(prerenderRef.current)
+  }, [canExport, layout, before.version, after.version, beforeBright, afterBright, beforePos, afterPos, labelColor])
+
+  // On close: cancel pending work and drop the cached file.
+  useEffect(() => () => {
+    genRef.current += 1
+    clearTimeout(prerenderRef.current)
+    exportFileRef.current = null
+  }, [])
+
+  const handleShare = async () => {
+    if (sharing || !canExport) return
+    setSharing(true)
+    setShareNote(null)
+    clearTimeout(prerenderRef.current)
+    try {
+      // Use the ready file at once; if it isn't ready yet, render it now.
+      const file = exportFileRef.current ?? (await runExport(genRef.current))
+      if (!file) return // settings changed while rendering; the next tap will use the new file
+
+      const canShareFiles =
+        typeof navigator.share === 'function' &&
+        typeof navigator.canShare === 'function' &&
+        navigator.canShare({ files: [file] })
+
+      if (!canShareFiles) {
+        downloadFile(file)
+        setShareNote({ kind: 'ok', text: "Saved to your phone's downloads." })
+        return
+      }
+      try {
+        await navigator.share({ files: [file] }) // files only: no text or title
+      } catch (err) {
+        if (err?.name === 'AbortError') return // John closed the share menu
+        if (err?.name === 'NotAllowedError') {
+          setShareNote({ kind: 'info', text: 'Collage is ready. Tap Share again.' }) // file stays cached
+          return
+        }
+        setShareNote({ kind: 'error', text: "Couldn't open the share menu. Please try again." })
+      }
+    } catch {
+      setShareNote({ kind: 'error', text: "Couldn't create the collage image. Please try again." })
+    } finally {
+      setSharing(false)
+    }
+  }
+
   let body
   if (fontStatus === 'error') {
     body = <Message onClose={close}>Label font didn't load. Close and reopen the collage maker.</Message>
@@ -274,7 +381,7 @@ export default function CollageMaker({ images, signedUrls, onClose }) {
           )}
         </div>
 
-        <div className="flex-1 overflow-y-auto overscroll-contain px-4 py-4 space-y-4 pb-10">
+        <div className="flex-1 overflow-y-auto overscroll-contain px-4 py-4 space-y-4 pb-4">
           <Panel title="Layout">
             <div className="flex gap-2">
               {[['stacked', 'Stacked'], ['side', 'Side by side']].map(([value, label]) => (
@@ -373,6 +480,22 @@ export default function CollageMaker({ images, signedUrls, onClose }) {
         </button>
       </header>
       {body}
+      <div className="shrink-0 bg-white border-t border-dtf-border px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
+        {(shareReason || shareNote) && (
+          <p
+            role="status"
+            className={`text-xs text-center mb-2 ${
+              shareReason || shareNote.kind === 'info' ? 'text-dtf-sub'
+                : shareNote.kind === 'error' ? 'text-red-600' : 'text-green-600'
+            }`}
+          >
+            {shareReason || shareNote.text}
+          </p>
+        )}
+        <Button className="w-full min-h-[48px]" disabled={!canExport || sharing} onClick={handleShare}>
+          <Share2 size={18} /> {sharing ? 'Preparing…' : 'Share'}
+        </Button>
+      </div>
     </div>,
     document.body
   )
