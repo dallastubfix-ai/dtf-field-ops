@@ -22,6 +22,7 @@ import Textarea from '../components/ui/Textarea'
 import { createCalendarEvent, updateCalendarEvent } from '../lib/googleCalendar'
 import { getValidProviderToken } from '../lib/googleToken'
 import AddressAutocomplete from '../components/ui/AddressAutocomplete'
+import CollageMaker from '../components/collage/CollageMaker'
 
 // Transient failures (no connection mid-request, expired session, server
 // trouble) are safe to queue and retry. Anything else (RLS, foreign key, bad
@@ -136,6 +137,7 @@ export default function JobDetail() {
   const [signedUrls, setSignedUrls] = useState({})
   const [lightboxImg, setLightboxImg] = useState(null)
   const touchStartX = useRef(null)
+  const [collageOpen, setCollageOpen] = useState(false)
 
   const flashToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 1800) }
 
@@ -872,9 +874,14 @@ export default function JobDetail() {
           ) : (
             <p className="text-sm text-[#6B7280] mb-3">No photos yet.</p>
           )}
-          <Button variant="secondary" className="w-full" onClick={() => navigate(`/jobs/${id}/images`)}>
-            <Camera size={16} /> Add Photos
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="secondary" className="flex-1" onClick={() => navigate(`/jobs/${id}/images`)}>
+              <Camera size={16} /> Add Photos
+            </Button>
+            <Button variant="secondary" className="flex-1" onClick={() => setCollageOpen(true)}>
+              <ArrowLeftRight size={16} /> Make Collage
+            </Button>
+          </div>
         </Section>
 
         {/* Videos */}
@@ -1108,6 +1115,10 @@ export default function JobDetail() {
             </button>
           </div>
         </div>
+      )}
+
+      {collageOpen && (
+        <CollageMaker images={images} signedUrls={signedUrls} onClose={() => setCollageOpen(false)} />
       )}
 
       {/* Add Appointment Modal */}
