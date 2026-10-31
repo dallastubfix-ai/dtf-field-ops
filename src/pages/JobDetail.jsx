@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, Link } from 'react-router-dom'
 import {
   ArrowLeft, Phone, Camera, Video, FileText, Shield,
   ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Plus, Calendar, Trash2, X, MessageSquare, MapPin, ArrowLeftRight
@@ -10,6 +10,7 @@ import db from '../lib/db'
 import { updateRecord, upsertLocal } from '../lib/sync'
 import { recalcAfterAppointmentChange, recalcAfterAppointmentEdit, recalcAfterStatusChange } from '../lib/mileage'
 import { removeJobLocally } from '../lib/localCleanup'
+import { getOtherJobsForCustomer } from '../lib/customerSeparation'
 import { formatEnum } from '../lib/formatEnum'
 import { useOnlineStatus } from '../hooks/useOnlineStatus'
 import Badge from '../components/ui/Badge'
@@ -110,6 +111,7 @@ export default function JobDetail() {
 
   const [job, setJob] = useState(null)
   const [customer, setCustomer] = useState(null)
+  const [sharedJobs, setSharedJobs] = useState([])
   const [appointments, setAppointments] = useState([])
   const [images, setImages] = useState([])
   const [videos, setVideos] = useState([])
@@ -202,6 +204,17 @@ export default function JobDetail() {
   }
 
   useEffect(() => { if (id) load() }, [id])
+
+  // Other jobs on this customer. Separate from load() so it never holds up the page.
+  useEffect(() => {
+    let cancelled = false
+    setSharedJobs([])
+    if (!job?.id || !job.customer_id) return
+    getOtherJobsForCustomer(job, isOnline)
+      .then(list => { if (!cancelled) setSharedJobs(list) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [job?.id, job?.customer_id])
 
   // Generate signed URLs whenever the image set changes (bucket is private)
   useEffect(() => {
@@ -717,6 +730,18 @@ export default function JobDetail() {
                   <button onClick={startEditCustomer} className="text-xs text-navy underline shrink-0">Edit</button>
                 )}
               </div>
+              {sharedJobs.length > 0 && (
+                <div className="text-xs text-[#9CA3AF]">
+                  Also on{' '}
+                  {sharedJobs.slice(0, 3).map((j, i) => (
+                    <span key={j.id}>
+                      {i > 0 && ', '}
+                      <Link to={`/jobs/${j.id}`} className="text-navy underline">{j.job_number ?? 'job'}</Link>
+                    </span>
+                  ))}
+                  {sharedJobs.length > 3 && ` +${sharedJobs.length - 3} more`}
+                </div>
+              )}
               {customer?.phone && (
                 <a href={`tel:${customer.phone}`} className="flex items-center gap-2 text-navy text-sm">
                   <Phone size={14} /> {customer.phone}
