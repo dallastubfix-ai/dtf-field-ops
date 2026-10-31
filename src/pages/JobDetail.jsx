@@ -10,7 +10,7 @@ import db from '../lib/db'
 import { updateRecord, upsertLocal } from '../lib/sync'
 import { recalcAfterAppointmentChange, recalcAfterAppointmentEdit, recalcAfterStatusChange } from '../lib/mileage'
 import { removeJobLocally } from '../lib/localCleanup'
-import { getOtherJobsForCustomer } from '../lib/customerSeparation'
+import { getOtherJobsForCustomer, separateCustomer } from '../lib/customerSeparation'
 import { formatEnum } from '../lib/formatEnum'
 import { useOnlineStatus } from '../hooks/useOnlineStatus'
 import Badge from '../components/ui/Badge'
@@ -112,6 +112,10 @@ export default function JobDetail() {
   const [job, setJob] = useState(null)
   const [customer, setCustomer] = useState(null)
   const [sharedJobs, setSharedJobs] = useState([])
+  const [separateOpen, setSeparateOpen] = useState(false)
+  const [separating, setSeparating] = useState(false)
+  const [separateError, setSeparateError] = useState('')
+  const separatingRef = useRef(false)
   const [appointments, setAppointments] = useState([])
   const [images, setImages] = useState([])
   const [videos, setVideos] = useState([])
@@ -141,7 +145,7 @@ export default function JobDetail() {
   const touchStartX = useRef(null)
   const [collageOpen, setCollageOpen] = useState(false)
 
-  const flashToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 1800) }
+  const flashToast = (msg, ms = 1800) => { setToast(msg); setTimeout(() => setToast(''), ms) }
 
   const load = async () => {
     // Try Dexie first
@@ -412,15 +416,15 @@ export default function JobDetail() {
     flashToast('Notes saved')
   }
 
-  const startEditCustomer = () => {
+  const startEditCustomer = (c = customer) => {
     setCustVal({
-      full_name:      customer?.full_name      ?? '',
-      phone:          customer?.phone          ?? '',
-      email:          customer?.email          ?? '',
-      address:        customer?.address        ?? '',
-      city_state_zip: customer?.city_state_zip ?? '',
-      lead_source:    customer?.lead_source    ?? '',
-      referred_by:    customer?.referred_by    ?? '',
+      full_name:      c?.full_name      ?? '',
+      phone:          c?.phone          ?? '',
+      email:          c?.email          ?? '',
+      address:        c?.address        ?? '',
+      city_state_zip: c?.city_state_zip ?? '',
+      lead_source:    c?.lead_source    ?? '',
+      referred_by:    c?.referred_by    ?? '',
     })
     setEditCustomer(true)
   }
@@ -442,6 +446,38 @@ export default function JobDetail() {
     setEditCustomer(false)
     setSaving(false)
     flashToast('Customer saved')
+  }
+
+  const handleSeparate = async () => {
+    if (separatingRef.current || !job) return
+    separatingRef.current = true
+    setSeparating(true)
+    setSeparateError('')
+    try {
+      const result = await separateCustomer(job, isOnline)
+      if (!result.ok) {
+        if (result.refresh) {
+          setSeparateOpen(false)
+          getOtherJobsForCustomer(job, isOnline).then(setSharedJobs).catch(() => {})
+          flashToast(result.message, 4000)
+        } else {
+          setSeparateError(result.message)
+        }
+        return
+      }
+      // Replace both, or saveStatus/saveNotes/saveJob would write the old customer_id back.
+      setJob(result.job)
+      setCustomer(result.customer)
+      setSharedJobs([])
+      setSeparateOpen(false)
+      flashToast('This job now has its own customer record')
+      startEditCustomer(result.customer)
+    } catch {
+      setSeparateError("Something went wrong. Nothing was changed.")
+    } finally {
+      separatingRef.current = false
+      setSeparating(false)
+    }
   }
 
   const startEditJob = () => {
@@ -727,20 +763,32 @@ export default function JobDetail() {
               <div className="flex items-start justify-between gap-2">
                 <div className="font-bold text-[#1F2937]">{customer?.full_name ?? '—'}</div>
                 {customer && (
-                  <button onClick={startEditCustomer} className="text-xs text-navy underline shrink-0">Edit</button>
+                  <button onClick={() => startEditCustomer()} className="text-xs text-navy underline shrink-0">Edit</button>
                 )}
               </div>
               {sharedJobs.length > 0 && (
-                <div className="text-xs text-[#9CA3AF]">
-                  Also on{' '}
-                  {sharedJobs.slice(0, 3).map((j, i) => (
-                    <span key={j.id}>
-                      {i > 0 && ', '}
-                      <Link to={`/jobs/${j.id}`} className="text-navy underline">{j.job_number ?? 'job'}</Link>
-                    </span>
-                  ))}
-                  {sharedJobs.length > 3 && ` +${sharedJobs.length - 3} more`}
-                </div>
+                <>
+                  <div className="text-xs text-[#9CA3AF]">
+                    Also on{' '}
+                    {sharedJobs.slice(0, 3).map((j, i) => (
+                      <span key={j.id}>
+                        {i > 0 && ', '}
+                        <Link to={`/jobs/${j.id}`} className="text-navy underline">{j.job_number ?? 'job'}</Link>
+                      </span>
+                    ))}
+                    {sharedJobs.length > 3 && ` +${sharedJobs.length - 3} more`}
+                  </div>
+                  <div className="flex items-center gap-2 pt-1">
+                    <Button
+                      variant="secondary"
+                      onClick={() => { setSeparateError(''); setSeparateOpen(true) }}
+                      disabled={!isOnline}
+                    >
+                      Make this a separate customer
+                    </Button>
+                    {!isOnline && <span className="text-xs text-[#6B7280]">Needs an internet connection</span>}
+                  </div>
+                </>
               )}
               {customer?.phone && (
                 <a href={`tel:${customer.phone}`} className="flex items-center gap-2 text-navy text-sm">
@@ -1145,6 +1193,31 @@ export default function JobDetail() {
       {collageOpen && (
         <CollageMaker images={images} signedUrls={signedUrls} onClose={() => setCollageOpen(false)} />
       )}
+
+      {/* Make this a separate customer */}
+      <Modal
+        open={separateOpen}
+        onClose={() => { if (!separating) setSeparateOpen(false) }}
+        title="Make this a separate customer?"
+      >
+        <div className="space-y-3">
+          <p className="text-sm text-[#1F2937]">
+            {`This job (${job.job_number}) will get its own copy of this customer's details. ${sharedJobs.map(j => j.job_number ?? 'job').join(', ')} ${sharedJobs.length === 1 ? 'keeps' : 'keep'} the original. After this, editing the customer on one job no longer changes the other. Nothing is deleted.`}
+          </p>
+          {invoiceLocked && (
+            <p className="text-sm text-[#1F2937]">
+              {"This job's invoice is signed. It will look the same until you edit the new customer. After you edit, a reprinted invoice and warranty will show the new details."}
+            </p>
+          )}
+          {separateError && <p className="text-sm text-red-600">{separateError}</p>}
+          <div className="flex gap-2">
+            <Button variant="primary" className="flex-1" onClick={handleSeparate} disabled={separating}>
+              {separating ? 'Working…' : 'Make separate'}
+            </Button>
+            <Button variant="ghost" onClick={() => setSeparateOpen(false)} disabled={separating}>Cancel</Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Add Appointment Modal */}
       <Modal open={apptModal} onClose={() => setApptModal(false)} title="Add Appointment">
