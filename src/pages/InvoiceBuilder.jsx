@@ -25,6 +25,41 @@ const DEFAULT_ITEMS = [
 const MIN_LINES = DEFAULT_ITEMS.length // 4: invoices at or under this print exactly as before
 const MAX_LINES = 12
 
+// Letter page minus 0.45in margins on every side, in CSS px (96 per inch).
+const PRINT_WIDTH_PX = 7.6 * 96
+const PRINT_HEIGHT_PX = 10.1 * 96
+const CONTINUED_TOLERANCE_PX = 12
+
+// Decides whether the "continued on page 2" note and the page-2 header print (both come from one
+// "has-page2" class on the print root). Lays the real print view out off-screen at the printed
+// page width and checks whether the bottom block fits under the totals.
+function updateContinuedNote(root) {
+  if (!root) return
+  const page = root.querySelector('.invoice-page')
+  const bottom = root.querySelector('.inv-bottom')
+  const note = root.querySelector('.inv-continued')
+  if (!page || !bottom || !note) return
+
+  root.classList.remove('has-page2')
+  if (root.querySelectorAll('.svc-tbl tbody tr').length <= MIN_LINES) return
+
+  root.style.cssText = `display:block;position:absolute;left:-10000px;top:0;visibility:hidden;width:${PRINT_WIDTH_PX}px`
+  page.style.cssText = `width:${PRINT_WIDTH_PX}px;padding:0`
+  try {
+    // Measured without the page-2 header: it only exists once the block is already on page 2.
+    const pageTop = page.getBoundingClientRect().top
+    const needed = bottom.getBoundingClientRect().bottom - pageTop
+    if (needed <= PRINT_HEIGHT_PX + CONTINUED_TOLERANCE_PX) return
+
+    root.classList.add('has-page2')
+    const noteEnd = note.getBoundingClientRect().bottom - pageTop + (parseFloat(getComputedStyle(note).marginBottom) || 0)
+    if (noteEnd > PRINT_HEIGHT_PX) root.classList.remove('has-page2')
+  } finally {
+    root.removeAttribute('style')
+    page.removeAttribute('style')
+  }
+}
+
 const PAYMENT_METHODS = ['Cash', 'Check', 'Credit/Debit', 'Venmo', 'Zelle', 'Other']
 
 const SIGNED_WHILE_OPEN_MSG = 'This invoice was signed while it was open, so nothing was saved. Go back and reopen the invoice to see and print the signed copy.'
@@ -139,6 +174,13 @@ const INVOICE_PRINT_CSS = `
 .inv-print .fthanks { font-size:9pt; font-weight:800; color:var(--navy); letter-spacing:-0.01em; }
 .inv-print .fcontact { font-size:7pt; font-weight:600; color:var(--gray-txt); margin-bottom:2px; }
 .inv-print .fverses { font-size:6.5pt; font-weight:500; color:var(--navy); letter-spacing:0.04em; opacity:0.8; }
+.inv-print .inv-continued, .inv-print .inv-page2-head { display:none; }
+.inv-print.has-page2 .inv-continued { display:block; text-align:center; margin:14px 0 0; break-inside:avoid; page-break-inside:avoid; }
+.inv-print .cont-main { font-size:20pt; font-weight:900; color:var(--navy); letter-spacing:-0.01em; line-height:1.1; }
+.inv-print .cont-sub { font-size:9pt; font-weight:600; color:var(--gray-txt); margin-top:3px; }
+.inv-print.has-page2 .inv-page2-head { display:block; border-bottom:1px solid var(--gray-bd); padding-bottom:4px; margin-bottom:8px; }
+.inv-print .p2-main { font-size:10pt; font-weight:800; color:var(--navy); line-height:1.2; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.inv-print .p2-sub { font-size:7.5pt; font-weight:500; color:var(--gray-txt); line-height:1.3; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 @media print {
   @page { size: letter portrait; margin: 0.45in; }
   .inv-print .invoice-page { width:auto; padding:0; }
@@ -242,6 +284,19 @@ export default function InvoiceBuilder() {
   // From then on every save() on this page is refused, so unsaved edits are
   // never written onto a signed invoice. Reopening the invoice clears it.
   const signedWhileOpen = useRef(false)
+  const printRef = useRef(null)
+
+  // Also covers print paths that skip the Print button (Ctrl+P, browser menu).
+  useEffect(() => {
+    const before = () => updateContinuedNote(printRef.current)
+    const after = () => printRef.current?.classList.remove('has-page2')
+    window.addEventListener('beforeprint', before)
+    window.addEventListener('afterprint', after)
+    return () => {
+      window.removeEventListener('beforeprint', before)
+      window.removeEventListener('afterprint', after)
+    }
+  }, [])
 
   useEffect(() => {
     signedWhileOpen.current = false
@@ -614,12 +669,14 @@ export default function InvoiceBuilder() {
     setPrintAsQuote(false)
     if ((await save(false)) === false) return
     document.title = `${inv.invoice_number || 'invoice'}-invoice`
+    updateContinuedNote(printRef.current)
     window.print()
   }
   const printAsQuoteHandler = async () => {
     setPrintAsQuote(true)
     if ((await save(false)) === false) return
     document.title = `${inv.invoice_number || 'quote'}-quote`
+    updateContinuedNote(printRef.current)
     window.print()
   }
 
@@ -718,6 +775,11 @@ export default function InvoiceBuilder() {
       setTimeout(() => setToast(''), 3500)
     }
   }
+
+  const page2Title = `Dallas Tub Fix - Invoice${inv.invoice_number ? ` ${inv.invoice_number}` : ''} (continued)`
+  const page2Sub = [inv.customer_name, inv.service_date ? fmtDateMMDDYYYY(inv.service_date) : '', 'Page 2 of 2']
+    .filter(Boolean)
+    .join(' · ')
 
   const combinedAddress = [inv.customer_address, inv.customer_city]
     .filter(Boolean)
@@ -912,7 +974,7 @@ export default function InvoiceBuilder() {
       </div>
 
       {/* ── PRINT VIEW — matches dtf-invoice-builder.html ── */}
-      <div className="inv-print hidden print:block">
+      <div ref={printRef} className="inv-print hidden print:block">
         <style>{INVOICE_PRINT_CSS}</style>
         <div className="invoice-page">
 
@@ -1024,8 +1086,19 @@ export default function InvoiceBuilder() {
             </table>
           </div>
 
+          {/* Only shown (via has-page2 on the print root) when the bottom block moves to page 2 */}
+          <div className="inv-continued">
+            <div className="cont-main">CONTINUED ON PAGE 2 &rarr;</div>
+            <div className="cont-sub">Payment, warranty &amp; signature</div>
+          </div>
+
           {/* Everything below the totals stays together: page 1 if it fits, otherwise page 2 as one block */}
           <div className="inv-bottom">
+
+          <div className="inv-page2-head">
+            <div className="p2-main">{page2Title}</div>
+            <div className="p2-sub">{page2Sub}</div>
+          </div>
 
           {/* PAYMENT + NOTES */}
           <div className="pn-row">
