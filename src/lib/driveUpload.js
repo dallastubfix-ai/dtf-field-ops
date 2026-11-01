@@ -98,7 +98,7 @@ async function deleteDriveFile(token, fileId) {
 }
 
 // job: the job row (needs id, job_number, drive_folder_id). file: the JPEG File. filename: final name.
-// Returns { record, warning }. Throws an Error with a message that is safe to show.
+// Returns { record, warning, folderId }. Throws an Error with a message that is safe to show.
 export async function uploadCollageToDrive({ job, file, filename }) {
   if (!job?.id) throw new Error("Couldn't find this job. Please try again.")
 
@@ -167,5 +167,5 @@ export async function uploadCollageToDrive({ job, file, filename }) {
   } catch (err) {
     console.error('local images save error:', err) // the server has it; the page reloads from there
   }
-  return { record, warning }
+  return { record, warning, folderId }
 }

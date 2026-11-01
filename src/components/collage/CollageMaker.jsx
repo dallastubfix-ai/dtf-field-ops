@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Share2, X } from 'lucide-react'
+import { Loader2, Save, Share2, X } from 'lucide-react'
 import Button from '../ui/Button'
 import Card from '../ui/Card'
 import {
-  DEFAULT_LABEL_POSITION, LONG_SIDE, decodePhoto, exportCollage, loadLabelFont, renderCollage, supportsBrightness,
+  DEFAULT_LABEL_POSITION, EXPORT_FILENAME, LONG_SIDE, decodePhoto, exportCollage, loadLabelFont, renderCollage, supportsBrightness,
 } from '../../lib/collageRender'
+import { uploadCollageToDrive } from '../../lib/driveUpload'
+import SavePanel, { useSaveChoices } from './CollageSavePanel'
 
 const PREVIEW_SCALE = 800 / LONG_SIDE // preview is about 800px on its long side
 const DEFAULT_CUSTOM_COLOR = '#1E40AF'
@@ -13,6 +15,7 @@ const PRERENDER_DELAY_MS = 600
 const BRIGHTNESS_SUPPORTED = supportsBrightness()
 const ROWS = ['top', 'middle', 'bottom']
 const COLS = ['left', 'center', 'right']
+const EMPTY_LIST = []
 
 const isBlobUrl = (u) => typeof u === 'string' && u.startsWith('blob:')
 const orderFirst = (photos, type) => [
@@ -162,7 +165,10 @@ function Message({ children, onClose }) {
   )
 }
 
-export default function CollageMaker({ images, signedUrls, onClose }) {
+export default function CollageMaker({
+  images, signedUrls, onClose,
+  job = null, appointments = EMPTY_LIST, online = true, savedNames = EMPTY_LIST, onSaved,
+}) {
   const canvasRef = useRef(null)
   const rafRef = useRef(0)
   const pushedRef = useRef(false)
@@ -170,11 +176,22 @@ export default function CollageMaker({ images, signedUrls, onClose }) {
   const prerenderRef = useRef(0)
   const exportFileRef = useRef(null) // the one cached export, never more than one
   const exportChainRef = useRef(Promise.resolve()) // keeps exports one at a time
+  const exportNameRef = useRef(EXPORT_FILENAME) // name given to every export; the saved name after Save
+  const savingRef = useRef(false)
+  const folderIdRef = useRef(null) // the job's Drive folder, once known, for "Make another"
+  const usedKeysRef = useRef(new Set()) // photos used in collages saved during this maker session
+  const toastTimerRef = useRef(0)
 
   const [fontStatus, setFontStatus] = useState('loading')
   const [renderError, setRenderError] = useState(false)
   const [sharing, setSharing] = useState(false)
   const [shareNote, setShareNote] = useState(null) // { kind: 'info' | 'ok' | 'error', text }
+  const [saveOpen, setSaveOpen] = useState(false)
+  const [saveStatus, setSaveStatus] = useState('idle') // 'idle' | 'saving' | 'saved'
+  const [saveError, setSaveError] = useState('')
+  const [saveWarning, setSaveWarning] = useState('')
+  const [savedName, setSavedName] = useState('')
+  const [toast, setToast] = useState('')
 
   const [layout, setLayout] = useState('stacked')
   const [beforeKey, setBeforeKey] = useState(null)
@@ -186,19 +203,28 @@ export default function CollageMaker({ images, signedUrls, onClose }) {
   const [colorMode, setColorMode] = useState('black')
   const [customColor, setCustomColor] = useState(DEFAULT_CUSTOM_COLOR)
   const labelColor = colorMode === 'black' ? '#000000' : colorMode === 'white' ? '#FFFFFF' : customColor
+  const choices = useSaveChoices({ job, appointments, existingNames: savedNames })
 
-  // Android back button: one history entry while open; popstate closes.
+  // Android back button: one history entry while open; popstate closes (not while saving).
   useEffect(() => {
     if (!pushedRef.current) {
       window.history.pushState({ ...(window.history.state ?? {}), dtfCollage: true }, '')
       pushedRef.current = true
     }
-    const onPop = () => onClose()
+    const onPop = () => {
+      if (savingRef.current) {
+        // Saving: stay open and put the history entry back.
+        window.history.pushState({ ...(window.history.state ?? {}), dtfCollage: true }, '')
+        return
+      }
+      onClose()
+    }
     window.addEventListener('popstate', onPop)
     return () => window.removeEventListener('popstate', onPop)
   }, [])
 
   const close = () => {
+    if (savingRef.current) return
     if (window.history.state?.dtfCollage) window.history.back()
     else onClose()
   }
@@ -285,7 +311,7 @@ export default function CollageMaker({ images, signedUrls, onClose }) {
       if (gen !== genRef.current) return null
       const state = buildExportState()
       if (!state.before.bitmap || !state.after.bitmap) return null
-      const file = await exportCollage(state)
+      const file = await exportCollage(state, exportNameRef.current)
       if (gen !== genRef.current) return null
       exportFileRef.current = file
       return file
@@ -310,8 +336,12 @@ export default function CollageMaker({ images, signedUrls, onClose }) {
   useEffect(() => () => {
     genRef.current += 1
     clearTimeout(prerenderRef.current)
+    clearTimeout(toastTimerRef.current)
     exportFileRef.current = null
   }, [])
+
+  // A new choice makes an old save error stale.
+  useEffect(() => { setSaveError('') }, [choices.filename])
 
   const handleShare = async () => {
     if (sharing || !canExport) return
@@ -348,6 +378,91 @@ export default function CollageMaker({ images, signedUrls, onClose }) {
     } finally {
       setSharing(false)
     }
+  }
+
+  const showToast = (text) => {
+    setToast(text)
+    clearTimeout(toastTimerRef.current)
+    toastTimerRef.current = setTimeout(() => setToast(''), 2500)
+  }
+
+  // Why Save is disabled, most important first.
+  let saveReason = ''
+  if (!online) saveReason = 'Connect to the internet to save. Share still works.'
+  else if (!canExport) saveReason = shareReason
+  else if (!choices.canSave) saveReason = choices.missing
+
+  const handleSave = async () => {
+    if (savingRef.current || saveReason) return
+    savingRef.current = true
+    setSaveStatus('saving')
+    setSaveError('')
+    clearTimeout(prerenderRef.current)
+    const usedNow = [beforePhoto?.key, afterPhoto?.key].filter(Boolean)
+    try {
+      await exportChainRef.current // let any export already running finish first
+      const gen = genRef.current
+      const rendered = exportFileRef.current ?? (await runExport(gen))
+      if (!rendered) throw new Error('The photos changed while the image was being prepared. Please try again.')
+
+      const name = choices.filename
+      const file = new File([rendered], name, { type: 'image/jpeg' })
+      const { record, warning, folderId } = await uploadCollageToDrive({
+        job: { ...job, drive_folder_id: folderIdRef.current || job.drive_folder_id },
+        file,
+        filename: name,
+      })
+      folderIdRef.current = folderId
+      usedNow.forEach((key) => usedKeysRef.current.add(key))
+      exportNameRef.current = name // Share now uses the saved name
+      if (gen === genRef.current) exportFileRef.current = file
+      setSavedName(name)
+      setSaveWarning(warning ?? '')
+      setSaveStatus('saved')
+      showToast('Collage saved')
+      onSaved?.(record)
+    } catch (err) {
+      setSaveError(
+        err?.name === 'TypeError'
+          ? "Couldn't reach Google or the server. Check your signal and try again."
+          : err?.message || "Couldn't save the collage. Please try again."
+      )
+      setSaveStatus('idle')
+    } finally {
+      savingRef.current = false
+    }
+  }
+
+  // Next collage: fresh photos and choices. Keeps layout, label position and color, fixture and city.
+  // Auto-picks the first before and first after not used in a collage saved this session
+  // (null falls back to the maker's normal defaults).
+  const makeAnother = () => {
+    const used = usedKeysRef.current
+    setBeforeKey(photos.find((p) => p.usable && p.type === 'before' && !used.has(p.key))?.key ?? null)
+    setAfterKey(photos.find((p) => p.usable && p.type === 'after' && !used.has(p.key))?.key ?? null)
+    setBeforeBright(100)
+    setAfterBright(100)
+    choices.resetForNext()
+    setSaveStatus('idle')
+    setSaveError('')
+    setSaveWarning('')
+    setSavedName('')
+    setSaveOpen(false)
+    exportNameRef.current = EXPORT_FILENAME
+    genRef.current += 1 // the cached export is the collage just saved
+    exportFileRef.current = null
+    setShareNote(null)
+  }
+
+  const saving = saveStatus === 'saving'
+  let footerNote = null
+  if (saveOpen && saveStatus !== 'saved') {
+    if (saveError) footerNote = { tone: 'error', text: saveError }
+    else if (saving) footerNote = { tone: 'sub', text: 'Saving... please wait.' }
+    else if (saveReason) footerNote = { tone: 'sub', text: saveReason }
+  } else if (shareReason) footerNote = { tone: 'sub', text: shareReason }
+  else if (shareNote) {
+    footerNote = { tone: shareNote.kind === 'info' ? 'sub' : shareNote.kind === 'error' ? 'error' : 'ok', text: shareNote.text }
   }
 
   let body
@@ -470,31 +585,74 @@ export default function CollageMaker({ images, signedUrls, onClose }) {
       className="fixed inset-0 z-[70] bg-dtf-bg flex flex-col overscroll-contain"
     >
       <header className="bg-navy px-4 py-4 flex items-center gap-3 shrink-0">
-        <h1 className="text-white font-bold text-base flex-1">Make Collage</h1>
+        <h1 className="text-white font-bold text-base flex-1">{saveOpen ? 'Save Collage' : 'Make Collage'}</h1>
         <button
           onClick={close}
+          disabled={saving}
           aria-label="Close"
-          className="w-11 h-11 -mr-2 flex items-center justify-center text-white"
+          className="w-11 h-11 -mr-2 flex items-center justify-center text-white disabled:opacity-40"
         >
           <X size={22} />
         </button>
       </header>
-      {body}
+      <div className={saveOpen ? 'hidden' : 'contents'}>{body}</div>
+      {saveOpen && (
+        <SavePanel choices={choices} status={saveStatus} savedName={savedName} warning={saveWarning} />
+      )}
+      {toast && (
+        <div role="status" className="fixed top-16 left-1/2 -translate-x-1/2 z-[80] bg-green-600 text-white text-sm px-4 py-2 rounded-lg shadow-lg">
+          {toast}
+        </div>
+      )}
       <div className="shrink-0 bg-white border-t border-dtf-border px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
-        {(shareReason || shareNote) && (
+        {footerNote && (
           <p
             role="status"
             className={`text-xs text-center mb-2 ${
-              shareReason || shareNote.kind === 'info' ? 'text-dtf-sub'
-                : shareNote.kind === 'error' ? 'text-red-600' : 'text-green-600'
+              footerNote.tone === 'error' ? 'text-red-600' : footerNote.tone === 'ok' ? 'text-green-600' : 'text-dtf-sub'
             }`}
           >
-            {shareReason || shareNote.text}
+            {footerNote.text}
           </p>
         )}
-        <Button className="w-full min-h-[48px]" disabled={!canExport || sharing} onClick={handleShare}>
-          <Share2 size={18} /> {sharing ? 'Preparing…' : 'Share'}
-        </Button>
+        {!saveOpen && (
+          <div className="flex gap-2">
+            {job && (
+              <Button type="button" variant="secondary" className="flex-1 min-h-[48px]" disabled={!canExport} onClick={() => setSaveOpen(true)}>
+                <Save size={18} /> Save
+              </Button>
+            )}
+            <Button className="flex-1 min-h-[48px]" disabled={!canExport || sharing} onClick={handleShare}>
+              <Share2 size={18} /> {sharing ? 'Preparing…' : 'Share'}
+            </Button>
+          </div>
+        )}
+        {saveOpen && saveStatus !== 'saved' && (
+          <div className="flex gap-2">
+            <Button type="button" variant="secondary" className="flex-1 min-h-[48px]" disabled={saving} onClick={() => setSaveOpen(false)}>
+              Back
+            </Button>
+            <Button type="button" className="flex-1 min-h-[48px]" disabled={!!saveReason || saving} onClick={handleSave}>
+              {saving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+              {saving ? 'Saving...' : 'Save'}
+            </Button>
+          </div>
+        )}
+        {saveOpen && saveStatus === 'saved' && (
+          <div className="space-y-2">
+            <Button type="button" className="w-full min-h-[48px]" disabled={!canExport || sharing} onClick={handleShare}>
+              <Share2 size={18} /> {sharing ? 'Preparing...' : 'Share'}
+            </Button>
+            <div className="flex gap-2">
+              <Button type="button" variant="secondary" className="flex-1 min-h-[48px]" onClick={makeAnother}>
+                Make another
+              </Button>
+              <Button type="button" variant="secondary" className="flex-1 min-h-[48px]" onClick={close}>
+                Done
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
     </div>,
     document.body

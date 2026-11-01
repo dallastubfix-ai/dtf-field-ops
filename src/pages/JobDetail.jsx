@@ -67,7 +67,22 @@ const LEAD_OPTIONS = [
 
 const REVIEW_LINK = 'https://g.page/r/CZ3g5Gm0_pYiEBM/review'
 
-const IMAGE_TYPE_RANK = { before: 0, after: 1, collage: 2 }
+// Downloads one Drive photo and returns a blob URL for it, or null if it can't be fetched.
+async function downloadDriveImage(fileId) {
+  try {
+    const token = await getValidProviderToken()
+    if (!token) return null
+    const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (!res.ok) return null
+    return URL.createObjectURL(await res.blob())
+  } catch {
+    return null
+  }
+}
+
+const IMAGE_TYPE_RANK ={ before: 0, after: 1, collage: 2 }
 const imageBadgeClass = (type) =>
   type === 'before' ? 'bg-green-500 text-white' : type === 'collage' ? 'bg-navy text-white' : 'bg-gold text-white'
 
@@ -233,6 +248,9 @@ export default function JobDetail() {
     return () => { cancelled = true }
   }, [job?.id, job?.customer_id])
 
+  // Drive photos already downloaded (or downloading) on this page: image key -> promise of its blob URL.
+  const driveUrlsRef = useRef(new Map())
+
   // Generate signed URLs whenever the image set changes (bucket is private)
   useEffect(() => {
     let cancelled = false
@@ -251,19 +269,13 @@ export default function JobDetail() {
           }
         }
         if (img.google_drive_file_id) {
-          try {
-            const token = await getValidProviderToken()
-            if (!token) return [key, null]
-            const res = await fetch(
-              `https://www.googleapis.com/drive/v3/files/${img.google_drive_file_id}?alt=media`,
-              { headers: { Authorization: `Bearer ${token}` } }
-            )
-            if (!res.ok) return [key, null]
-            const blob = await res.blob()
-            return [key, URL.createObjectURL(blob)]
-          } catch {
-            return [key, null]
+          let download = driveUrlsRef.current.get(key)
+          if (!download) {
+            download = downloadDriveImage(img.google_drive_file_id)
+            driveUrlsRef.current.set(key, download)
+            download.then(url => { if (!url) driveUrlsRef.current.delete(key) }) // failures retry next time
           }
+          return [key, await download]
         }
         return [key, null]
       }))
@@ -1244,7 +1256,16 @@ export default function JobDetail() {
       )}
 
       {collageOpen && (
-        <CollageMaker images={images} signedUrls={signedUrls} onClose={() => setCollageOpen(false)} />
+        <CollageMaker
+          images={images}
+          signedUrls={signedUrls}
+          job={job}
+          appointments={appointments}
+          online={isOnline}
+          savedNames={images.filter(i => i.image_type === 'collage').map(i => i.filename).filter(Boolean)}
+          onSaved={(record) => setImages(prev => (prev.some(i => i.id === record.id) ? prev : [...prev, record]))}
+          onClose={() => setCollageOpen(false)}
+        />
       )}
 
       {/* Make this a separate customer */}
