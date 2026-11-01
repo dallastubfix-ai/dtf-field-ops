@@ -74,7 +74,7 @@ export default function Calendar() {
   const selectedAppts = apptsByDay(selected)
 
   return (
-    <div className="min-h-screen bg-[#F3F4F6]">
+    <div className="min-h-screen">
       {/* Header */}
       <header className="bg-navy px-4 py-4 flex items-center justify-between">
         <button onClick={() => setCurrent(m => subMonths(m, 1))} className="text-white">

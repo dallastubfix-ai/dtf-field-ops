@@ -21,7 +21,7 @@ export default function AppShell({ children }) {
   useEffect(() => startMileageRetry(), [])
 
   return (
-    <div className="flex min-h-screen bg-[#F3F4F6]">
+    <div className="flex min-h-screen glass-page">
       {/* Desktop sidebar — hidden on mobile and in print */}
       <aside className="no-print hidden lg:flex flex-col w-60 bg-navy fixed top-0 left-0 h-full z-40 shrink-0">
         <div className="px-6 py-6 border-b border-navy-dark">
@@ -57,7 +57,7 @@ export default function AppShell({ children }) {
           <UpdateBanner />
           <OfflineBanner />
         </div>
-        <main className="flex-1 pb-[calc(64px+env(safe-area-inset-bottom))] lg:pb-0 print:pb-0">
+        <main className="flex-1 pb-[calc(154px+env(safe-area-inset-bottom))] lg:pb-0 print:pb-0">
           {children}
         </main>
       </div>

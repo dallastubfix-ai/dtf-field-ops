@@ -15,7 +15,7 @@
 }
 
 @layer components {
-  /* Frosted-glass page background (Settings only for now) */
+  /* Frosted-glass page background (applied by AppShell and the full-screen pages outside it) */
   .glass-page {
     background:
       radial-gradient(360px 300px at 12% 4%, var(--bg-blob-1), rgba(0,0,0,0) 70%),
@@ -295,9 +295,72 @@
     outline-offset: 2px;
   }
 
+  /* ── App shell: floating glass tab bar (the only blurred layer in the shell) ── */
+  .glass-tabbar {
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    bottom: calc(14px + env(safe-area-inset-bottom));
+    height: 68px;
+    padding: 6px;
+    gap: 2px;
+    border-radius: var(--radius-tab);
+    background: var(--tab-fill);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-shadow);
+    -webkit-backdrop-filter: blur(var(--blur-tab)) saturate(var(--glass-saturate));
+    backdrop-filter: blur(var(--blur-tab)) saturate(var(--glass-saturate));
+  }
+  .glass-tab {
+    flex: 1;
+    min-width: 0;
+    height: 56px;
+    gap: 3px;
+    border-radius: var(--radius-row);
+    background: transparent;
+    color: var(--tab-inactive-text);
+    font-size: 12px;
+    font-weight: 500;
+    transition: background-color 150ms, color 150ms;
+  }
+  .glass-tab[aria-current="page"] {
+    background: var(--tab-active-fill);
+    color: var(--tab-active-text);
+    font-weight: 700;
+  }
+  .glass-tab:focus-visible,
+  .glass-fab:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+
+  /* Floating + button: 16px above the tab bar; 24px from the bottom when the tab bar is hidden (lg) */
+  .glass-fab-wrap {
+    position: fixed;
+    right: 20px;
+    bottom: calc(98px + env(safe-area-inset-bottom));
+  }
+  @media (min-width: 1024px) {
+    .glass-fab-wrap { bottom: calc(24px + env(safe-area-inset-bottom)); }
+  }
+  .glass-fab {
+    width: 56px;
+    height: 56px;
+    border-radius: var(--radius-pill);
+    background: var(--fab-fill);
+    color: var(--on-fab);
+    border: 1.5px solid var(--fab-rim);
+    box-shadow: var(--fab-shadow);
+    transition: transform 150ms;
+  }
+  .glass-fab:active { transform: scale(0.95); }
+
   @media (prefers-reduced-motion: reduce) {
     .switch-thumb { transition: none; }
     .ui-btn { transition: none; }
+    .glass-tab { transition: none; }
+    .glass-fab { transition: none; }
+    .glass-fab:active { transform: none; }
   }
 }
 
@@ -316,6 +379,7 @@
 @media print {
   .no-print { display: none !important; }
   body { background: white !important; }
+  .glass-page { background: #fff !important; }
   .print-page {
     width: 816px !important;
     padding: 43px !important;

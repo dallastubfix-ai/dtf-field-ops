@@ -728,7 +728,7 @@ export default function JobDetail() {
   const hasWarranty = !!warranty
 
   return (
-    <div className={`min-h-screen bg-[#F3F4F6] ${job.status === 'completed' && hasCollage ? 'pb-56' : 'pb-40'}`}>
+    <div className={`min-h-screen ${job.status === 'completed' && hasCollage ? 'pb-56' : 'pb-40'}`}>
       {/* Header */}
       <header className="bg-navy px-4 py-4 flex items-center gap-3 sticky top-0 z-30">
         <button onClick={() => navigate(-1)} className="text-white">
@@ -1114,7 +1114,7 @@ export default function JobDetail() {
 
       {/* Sticky bottom action bar */}
       <div className="fixed left-0 right-0 bg-white border-t border-[#E5E7EB] pl-4 pr-20 py-3 flex gap-2 z-30 no-print"
-           style={{ bottom: 'calc(4rem + env(safe-area-inset-bottom))' }}>
+           style={{ bottom: 'calc(82px + env(safe-area-inset-bottom))' }}>
         {(job.status === 'contact' || job.status === 'quote') && (
           <Button variant="gold" className="flex-1" onClick={() => setApptModal(true)}>
             <Calendar size={16} /> Schedule Appointment

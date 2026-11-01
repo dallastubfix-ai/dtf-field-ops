@@ -140,7 +140,7 @@ export default function Invoices() {
     .reduce((sum, i) => sum + (Number(i.total) || 0), 0)
 
   if (error) return (
-    <div className="min-h-screen bg-[#F3F4F6]">
+    <div className="min-h-screen">
       <header className="bg-navy px-4 py-4">
         <h1 className="text-white font-bold text-lg">Invoices</h1>
       </header>
@@ -152,7 +152,7 @@ export default function Invoices() {
   )
 
   return (
-    <div className="min-h-screen bg-[#F3F4F6]">
+    <div className="min-h-screen">
       {statusMenuFor && (
         <div className="fixed inset-0 z-40" onClick={() => setStatusMenuFor(null)} />
       )}

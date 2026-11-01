@@ -8,13 +8,14 @@ export default function FAB() {
   if (location.pathname === '/intake') return null
 
   return (
-    <div className="fixed bottom-20 right-4 z-50 group">
+    <div className="glass-fab-wrap z-[45] group">
       <button
+        type="button"
         onClick={() => navigate('/intake')}
-        className="w-14 h-14 rounded-full bg-gold text-white shadow-lg flex items-center justify-center hover:bg-amber-500 active:scale-95 transition-all"
+        className="glass-fab flex items-center justify-center"
         aria-label="Log New Call"
       >
-        <Plus size={22} />
+        <Plus size={26} strokeWidth={2.4} />
       </button>
       <span className="absolute right-16 top-1/2 -translate-y-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none hidden lg:block">
         Log New Call

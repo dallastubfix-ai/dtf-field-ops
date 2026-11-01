@@ -14,8 +14,8 @@ export default function BottomNav() {
 
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 z-40 h-16 bg-white border-t border-[#E5E7EB] flex lg:hidden items-stretch"
-      style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+      aria-label="Main"
+      className="glass-tabbar z-40 flex lg:hidden"
     >
       {tabs.map(({ to, icon: Icon, label }) => {
         const isActive = to === '/' ? location.pathname === '/' : location.pathname.startsWith(to)
@@ -23,11 +23,10 @@ export default function BottomNav() {
           <Link
             key={to}
             to={to}
-            className={`flex flex-col items-center justify-center flex-1 py-2 text-xs font-medium transition-colors ${
-              isActive ? 'text-navy' : 'text-gray-400'
-            }`}
+            aria-current={isActive ? 'page' : undefined}
+            className="glass-tab flex flex-col items-center justify-center"
           >
-            <Icon size={20} strokeWidth={isActive ? 2 : 1.5} />
+            <Icon size={22} strokeWidth={isActive ? 2 : 1.5} />
             <span>{label}</span>
           </Link>
         )

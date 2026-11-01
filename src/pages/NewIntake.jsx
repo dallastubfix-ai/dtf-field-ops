@@ -254,7 +254,7 @@ export default function NewIntake() {
   }
 
   return (
-    <div className="min-h-screen bg-white flex flex-col">
+    <div className="min-h-screen glass-page flex flex-col">
       {/* Header */}
       <header className="bg-navy px-4 py-4 flex items-center justify-between sticky top-0 z-30">
         <h1 className="text-white font-bold text-lg">New Call</h1>

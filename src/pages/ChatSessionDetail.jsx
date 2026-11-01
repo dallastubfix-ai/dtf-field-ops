@@ -66,7 +66,7 @@ export default function ChatSessionDetail() {
     : ''
 
   return (
-    <div className="min-h-screen bg-[#F3F4F6] flex flex-col">
+    <div className="min-h-screen flex flex-col">
       <header className="bg-navy px-4 py-4">
         <div className="flex items-center gap-3">
           <button onClick={() => navigate('/chat-sessions')} className="text-white">

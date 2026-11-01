@@ -843,7 +843,7 @@ export default function InvoiceBuilder() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F3F4F6]">
+    <div className="min-h-screen">
       {/* Top nav — hidden on print */}
       <header className="bg-navy px-4 py-4 flex items-center gap-3 no-print sticky top-0 z-30">
         <button onClick={() => navigate(-1)} className="text-white"><ArrowLeft size={20} /></button>

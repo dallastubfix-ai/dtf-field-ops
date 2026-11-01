@@ -150,7 +150,7 @@ export default function Settings() {
   }
 
   return (
-    <div className="min-h-screen glass-page">
+    <div className="min-h-screen">
       <header className="bg-navy px-4 py-4">
         <h1 className="text-white font-bold text-lg">Settings</h1>
       </header>

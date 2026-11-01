@@ -12,7 +12,7 @@ export default function Login() {
   }, [user, loading, navigate])
 
   return (
-    <div className="min-h-screen bg-[#F3F4F6] flex flex-col items-center justify-center px-4">
+    <div className="min-h-screen glass-page flex flex-col items-center justify-center px-4">
       <div className="w-full max-w-sm">
         {/* Wordmark */}
         <div className="text-center mb-8">

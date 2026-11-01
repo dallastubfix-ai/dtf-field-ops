@@ -117,7 +117,7 @@ export default function Home() {
   ]
 
   return (
-    <div className="min-h-screen bg-[#F3F4F6]">
+    <div className="min-h-screen">
       {/* Header */}
       <header className="bg-navy px-4 pt-4 pb-4 flex items-center justify-between">
         <span className="text-white font-bold text-lg">DTF Field Ops</span>

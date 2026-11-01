@@ -72,7 +72,7 @@ export default function Jobs() {
   }, [filter, query, customers])
 
   return (
-    <div className="min-h-screen bg-[#F3F4F6]">
+    <div className="min-h-screen">
       {/* Header */}
       <header className="bg-navy px-4 py-4 flex items-center justify-between">
         <h1 className="text-white font-bold text-lg">Jobs</h1>

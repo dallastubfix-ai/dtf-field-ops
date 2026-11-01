@@ -207,7 +207,7 @@ export default function ImageCapture() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F3F4F6]">
+    <div className="min-h-screen">
       <header className="bg-navy px-4 py-4 flex items-center gap-3 sticky top-0 z-30">
         <button onClick={() => navigate(-1)} className="text-white"><ArrowLeft size={20} /></button>
         <h1 className="text-white font-bold text-base flex-1">

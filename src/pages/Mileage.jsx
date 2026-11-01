@@ -123,7 +123,7 @@ export default function Mileage() {
   const loading = rows === undefined || (isOnline && groups === null && !loadFailed)
 
   return (
-    <div className="min-h-screen bg-[#F3F4F6]">
+    <div className="min-h-screen">
       <header className="bg-navy px-4 py-4 flex items-center gap-2">
         <button onClick={() => navigate('/more')} aria-label="Back" className="text-white">
           <ChevronLeft size={22} />

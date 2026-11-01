@@ -69,7 +69,7 @@ export default function ChatSessions() {
   }, [])
 
   return (
-    <div className="min-h-screen bg-[#F3F4F6]">
+    <div className="min-h-screen">
       <header className="bg-navy px-4 py-4">
         <h1 className="text-white font-bold text-lg">Chat Sessions</h1>
       </header>
