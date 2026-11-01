@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, Printer, Save, Shield } from 'lucide-react'
 import { format } from 'date-fns'
@@ -9,6 +10,7 @@ import { normalize as normalizeWarrantyYears, warrantyExpiry } from '../lib/warr
 import { formatEnum } from '../lib/formatEnum'
 import { getJobSurfaceText } from '../lib/fixtures'
 import Button from '../components/ui/Button'
+import Modal from '../components/ui/Modal'
 import AddressAutocomplete from '../components/ui/AddressAutocomplete'
 import { useAuth } from '../context/AuthContext'
 import SignatureCapture from '../components/SignatureCapture'
@@ -19,6 +21,9 @@ const DEFAULT_ITEMS = [
   { description: '', notes: '', rate: '', amount: '' },
   { description: '', notes: '', rate: '', amount: '' },
 ]
+
+const MIN_LINES = DEFAULT_ITEMS.length // 4: invoices at or under this print exactly as before
+const MAX_LINES = 12
 
 const PAYMENT_METHODS = ['Cash', 'Check', 'Credit/Debit', 'Venmo', 'Zelle', 'Other']
 
@@ -137,6 +142,10 @@ const INVOICE_PRINT_CSS = `
 @media print {
   @page { size: letter portrait; margin: 0.45in; }
   .inv-print .invoice-page { width:auto; padding:0; }
+  .inv-print .svc-tbl thead { display:table-header-group; }
+  .inv-print .svc-tbl tbody tr { break-inside:avoid; page-break-inside:avoid; }
+  .inv-print .totals-wrap { break-before:avoid; page-break-before:avoid; break-inside:avoid; page-break-inside:avoid; }
+  .inv-print .inv-bottom { break-inside:avoid; page-break-inside:avoid; }
 }
 `
 
@@ -223,6 +232,7 @@ export default function InvoiceBuilder() {
   const [existingWarranty, setExistingWarranty] = useState(null)
   const [toast, setToast] = useState('')
   const [showSigCapture, setShowSigCapture] = useState(false)
+  const [confirmRemoveLine, setConfirmRemoveLine] = useState(false)
   const [sigLinkState, setSigLinkState] = useState(null)
   // sigLinkState: null | { status: 'generating' } | { status: 'ready', url: string } | { status: 'error' }
   // Warranty length as of the last load / successful save. Only a change from
@@ -336,6 +346,33 @@ export default function InvoiceBuilder() {
     items[i] = { ...items[i], [key]: value }
     if (key === 'rate') items[i].amount = value
     setInv(v => ({ ...v, line_items: items }))
+  }
+
+  const addLine = () => setInv(v => (
+    v.line_items.length >= MAX_LINES
+      ? v
+      : { ...v, line_items: [...v.line_items, { description: '', notes: '', rate: '', amount: '' }] }
+  ))
+
+  const removeLastLine = () => setInv(v => (
+    v.line_items.length <= MIN_LINES
+      ? v
+      : { ...v, line_items: v.line_items.slice(0, -1) }
+  ))
+
+  // A blank last line goes straight away; one with anything in it asks first.
+  const lastLine = inv.line_items[inv.line_items.length - 1] || {}
+  const lastLineHasContent = ['description', 'notes', 'rate', 'amount']
+    .some(k => String(lastLine[k] ?? '').trim() !== '')
+
+  const handleRemoveLastLine = () => {
+    if (lastLineHasContent) setConfirmRemoveLine(true)
+    else removeLastLine()
+  }
+
+  const confirmRemoveLastLine = () => {
+    setConfirmRemoveLine(false)
+    removeLastLine()
   }
 
   const subtotal = inv.line_items.reduce((s, item) => s + (parseFloat(item.amount) || 0), 0)
@@ -790,6 +827,19 @@ export default function InvoiceBuilder() {
                 className="col-span-2 border border-[#E5E7EB] rounded px-2 py-1 text-xs text-right focus:outline-none focus:ring-1 focus:ring-navy disabled:opacity-60 disabled:bg-gray-50" />
             </div>
           ))}
+          {!isLocked && (
+            <div className="flex gap-2 pt-1">
+              <Button type="button" variant="secondary" className="flex-1 min-h-[44px]"
+                onClick={addLine} disabled={inv.line_items.length >= MAX_LINES}>
+                {inv.line_items.length >= MAX_LINES ? `Add line (max ${MAX_LINES})` : 'Add line'}
+              </Button>
+              {inv.line_items.length > MIN_LINES && (
+                <Button type="button" variant="secondary" className="flex-1 min-h-[44px]" onClick={handleRemoveLastLine}>
+                  Remove last line
+                </Button>
+              )}
+            </div>
+          )}
           <div className="border-t border-[#E5E7EB] pt-2 mt-2 space-y-1 text-sm">
             <div className="flex justify-between"><span className="text-[#6B7280]">Subtotal</span><span className="font-medium">${subtotal.toFixed(2)}</span></div>
             <div className="flex items-center gap-2">
@@ -948,7 +998,7 @@ export default function InvoiceBuilder() {
               </tr>
             </thead>
             <tbody>
-              {[0, 1, 2, 3].map(i => {
+              {Array.from({ length: Math.max(MIN_LINES, inv.line_items.length) }, (_, i) => {
                 const item = inv.line_items[i] || {}
                 return (
                   <tr key={i}>
@@ -973,6 +1023,9 @@ export default function InvoiceBuilder() {
               </tbody>
             </table>
           </div>
+
+          {/* Everything below the totals stays together: page 1 if it fits, otherwise page 2 as one block */}
+          <div className="inv-bottom">
 
           {/* PAYMENT + NOTES */}
           <div className="pn-row">
@@ -1063,8 +1116,28 @@ export default function InvoiceBuilder() {
             <div className="fverses">John 3:16 · Matthew 6:9–13 · Matthew 11:30 · Mark 10:45 · Luke 19:10</div>
           </div>
 
+          </div>{/* /inv-bottom */}
+
         </div>
       </div>
+
+      {/* Portal keeps the Modal's un-typed close button out of any surrounding form. */}
+      {createPortal(
+        <Modal open={confirmRemoveLine} onClose={() => setConfirmRemoveLine(false)} title="Remove line?">
+          <p className="text-sm text-[#1F2937] mb-4">
+            The last line has details filled in. Remove it?
+          </p>
+          <div className="flex gap-2">
+            <Button type="button" variant="secondary" className="flex-1 min-h-[44px]" onClick={() => setConfirmRemoveLine(false)}>
+              Keep it
+            </Button>
+            <Button type="button" variant="destructive" className="flex-1 min-h-[44px]" onClick={confirmRemoveLastLine}>
+              Remove
+            </Button>
+          </div>
+        </Modal>,
+        document.body
+      )}
 
       {sigLinkState && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-6">
