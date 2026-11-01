@@ -9,7 +9,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import db from '../lib/db'
 import { supabase } from '../lib/supabase'
-import { upsertLocal } from '../lib/sync'
+import { upsertServerRow } from '../lib/sync'
 import Badge from '../components/ui/Badge'
 
 export default function Calendar() {
@@ -50,11 +50,11 @@ export default function Calendar() {
         if (!data) return
         for (const a of data) {
           const { jobs: jobData, ...appt } = a
-          await upsertLocal('appointments', { ...appt, _synced: true })
+          await upsertServerRow('appointments', { ...appt, _synced: true })
           if (jobData) {
             const { customers: cust, ...job } = jobData
-            await upsertLocal('jobs', { ...job, _synced: true })
-            if (cust) await upsertLocal('customers', { ...cust, _synced: true })
+            await upsertServerRow('jobs', { ...job, _synced: true })
+            if (cust) await upsertServerRow('customers', { ...cust, _synced: true })
           }
         }
         // Refresh lookup maps so tapping a freshly-synced appointment can

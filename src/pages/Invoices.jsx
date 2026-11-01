@@ -5,7 +5,7 @@ import { format } from 'date-fns'
 import { useLiveQuery } from 'dexie-react-hooks'
 import db from '../lib/db'
 import { supabase } from '../lib/supabase'
-import { upsertLocal } from '../lib/sync'
+import { upsertServerRow } from '../lib/sync'
 import { cleanupLeftoverInvoices } from '../lib/localCleanup'
 import EmptyState from '../components/ui/EmptyState'
 import LoadingSpinner from '../components/ui/LoadingSpinner'
@@ -91,11 +91,11 @@ export default function Invoices() {
         if (!data) return
         for (const inv of data) {
           const { jobs: jobData, ...invoice } = inv
-          await upsertLocal('invoices', { ...invoice, _synced: true })
+          await upsertServerRow('invoices', { ...invoice, _synced: true }, { honorUnsyncedFlag: true })
           if (jobData) {
             const { customers: cust, ...job } = jobData
-            await upsertLocal('jobs', { ...job, _synced: true })
-            if (cust) await upsertLocal('customers', { ...cust, _synced: true })
+            await upsertServerRow('jobs', { ...job, _synced: true })
+            if (cust) await upsertServerRow('customers', { ...cust, _synced: true })
           }
         }
         // Re-read the lookup maps now that Dexie is fresh, otherwise names

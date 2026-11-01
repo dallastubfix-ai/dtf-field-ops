@@ -5,7 +5,7 @@ import { Briefcase, Calendar, FileText } from 'lucide-react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import db from '../lib/db'
 import { supabase } from '../lib/supabase'
-import { upsertLocal } from '../lib/sync'
+import { mergeServerRows, upsertServerRow } from '../lib/sync'
 import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
 import EmptyState from '../components/ui/EmptyState'
@@ -62,7 +62,18 @@ export default function Home() {
       setCustomers(map)
     })
 
-    // Background refresh — clear and replace appointments so deleted records don't linger
+    // Only rows inside the fetched day can be judged "deleted on the server". The
+    // server reads the naive day strings in an unknown timezone, so use the overlap
+    // of the local-day and UTC-day windows. Rows with no datetime are never removed.
+    const dayStr = format(today, 'yyyy-MM-dd')
+    const lo = Math.max(new Date(`${dayStr}T00:00:00`), new Date(`${dayStr}T00:00:00Z`))
+    const hi = Math.min(new Date(`${dayStr}T23:59:59`), new Date(`${dayStr}T23:59:59Z`))
+    const inFetchedDay = r => {
+      const t = new Date(r.appointment_datetime).getTime()
+      return t >= lo && t <= hi
+    }
+
+    // Background refresh — merge today's appointments; queued local changes are kept
     const refresh = async () => {
       const { data: appts } = await supabase
         .from('appointments')
@@ -73,15 +84,14 @@ export default function Home() {
         const apptRows = []
         for (const a of appts) {
           const { jobs: jobData, ...appt } = a
-          apptRows.push({ ...appt, _synced: true })
+          apptRows.push(appt)
           if (jobData) {
             const { customers: cust, ...job } = jobData
-            await upsertLocal('jobs', { ...job, _synced: true })
-            if (cust) await upsertLocal('customers', { ...cust, _synced: true })
+            await upsertServerRow('jobs', { ...job, _synced: true })
+            if (cust) await upsertServerRow('customers', { ...cust, _synced: true })
           }
         }
-        await db.appointments.clear()
-        await db.appointments.bulkPut(apptRows)
+        await mergeServerRows('appointments', apptRows, { removeMissing: true, removeScope: inFetchedDay })
 
         // Re-read lookup maps now that Dexie is fresh, otherwise today's
         // appointments can't resolve their job/customer for display + nav.

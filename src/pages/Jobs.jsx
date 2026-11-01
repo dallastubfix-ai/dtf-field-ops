@@ -5,7 +5,7 @@ import { format } from 'date-fns'
 import { useLiveQuery } from 'dexie-react-hooks'
 import db from '../lib/db'
 import { supabase } from '../lib/supabase'
-import { upsertLocal } from '../lib/sync'
+import { mergeServerRows, upsertServerRow } from '../lib/sync'
 import { summarizeJobFixtures } from '../lib/fixtures'
 import Badge from '../components/ui/Badge'
 import EmptyState from '../components/ui/EmptyState'
@@ -34,18 +34,19 @@ export default function Jobs() {
       setCustomers(map)
     })
 
-    // Background refresh — replace jobs table entirely so deleted records don't linger
+    // Background refresh — merge server jobs; local rows with queued changes are kept
     supabase.from('jobs').select('*, customers(*)').order('created_at', { ascending: false })
-      .then(async ({ data }) => {
-        if (!data) return
+      .then(async ({ data, error }) => {
+        if (error || !data) return
         const jobRows = []
         for (const j of data) {
           const { customers: cust, ...job } = j
-          jobRows.push({ ...job, _synced: true })
-          if (cust) await upsertLocal('customers', { ...cust, _synced: true })
+          jobRows.push(job)
+          if (cust) await upsertServerRow('customers', cust)
         }
-        await db.jobs.clear()
-        await db.jobs.bulkPut(jobRows)
+        // The query is the whole table, so jobs missing from it were deleted on the
+        // server. Skip removal at the row cap: the list may be cut off.
+        await mergeServerRows('jobs', jobRows, { removeMissing: data.length < 1000 })
 
         // Re-read the customer map now that Dexie is fresh, otherwise job
         // cards render 'Unknown Customer' until the next mount.

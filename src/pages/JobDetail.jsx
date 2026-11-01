@@ -7,7 +7,7 @@ import {
 import { format } from 'date-fns'
 import { supabase } from '../lib/supabase'
 import db from '../lib/db'
-import { updateRecord, upsertLocal } from '../lib/sync'
+import { updateRecord, upsertServerRow } from '../lib/sync'
 import { recalcAfterAppointmentChange, recalcAfterAppointmentEdit, recalcAfterStatusChange } from '../lib/mileage'
 import { removeJobLocally } from '../lib/localCleanup'
 import { getOtherJobsForCustomer, separateCustomer } from '../lib/customerSeparation'
@@ -161,7 +161,7 @@ export default function JobDetail() {
     let j = await db.jobs.where('id').equals(id).first()
     if (!j && isOnline) {
       const { data } = await supabase.from('jobs').select('*').eq('id', id).single()
-      if (data) { await upsertLocal('jobs', { ...data, _synced: true }); j = data }
+      if (data) { await upsertServerRow('jobs', { ...data, _synced: true }); j = data }
     }
     setJob(j)
     setNotesVal(j?.notes ?? '')
@@ -170,7 +170,7 @@ export default function JobDetail() {
       let c = await db.customers.where('id').equals(j.customer_id).first()
       if (!c && isOnline) {
         const { data } = await supabase.from('customers').select('*').eq('id', j.customer_id).single()
-        if (data) { await upsertLocal('customers', { ...data, _synced: true }); c = data }
+        if (data) { await upsertServerRow('customers', { ...data, _synced: true }); c = data }
       }
       setCustomer(c)
     }
@@ -198,16 +198,16 @@ export default function JobDetail() {
         supabase.from('videos').select('*').eq('job_id', id),
         supabase.from('invoices').select('*').eq('job_id', id).maybeSingle(),
       ])
-      if (apptRes.data) { for (const a of apptRes.data) await upsertLocal('appointments', { ...a, _synced: true }); setAppointments(apptRes.data) }
-      if (imgRes.data)  { for (const i of imgRes.data) await upsertLocal('images', { ...i, _synced: true }); setImages(imgRes.data) }
-      if (vidRes.data)  { for (const v of vidRes.data) await upsertLocal('videos', { ...v, _synced: true }); setVideos(vidRes.data) }
+      if (apptRes.data) { for (const a of apptRes.data) await upsertServerRow('appointments', { ...a, _synced: true }); setAppointments(apptRes.data) }
+      if (imgRes.data)  { for (const i of imgRes.data) await upsertServerRow('images', { ...i, _synced: true }); setImages(imgRes.data) }
+      if (vidRes.data)  { for (const v of vidRes.data) await upsertServerRow('videos', { ...v, _synced: true }); setVideos(vidRes.data) }
       if (invRes.data)  {
-        await upsertLocal('invoices', { ...invRes.data, _synced: true })
+        await upsertServerRow('invoices', { ...invRes.data, _synced: true }, { honorUnsyncedFlag: true })
         setInvoice(invRes.data)
         let warr = await db.warranties.where('invoice_id').equals(invRes.data.id).first()
         if (!warr) {
           const { data: wData } = await supabase.from('warranties').select('*').eq('invoice_id', invRes.data.id).maybeSingle()
-          if (wData) { await upsertLocal('warranties', { ...wData, _synced: true }); warr = wData }
+          if (wData) { await upsertServerRow('warranties', { ...wData, _synced: true }); warr = wData }
         }
         if (warr) setWarranty(warr)
       }
