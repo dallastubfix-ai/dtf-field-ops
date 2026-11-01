@@ -102,7 +102,9 @@ export async function updateRecord(tableName, payload, isOnline) {
         payload: clean,
         created_at: new Date().toISOString()
       })
+      return { synced: false }
     }
+    return { synced: true }
   } else {
     await db.sync_queue.add({
       table_name: tableName,
@@ -110,5 +112,6 @@ export async function updateRecord(tableName, payload, isOnline) {
       payload: clean,
       created_at: new Date().toISOString()
     })
+    return { synced: false }
   }
 }

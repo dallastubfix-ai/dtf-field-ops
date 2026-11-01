@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import {
   ArrowLeft, Phone, Camera, Video, FileText, Shield,
@@ -24,6 +24,9 @@ import { createCalendarEvent, updateCalendarEvent } from '../lib/googleCalendar'
 import { getValidProviderToken } from '../lib/googleToken'
 import AddressAutocomplete from '../components/ui/AddressAutocomplete'
 import CollageMaker from '../components/collage/CollageMaker'
+import FixtureCardsEditor from '../components/fixtures/FixtureCardsEditor'
+import FixtureSummary from '../components/fixtures/FixtureSummary'
+import { sanitizeFixture } from '../lib/fixtures'
 
 // Transient failures (no connection mid-request, expired session, server
 // trouble) are safe to queue and retry. Anything else (RLS, foreign key, bad
@@ -51,22 +54,6 @@ const STATUS_OPTIONS = [
   { value: 'active',      label: 'Active'      },
   { value: 'completed',   label: 'Completed'   },
   { value: 'cancelled',   label: 'Cancelled'   },
-]
-
-const FIXTURE_OPTIONS = [
-  { value: '',           label: '— Select Fixture —' },
-  { value: 'bathtub',    label: 'Bathtub' },
-  { value: 'sink',       label: 'Sink' },
-  { value: 'countertop', label: 'Countertop' },
-  { value: 'toilet',     label: 'Toilet' },
-]
-
-const SURFACE_OPTIONS = [
-  { value: '',                    label: '— Select Surface —' },
-  { value: 'porcelain_cast_iron', label: 'Porcelain / Cast Iron' },
-  { value: 'fiberglass',          label: 'Fiberglass' },
-  { value: 'acrylic',             label: 'Acrylic' },
-  { value: 'cultured_marble',     label: 'Cultured Marble' },
 ]
 
 const LEAD_OPTIONS = [
@@ -109,7 +96,15 @@ export default function JobDetail() {
   const navigate = useNavigate()
   const isOnline = useOnlineStatus()
 
-  const [job, setJob] = useState(null)
+  const [job, setJobState] = useState(null)
+  // Always the latest job. Handlers that run after an await read this, not the `job` they were
+  // rendered with, so they can never write an older copy back.
+  const jobRef = useRef(null)
+  const setJob = useCallback((next) => {
+    const resolved = typeof next === 'function' ? next(jobRef.current) : next
+    jobRef.current = resolved
+    setJobState(resolved)
+  }, [])
   const [customer, setCustomer] = useState(null)
   const [sharedJobs, setSharedJobs] = useState([])
   const [separateOpen, setSeparateOpen] = useState(false)
@@ -133,6 +128,8 @@ export default function JobDetail() {
   const [custVal, setCustVal] = useState({})
   const [editJob, setEditJob] = useState(false)
   const [jobVal, setJobVal] = useState({})
+  const [editFixtures, setEditFixtures] = useState(false)
+  const [fixturesVal, setFixturesVal] = useState([])
   const [editApptId, setEditApptId] = useState(null)
   const [apptVal, setApptVal] = useState({ appointment_datetime: '', location_address: '', notes: '' })
 
@@ -146,6 +143,18 @@ export default function JobDetail() {
   const [collageOpen, setCollageOpen] = useState(false)
 
   const flashToast = (msg, ms = 1800) => { setToast(msg); setTimeout(() => setToast(''), ms) }
+
+  // Local state gets the full merged job. The server and Dexie get ONLY the changed fields,
+  // so fields written elsewhere (drive_folder_id, customer_id) can't be overwritten by a stale copy.
+  const patchJob = async (patch) => {
+    const id = jobRef.current.id
+    const changes = { ...patch, updated_at: new Date().toISOString() }
+    setJob(prev => ({ ...prev, ...changes }))
+    const result = await updateRecord('jobs', { id, ...changes }, isOnline)
+    return { synced: !!result?.synced }
+  }
+  const flashSaved = (synced, okMsg) =>
+    synced ? flashToast(okMsg) : flashToast('Saved on this phone, will sync when online', 3000)
 
   const load = async () => {
     // Try Dexie first
@@ -388,13 +397,12 @@ export default function JobDetail() {
   }
 
   const saveStatus = async (status) => {
-    if (!job) return
-    const previousStatus = job.status
-    const updated = { ...job, status, updated_at: new Date().toISOString() }
-    setJob(updated)
-    await updateRecord('jobs', updated, isOnline)
-    recalcAfterStatusChange(job, previousStatus, status)
-    flashToast(`Status → ${formatEnum(status)}`)
+    if (!jobRef.current) return
+    const before = jobRef.current
+    const previousStatus = before.status
+    const { synced } = await patchJob({ status })
+    recalcAfterStatusChange(before, previousStatus, status)
+    flashSaved(synced, `Status → ${formatEnum(status)}`)
   }
 
   const handleCancelJob = () => {
@@ -408,12 +416,10 @@ export default function JobDetail() {
   }
 
   const saveNotes = async () => {
-    if (!job) return
-    const updated = { ...job, notes: notesVal, updated_at: new Date().toISOString() }
-    setJob(updated)
-    await updateRecord('jobs', updated, isOnline)
+    if (!jobRef.current) return
+    const { synced } = await patchJob({ notes: notesVal })
     setEditNotes(false)
-    flashToast('Notes saved')
+    flashSaved(synced, 'Notes saved')
   }
 
   const startEditCustomer = (c = customer) => {
@@ -481,29 +487,32 @@ export default function JobDetail() {
   }
 
   const startEditJob = () => {
-    setJobVal({
-      fixture_type:  job?.fixture_type  ?? '',
-      surface_type:  job?.surface_type  ?? '',
-      surface_color: job?.surface_color ?? '',
-    })
+    setJobVal({ surface_color: job?.surface_color ?? '' })
     setEditJob(true)
   }
 
   const saveJob = async () => {
-    if (!job) return
+    if (!jobRef.current) return
     setSaving(true)
-    const updated = {
-      ...job,
-      fixture_type:  jobVal.fixture_type  || null,
-      surface_type:  jobVal.surface_type  || null,
-      surface_color: jobVal.surface_color || null,
-      updated_at: new Date().toISOString(),
-    }
-    setJob(updated)
-    await updateRecord('jobs', updated, isOnline)
+    const { synced } = await patchJob({ surface_color: jobVal.surface_color || null })
     setEditJob(false)
     setSaving(false)
-    flashToast('Job details saved')
+    flashSaved(synced, 'Job details saved')
+  }
+
+  const startEditFixtures = () => {
+    const current = Array.isArray(jobRef.current?.fixtures) ? jobRef.current.fixtures : []
+    setFixturesVal(JSON.parse(JSON.stringify(current)))
+    setEditFixtures(true)
+  }
+
+  const saveFixtures = async () => {
+    if (!jobRef.current) return
+    setSaving(true)
+    const { synced } = await patchJob({ fixtures: fixturesVal.map(sanitizeFixture) })
+    setEditFixtures(false)
+    setSaving(false)
+    flashSaved(synced, 'Fixtures saved')
   }
 
   const startEditAppt = (a) => {
@@ -818,12 +827,47 @@ export default function JobDetail() {
               />
             </div>
 
+            {editFixtures ? (
+              <div className="space-y-3 pt-1">
+                <FixtureCardsEditor cards={fixturesVal} onChange={setFixturesVal} />
+                <div className="flex gap-2">
+                  <Button type="button" variant="primary" className="flex-1 min-h-[44px]" onClick={saveFixtures} disabled={saving}>
+                    {saving ? 'Saving…' : 'Save'}
+                  </Button>
+                  <Button type="button" variant="ghost" className="min-h-[44px]" onClick={() => setEditFixtures(false)}>
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-2 pt-1">
+                {Array.isArray(job.fixtures) && job.fixtures.length > 0 ? (
+                  <>
+                    <div className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Fixtures</div>
+                    <FixtureSummary cards={job.fixtures} />
+                  </>
+                ) : (job.fixture_type || job.surface_type) ? (
+                  <div className="space-y-1">
+                    <div className="text-xs text-[#9CA3AF]">Recorded before fixture cards</div>
+                    {[
+                      ['Fixture', formatEnum(job.fixture_type)],
+                      ['Surface', formatEnum(job.surface_type)],
+                    ].map(([label, value]) => value ? (
+                      <div key={label} className="flex gap-2">
+                        <span className="text-xs text-[#6B7280] w-28">{label}</span>
+                        <span className="text-sm text-[#1F2937]">{value}</span>
+                      </div>
+                    ) : null)}
+                  </div>
+                ) : null}
+                <Button type="button" variant="secondary" className="min-h-[44px]" onClick={startEditFixtures}>
+                  {Array.isArray(job.fixtures) && job.fixtures.length > 0 ? 'Edit fixtures' : 'Add fixtures'}
+                </Button>
+              </div>
+            )}
+
             {editJob ? (
               <div className="space-y-3 pt-1">
-                <Select label="Fixture Type" value={jobVal.fixture_type} options={FIXTURE_OPTIONS}
-                  onChange={e => setJobVal(v => ({ ...v, fixture_type: e.target.value }))} />
-                <Select label="Surface Type" value={jobVal.surface_type} options={SURFACE_OPTIONS}
-                  onChange={e => setJobVal(v => ({ ...v, surface_type: e.target.value }))} />
                 <Input label="Surface Color" value={jobVal.surface_color}
                   onChange={e => setJobVal(v => ({ ...v, surface_color: e.target.value }))} />
                 <div className="flex gap-2">
@@ -836,8 +880,6 @@ export default function JobDetail() {
             ) : (
               <>
                 {[
-                  ['Fixture', formatEnum(job.fixture_type)],
-                  ['Surface', formatEnum(job.surface_type)],
                   ['Color',   job.surface_color],
                 ].map(([label, value]) => value ? (
                   <div key={label} className="flex gap-2">
