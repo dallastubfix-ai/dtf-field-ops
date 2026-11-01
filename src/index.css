@@ -1,3 +1,5 @@
+@import './styles/glass-tokens.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -9,6 +11,161 @@
   }
   input, select, textarea {
     @apply font-sans;
+  }
+}
+
+@layer components {
+  /* Frosted-glass page background (Settings only for now) */
+  .glass-page {
+    background:
+      radial-gradient(360px 300px at 12% 4%, var(--bg-blob-1), rgba(0,0,0,0) 70%),
+      radial-gradient(380px 360px at 100% 40%, var(--bg-blob-2), rgba(0,0,0,0) 70%),
+      radial-gradient(420px 360px at 0% 78%, var(--bg-blob-3), rgba(0,0,0,0) 70%),
+      var(--page-base);
+  }
+  [data-theme="dark"] .glass-page {
+    background:
+      radial-gradient(360px 300px at 88% 6%, var(--bg-blob-1), rgba(0,0,0,0) 70%),
+      radial-gradient(380px 360px at 0% 52%, var(--bg-blob-2), rgba(0,0,0,0) 70%),
+      radial-gradient(420px 360px at 92% 96%, var(--bg-blob-3), rgba(0,0,0,0) 70%),
+      var(--page-base);
+  }
+
+  .glass-card {
+    background: var(--glass-fill);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-shadow);
+    border-radius: var(--radius-card);
+    padding: 16px;
+    -webkit-backdrop-filter: blur(var(--blur-glass)) saturate(var(--glass-saturate));
+    backdrop-filter: blur(var(--blur-glass)) saturate(var(--glass-saturate));
+  }
+
+  /* Appearance card */
+  .appearance-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .appearance-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    background: var(--inset-fill);
+    color: var(--text);
+  }
+  .appearance-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text);
+  }
+  .appearance-label {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    color: var(--text-label);
+    margin-bottom: 8px;
+  }
+  .appearance-helper {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin-top: 8px;
+  }
+  .appearance-divider {
+    height: 1px;
+    background: var(--inset-fill);
+    margin: 16px 0 4px;
+  }
+
+  .theme-segmented {
+    display: flex;
+    gap: 4px;
+    padding: 4px;
+    border-radius: var(--radius-lg);
+    background: var(--track-fill);
+  }
+  .theme-segment {
+    flex: 1;
+    height: 44px;
+    border-radius: var(--radius-sm);
+    font-size: 14px;
+    font-weight: 500;
+    background: transparent;
+    color: var(--text-secondary);
+  }
+  .theme-segment[aria-pressed="true"] {
+    background: var(--tab-active-fill);
+    color: var(--tab-active-text);
+    font-weight: 700;
+  }
+
+  .switch-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+    min-height: 56px;
+    padding: 8px 0;
+    text-align: left;
+    background: transparent;
+    border-radius: var(--radius-sm);
+  }
+  .switch-label {
+    display: block;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text);
+  }
+  .switch-sub {
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+  }
+  .switch-track {
+    position: relative;
+    flex-shrink: 0;
+    width: 52px;
+    height: 32px;
+    border-radius: 999px;
+    background: var(--switch-off-track);
+    box-shadow: inset 0 0 0 2px var(--switch-off-ring);
+  }
+  .switch-row[aria-checked="true"] .switch-track {
+    background: var(--switch-on);
+    box-shadow: none;
+  }
+  .switch-thumb {
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: var(--switch-thumb-off);
+    box-shadow: var(--thumb-shadow);
+    transition: left 200ms ease;
+  }
+  .switch-row[aria-checked="true"] .switch-thumb {
+    left: 23px;
+    background: var(--switch-thumb-on);
+  }
+
+  .theme-segment:focus-visible,
+  .switch-row:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .switch-thumb { transition: none; }
   }
 }
 

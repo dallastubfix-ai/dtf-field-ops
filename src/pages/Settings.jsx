@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Bell, LogOut, Info, Trash2, Home } from 'lucide-react'
+import { Bell, LogOut, Info, Trash2, Home, Sun } from 'lucide-react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { format } from 'date-fns'
 import { useAuth } from '../context/AuthContext'
@@ -11,9 +11,17 @@ import Button from '../components/ui/Button'
 import AddressAutocomplete from '../components/ui/AddressAutocomplete'
 import { useOnlineStatus } from '../hooks/useOnlineStatus'
 import { loadHomeAddress, saveHomeAddress } from '../lib/appSettings'
+import { useTheme } from '../lib/theme'
+
+const THEME_OPTIONS = [
+  { value: 'system', label: 'System' },
+  { value: 'light', label: 'Light' },
+  { value: 'dark', label: 'Dark' },
+]
 
 export default function Settings() {
   const { user, signOut } = useAuth()
+  const { themePref, accents, setThemePref, setAccents } = useTheme()
   const navigate = useNavigate()
   const [push, setPush] = useState(getPushStatus())
   const [testStatus, setTestStatus] = useState(null)
@@ -142,12 +150,56 @@ export default function Settings() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F3F4F6]">
+    <div className="min-h-screen glass-page">
       <header className="bg-navy px-4 py-4">
         <h1 className="text-white font-bold text-lg">Settings</h1>
       </header>
 
       <div className="px-4 py-5 space-y-4 max-w-lg mx-auto">
+
+        {/* Appearance */}
+        <section className="glass-card" aria-label="Appearance">
+          <div className="appearance-head">
+            <div className="appearance-icon">
+              <Sun size={20} aria-hidden="true" />
+            </div>
+            <h2 className="appearance-title">Appearance</h2>
+          </div>
+
+          <div className="appearance-label">THEME</div>
+          <div className="theme-segmented" role="group" aria-label="Theme">
+            {THEME_OPTIONS.map(({ value, label }) => (
+              <button
+                key={value}
+                type="button"
+                className="theme-segment"
+                aria-pressed={themePref === value}
+                onClick={() => setThemePref(value)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <p className="appearance-helper">System follows your phone's light or dark setting.</p>
+
+          <div className="appearance-divider" />
+
+          <button
+            type="button"
+            role="switch"
+            aria-checked={accents === 'on'}
+            className="switch-row"
+            onClick={() => setAccents(accents === 'on' ? 'off' : 'on')}
+          >
+            <span>
+              <span className="switch-label">Color accents</span>
+              <span className="switch-sub">Navy buttons and gold highlights</span>
+            </span>
+            <span className="switch-track" aria-hidden="true">
+              <span className="switch-thumb" />
+            </span>
+          </button>
+        </section>
 
         {/* Notifications */}
         <div className="bg-white rounded-xl border border-[#E5E7EB] shadow-sm p-4">
