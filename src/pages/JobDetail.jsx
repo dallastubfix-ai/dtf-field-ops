@@ -24,6 +24,7 @@ import { createCalendarEvent, updateCalendarEvent } from '../lib/googleCalendar'
 import { getValidProviderToken } from '../lib/googleToken'
 import AddressAutocomplete from '../components/ui/AddressAutocomplete'
 import CollageMaker from '../components/collage/CollageMaker'
+import SendCollage from '../components/collage/SendCollage'
 import FixtureCardsEditor from '../components/fixtures/FixtureCardsEditor'
 import FixtureSummary from '../components/fixtures/FixtureSummary'
 import { sanitizeFixture } from '../lib/fixtures'
@@ -718,6 +719,8 @@ export default function JobDetail() {
     (a, b) => (IMAGE_TYPE_RANK[a.image_type] ?? 1) - (IMAGE_TYPE_RANK[b.image_type] ?? 1)
   )
 
+  const hasCollage = images.some(i => i.image_type === 'collage')
+
   const invoiceLocked = !!(invoice?.technician_signature_url && invoice?.customer_signature_url)
   const hasInvoice = !!invoice
   const technicianSigned = !!invoice?.technician_signature_url
@@ -725,7 +728,7 @@ export default function JobDetail() {
   const hasWarranty = !!warranty
 
   return (
-    <div className="min-h-screen bg-[#F3F4F6] pb-40">
+    <div className={`min-h-screen bg-[#F3F4F6] ${job.status === 'completed' && hasCollage ? 'pb-56' : 'pb-40'}`}>
       {/* Header */}
       <header className="bg-navy px-4 py-4 flex items-center gap-3 sticky top-0 z-30">
         <button onClick={() => navigate(-1)} className="text-white">
@@ -1173,10 +1176,13 @@ export default function JobDetail() {
           </div>
         )}
         {job.status === 'completed' && (
-          <Button variant="gold" className="w-full" disabled={!customer?.phone}
-            onClick={requestReview}>
-            <MessageSquare size={16} /> Request Review
-          </Button>
+          <div className="flex flex-col gap-2 flex-1">
+            <SendCollage images={images} signedUrls={signedUrls} />
+            <Button variant="gold" className="w-full" disabled={!customer?.phone}
+              onClick={requestReview}>
+              <MessageSquare size={16} /> Request Review
+            </Button>
+          </div>
         )}
       </div>
 
