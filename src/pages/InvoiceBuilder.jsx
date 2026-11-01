@@ -24,6 +24,7 @@ const DEFAULT_ITEMS = [
 
 const MIN_LINES = DEFAULT_ITEMS.length // 4: invoices at or under this print exactly as before
 const MAX_LINES = 12
+const DISCOUNT_PERCENTS = [5, 10, 15, 20]
 const PENDING_ACTION_LABELS = { save: 'Save anyway', print: 'Print anyway', quote: 'Print quote anyway' }
 
 // Letter page minus 0.45in margins on every side, in CSS px (96 per inch).
@@ -449,6 +450,13 @@ export default function InvoiceBuilder() {
   const taxable   = subtotal - discount
   const tax       = taxable * (taxRate / 100)
   const total     = taxable + tax
+
+  // Calculator behavior: fills the dollar box once from the current subtotal. Nothing stays linked.
+  const applyDiscountPercent = (pct) => {
+    const subtotalCents = Math.round(subtotal * 100)
+    if (!Number.isFinite(subtotalCents) || subtotalCents <= 0) return
+    set('discount', (Math.round(subtotalCents * pct / 100) / 100).toFixed(2))
+  }
 
   const isLocked = !!(inv.technician_signature_url && inv.customer_signature_url)
   const warrantyYears = normalizeWarrantyYears(inv.warranty_years)
@@ -960,6 +968,20 @@ export default function InvoiceBuilder() {
               <span className="text-[#6B7280] flex-1">Discount ($)</span>
               <input value={inv.discount} onChange={e => set('discount', e.target.value)} disabled={isLocked} className="w-20 border border-[#E5E7EB] rounded px-2 py-1 text-xs text-right focus:outline-none disabled:opacity-60 disabled:bg-gray-50" />
             </div>
+            {!isLocked && (
+              <div className="flex flex-wrap justify-end gap-2">
+                {DISCOUNT_PERCENTS.map(pct => (
+                  <button key={pct} type="button" onClick={() => applyDiscountPercent(pct)} disabled={!(subtotal > 0)}
+                    className="min-h-[44px] px-3 rounded-full text-sm font-semibold border border-[#E5E7EB] text-[#6B7280] disabled:opacity-50 active:scale-95 transition-all">
+                    {pct}%
+                  </button>
+                ))}
+                <button type="button" onClick={() => set('discount', '0')}
+                  className="min-h-[44px] px-3 rounded-full text-sm font-semibold border border-[#E5E7EB] text-[#6B7280] active:scale-95 transition-all">
+                  Clear
+                </button>
+              </div>
+            )}
             <div className="flex items-center gap-2">
               <span className="text-[#6B7280] flex-1">Tax (%)</span>
               <input value={inv.tax_rate} onChange={e => set('tax_rate', e.target.value)} disabled={isLocked} className="w-20 border border-[#E5E7EB] rounded px-2 py-1 text-xs text-right focus:outline-none disabled:opacity-60 disabled:bg-gray-50" />
