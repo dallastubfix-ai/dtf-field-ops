@@ -9,9 +9,13 @@ import {
   FIXTURE_LABELS, SURFACE_LABELS, SERVICE_LABELS, NAME_QUICK_PICKS,
   createEmptyFixture, sanitizeFixture, getAllowedSurfaces, getAllowedWallsSurfaces,
   getAllowedServices, canStrip, needsSquareFeet, validateFixture, getFixtureTitles,
+  DAMAGE_LABELS, REPAIR_SIZE_LABELS, priceJob,
 } from '../../lib/fixtures'
 
 const MAX_CARDS = 10
+const MAX_REPAIRS = 10
+
+const money = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' })
 
 const SERVICE_HELP = {
   bottom_refinish: 'Bottom of the tub up to just above the rolled edge, or a whole shower pan.',
@@ -55,14 +59,68 @@ function Chips({ values, labels, selected, onSelect }) {
   )
 }
 
+function Stepper({ label, count, min, max, onMinus, onPlus, minusLabel, plusLabel }) {
+  return (
+    <div className="flex items-center justify-between">
+      <span className="text-xs font-semibold uppercase tracking-wide text-dtf-sub">{label}</span>
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          aria-label={minusLabel}
+          disabled={count <= min}
+          onClick={onMinus}
+          className="w-11 h-11 rounded-lg border border-dtf-border flex items-center justify-center text-navy disabled:opacity-40"
+        >
+          <Minus size={18} />
+        </button>
+        <span className="w-6 text-center text-base font-semibold text-dtf-text">{count}</span>
+        <button
+          type="button"
+          aria-label={plusLabel}
+          disabled={count >= max}
+          onClick={onPlus}
+          className="w-11 h-11 rounded-lg border border-dtf-border flex items-center justify-center text-navy disabled:opacity-40"
+        >
+          <Plus size={18} />
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export default function FixtureCardsEditor({ cards, onChange }) {
   const [confirmRemove, setConfirmRemove] = useState(false)
   const list = Array.isArray(cards) ? cards : []
   const titles = getFixtureTitles(list)
   const last = list[list.length - 1]
+  const priced = priceJob(list)
+  const cardsNeedingDetails = new Set(priced.problems.map(p => p.cardId)).size
 
   const updateCard = (index, patch) =>
-    onChange(list.map((c, i) => (i === index ? sanitizeFixture({ ...c, ...patch }) : c)))
+    onChange(list.map((c, i) => {
+      if (i !== index) return c
+      const next = { ...c, ...patch }
+      // Switching to repair starts the card with one empty repair.
+      if (next.service === 'repair' && c.service !== 'repair' && !(next.repairs && next.repairs.length)) {
+        next.repairs = [{ size: '', damage: '' }]
+      }
+      return sanitizeFixture(next)
+    }))
+
+  const updateRepair = (index, repairIndex, patch) =>
+    updateCard(index, {
+      repairs: list[index].repairs.map((r, j) => (j === repairIndex ? { ...r, ...patch } : r)),
+    })
+
+  const addRepair = (index) => {
+    const repairs = list[index].repairs
+    if (repairs.length < MAX_REPAIRS) updateCard(index, { repairs: [...repairs, { size: '', damage: '' }] })
+  }
+
+  const removeLastRepair = (index) => {
+    const repairs = list[index].repairs
+    if (repairs.length > 1) updateCard(index, { repairs: repairs.slice(0, -1) })
+  }
 
   const addCard = () => {
     if (list.length < MAX_CARDS) onChange([...list, sanitizeFixture(createEmptyFixture())])
@@ -82,37 +140,23 @@ export default function FixtureCardsEditor({ cards, onChange }) {
   return (
     <div className="space-y-3">
       {/* Top row: label + stepper */}
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-semibold uppercase tracking-wide text-dtf-sub">Fixtures</span>
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            aria-label="Remove last fixture"
-            disabled={list.length === 0}
-            onClick={handleMinus}
-            className="w-11 h-11 rounded-lg border border-dtf-border flex items-center justify-center text-navy disabled:opacity-40"
-          >
-            <Minus size={18} />
-          </button>
-          <span className="w-6 text-center text-base font-semibold text-dtf-text">{list.length}</span>
-          <button
-            type="button"
-            aria-label="Add a fixture"
-            disabled={list.length >= MAX_CARDS}
-            onClick={addCard}
-            className="w-11 h-11 rounded-lg border border-dtf-border flex items-center justify-center text-navy disabled:opacity-40"
-          >
-            <Plus size={18} />
-          </button>
-        </div>
-      </div>
+      <Stepper
+        label="Fixtures"
+        count={list.length}
+        min={0}
+        max={MAX_CARDS}
+        onMinus={handleMinus}
+        onPlus={addCard}
+        minusLabel="Remove last fixture"
+        plusLabel="Add a fixture"
+      />
 
       {list.map((card, i) => {
         const surfaces = getAllowedSurfaces(card.fixture)
         const wallsSurfaces = getAllowedWallsSurfaces(card.fixture)
         const services = getAllowedServices(card.fixture, card.surface)
-        // Repair details come in Phase 2b, so repair-related problems stay hidden for now.
-        const notes = validateFixture(card).filter(p => !/repair/i.test(p))
+        const notes = validateFixture(card)
+        const cardLines = priced.lines.filter(l => l.cardId === card.id)
 
         return (
           <div key={card.id}>
@@ -228,9 +272,54 @@ export default function FixtureCardsEditor({ cards, onChange }) {
               )}
 
               {card.service === 'repair' && (
-                <p className="text-xs text-gray-500 bg-gray-100 rounded-lg px-3 py-2">
-                  Repair details are added in the next update.
-                </p>
+                <div className="space-y-3">
+                  <Stepper
+                    label="Repairs"
+                    count={card.repairs.length}
+                    min={1}
+                    max={MAX_REPAIRS}
+                    onMinus={() => removeLastRepair(i)}
+                    onPlus={() => addRepair(i)}
+                    minusLabel="Remove last repair"
+                    plusLabel="Add a repair"
+                  />
+                  {card.repairs.map((r, j) => (
+                    <div key={j} className="rounded-lg border border-dtf-border p-3 space-y-3">
+                      <div className="text-sm font-semibold text-dtf-text">Repair {j + 1}</div>
+                      <div className="flex gap-2">
+                        {Object.keys(REPAIR_SIZE_LABELS).map(size => (
+                          <Button
+                            key={size}
+                            type="button"
+                            variant={r.size === size ? 'primary' : 'secondary'}
+                            className="flex-1 min-h-[44px]"
+                            aria-pressed={r.size === size}
+                            onClick={() => updateRepair(i, j, { size })}
+                          >
+                            {REPAIR_SIZE_LABELS[size]}
+                          </Button>
+                        ))}
+                      </div>
+                      <Chips
+                        values={Object.keys(DAMAGE_LABELS)}
+                        labels={DAMAGE_LABELS}
+                        selected={r.damage}
+                        onSelect={damage => updateRepair(i, j, { damage })}
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {cardLines.length > 0 && (
+                <div className="border-t border-dtf-border pt-3 space-y-1">
+                  {cardLines.map((l, k) => (
+                    <div key={k} className="flex justify-between gap-3 text-sm text-dtf-text">
+                      <span>{l.description}</span>
+                      <span className="font-medium whitespace-nowrap">{money.format(l.amount)}</span>
+                    </div>
+                  ))}
+                </div>
               )}
             </Card>
 
@@ -242,6 +331,20 @@ export default function FixtureCardsEditor({ cards, onChange }) {
           </div>
         )
       })}
+
+      {list.length > 0 && (
+        <div className="rounded-xl border border-dtf-border bg-dtf-bg px-4 py-3">
+          <div className="flex items-baseline justify-between">
+            <span className="font-bold text-dtf-text">{cardsNeedingDetails ? 'Total so far' : 'Total'}</span>
+            <span className="text-lg font-bold text-navy">{money.format(priced.total)}</span>
+          </div>
+          {cardsNeedingDetails > 0 && (
+            <p className="text-xs text-dtf-sub mt-1">
+              {cardsNeedingDetails} {cardsNeedingDetails === 1 ? 'card needs' : 'cards need'} details
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Portal keeps the Modal's un-typed close button outside the surrounding <form>. */}
       {createPortal(
