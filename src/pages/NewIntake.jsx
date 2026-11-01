@@ -16,6 +16,8 @@ import Button from '../components/ui/Button'
 import { createCalendarEvent } from '../lib/googleCalendar'
 import { getValidProviderToken } from '../lib/googleToken'
 import AddressAutocomplete from '../components/ui/AddressAutocomplete'
+import FixtureCardsEditor from '../components/fixtures/FixtureCardsEditor'
+import { sanitizeFixture, createEmptyFixture } from '../lib/fixtures'
 
 function formatPhone(value) {
   let raw = value.replace(/\D/g, '')
@@ -34,20 +36,54 @@ function generateId() {
 
 const now = () => format(new Date(), "yyyy-MM-dd'T'HH:mm")
 
-const FIXTURE_OPTIONS  = [
-  { value: '', label: '— Select Fixture —' },
-  { value: 'bathtub',    label: 'Bathtub' },
-  { value: 'sink',       label: 'Sink' },
-  { value: 'countertop', label: 'Countertop' },
-  { value: 'toilet',     label: 'Toilet' },
-]
-const SURFACE_OPTIONS  = [
-  { value: '', label: '— Select Surface —' },
-  { value: 'porcelain_cast_iron', label: 'Porcelain / Cast Iron' },
-  { value: 'fiberglass',          label: 'Fiberglass' },
-  { value: 'acrylic',             label: 'Acrylic' },
-  { value: 'cultured_marble',     label: 'Cultured Marble' },
-]
+const DRAFT_KEY = 'dtf-newintake-draft-v1'
+
+const emptyForm = () => ({
+  full_name: '', phone: '', call_datetime: now(),
+  surface_color: '',
+  schedule_appointment: false,
+  appointment_datetime: '', location_address: '',
+  notes: '', lead_source: '', referred_by: '',
+  is_test: false,
+  fixtures: [],
+})
+
+function removeDraft() {
+  try { localStorage.removeItem(DRAFT_KEY) } catch { /* storage unavailable */ }
+}
+
+// Returns { form, linkedCustomer } or null. A broken draft is ignored and removed.
+function loadDraft() {
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY)
+    if (!raw) return null
+    const d = JSON.parse(raw)
+    if (!d || typeof d !== 'object' || !d.form || typeof d.form !== 'object') throw new Error('bad draft')
+    const cards = Array.isArray(d.form.fixtures) ? d.form.fixtures : []
+    return {
+      form: {
+        ...emptyForm(),
+        ...d.form,
+        fixtures: cards
+          .filter(c => c && typeof c === 'object')
+          .map(c => sanitizeFixture({ ...createEmptyFixture(), ...c })),
+      },
+      linkedCustomer: d.linkedCustomer && typeof d.linkedCustomer === 'object' ? d.linkedCustomer : null,
+    }
+  } catch {
+    removeDraft()
+    return null
+  }
+}
+
+function hasEntered(form, linkedCustomer) {
+  return !!(
+    linkedCustomer || form.full_name.trim() || form.phone || form.surface_color || form.notes ||
+    form.lead_source || form.referred_by || form.appointment_datetime || form.location_address ||
+    form.schedule_appointment || form.is_test || form.fixtures.length
+  )
+}
+
 const LEAD_OPTIONS = [
   { value: '', label: '— How did they hear about us? —' },
   'Google Search', 'Google Maps', 'Referral', 'Repeat Customer', 'Other'
@@ -58,22 +94,40 @@ export default function NewIntake() {
   const isOnline = useOnlineStatus()
   const nameRef = useRef(null)
 
-  const [form, setForm] = useState({
-    full_name: '', phone: '', call_datetime: now(),
-    fixture_type: '', surface_type: '', surface_color: '',
-    schedule_appointment: false,
-    appointment_datetime: '', location_address: '',
-    notes: '', lead_source: '', referred_by: '',
-    is_test: false,
-  })
+  const [initialDraft] = useState(loadDraft)
+  const [form, setForm] = useState(() => initialDraft?.form ?? emptyForm())
+  const [linkedCustomer, setLinkedCustomer] = useState(initialDraft?.linkedCustomer ?? null)
+  const [draftRestored, setDraftRestored] = useState(!!initialDraft)
+  const savedRef = useRef(false)
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState('')
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState([])
-  const [linkedCustomer, setLinkedCustomer] = useState(null)
 
   useEffect(() => { nameRef.current?.focus() }, [])
+
+  // Debounced draft save. Skipped once the job has saved so a late timer can't resurrect it.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      if (savedRef.current) return
+      try {
+        if (hasEntered(form, linkedCustomer)) {
+          localStorage.setItem(DRAFT_KEY, JSON.stringify({ form, linkedCustomer }))
+        } else {
+          localStorage.removeItem(DRAFT_KEY)
+        }
+      } catch { /* storage full or unavailable: draft is best-effort */ }
+    }, 500)
+    return () => clearTimeout(t)
+  }, [form, linkedCustomer])
+
+  const clearDraft = () => {
+    setForm(emptyForm())
+    setLinkedCustomer(null)
+    setDraftRestored(false)
+    removeDraft()
+  }
 
   const set = (key, value) => setForm(f => ({ ...f, [key]: value }))
 
@@ -94,13 +148,13 @@ export default function NewIntake() {
 
   const submitLabel = () => {
     if (form.appointment_datetime) return 'Save & Schedule'
-    if (form.fixture_type || form.surface_type) return 'Save as Quote'
+    if (form.fixtures.some(c => c.fixture)) return 'Save as Quote'
     return 'Save Contact'
   }
 
   const submitStatus = () => {
     if (form.appointment_datetime) return 'appointment'
-    if (form.fixture_type || form.surface_type) return 'quote'
+    if (form.fixtures.some(c => c.fixture)) return 'quote'
     return 'contact'
   }
 
@@ -143,14 +197,15 @@ export default function NewIntake() {
         job_number: jobNumber,
         customer_id: customerId,
         status: submitStatus(),
-        fixture_type: form.fixture_type || null,
-        surface_type: form.surface_type || null,
+        fixtures: form.fixtures.map(sanitizeFixture),
         surface_color: form.surface_color || null,
         notes: form.notes || null,
         is_test: form.is_test,
         created_at: new Date().toISOString(),
       }
       savedJob = await writeRecord('jobs', jobPayload, isOnline)
+      savedRef.current = true
+      removeDraft()
 
       setToast(`Saved! Job ${jobNumber}`)
       navigate(`/jobs/${savedJob.id}`, { replace: true })
@@ -216,6 +271,15 @@ export default function NewIntake() {
 
       <form onSubmit={handleSubmit} className="flex-1 px-4 py-5 space-y-6 max-w-lg mx-auto w-full">
 
+        {draftRestored && (
+          <div className="flex items-center justify-between gap-3 text-sm bg-blue-50 text-navy rounded-lg pl-3 pr-1">
+            <span>Draft restored</span>
+            <button type="button" onClick={clearDraft} className="min-h-[44px] px-3 font-semibold underline">
+              Clear draft
+            </button>
+          </div>
+        )}
+
         {/* Section 1 — Customer */}
         <section>
           <h2 className="text-xs font-semibold uppercase tracking-wide text-[#6B7280] mb-3">Customer</h2>
@@ -268,20 +332,7 @@ export default function NewIntake() {
               value={form.call_datetime}
               onChange={e => set('call_datetime', e.target.value)}
             />
-            <Select
-              label="Fixture Type"
-              id="fixture_type"
-              value={form.fixture_type}
-              onChange={e => set('fixture_type', e.target.value)}
-              options={FIXTURE_OPTIONS}
-            />
-            <Select
-              label="Surface Type"
-              id="surface_type"
-              value={form.surface_type}
-              onChange={e => set('surface_type', e.target.value)}
-              options={SURFACE_OPTIONS}
-            />
+            <FixtureCardsEditor cards={form.fixtures} onChange={cards => set('fixtures', cards)} />
             <Input
               label="Surface Color (optional)"
               id="surface_color"
