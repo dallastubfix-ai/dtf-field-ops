@@ -24,6 +24,7 @@ const DEFAULT_ITEMS = [
 
 const MIN_LINES = DEFAULT_ITEMS.length // 4: invoices at or under this print exactly as before
 const MAX_LINES = 12
+const PENDING_ACTION_LABELS = { save: 'Save anyway', print: 'Print anyway', quote: 'Print quote anyway' }
 
 // Letter page minus 0.45in margins on every side, in CSS px (96 per inch).
 const PRINT_WIDTH_PX = 7.6 * 96
@@ -276,6 +277,8 @@ export default function InvoiceBuilder() {
   const [toast, setToast] = useState('')
   const [showSigCapture, setShowSigCapture] = useState(false)
   const [confirmRemoveLine, setConfirmRemoveLine] = useState(false)
+  const [warningAcknowledged, setWarningAcknowledged] = useState(false)
+  const [pendingAction, setPendingAction] = useState(null) // 'save' | 'print' | 'quote' while the confirm is open
   const [sigLinkState, setSigLinkState] = useState(null)
   // sigLinkState: null | { status: 'generating' } | { status: 'ready', url: string } | { status: 'error' }
   // Warranty length as of the last load / successful save. Only a change from
@@ -690,6 +693,30 @@ export default function InvoiceBuilder() {
     window.print()
   }
 
+  // Shown as the red "Not on this invoice:" box and asked about before the first save.
+  const missingFromInvoice = !!newInvoiceWarning && !saved
+    && (newInvoiceWarning.problems.length > 0 || newInvoiceWarning.overflow > 0)
+
+  const runAction = (name) => {
+    if (name === 'save') save()
+    else if (name === 'print') print()
+    else if (name === 'quote') printAsQuoteHandler()
+  }
+
+  // Save, Print and Print as Quote all come through here. The first one on an
+  // incomplete new invoice asks first; after "anyway" none of them ask again.
+  const requestAction = (name) => {
+    if (missingFromInvoice && !warningAcknowledged) setPendingAction(name)
+    else runAction(name)
+  }
+
+  const confirmPendingAction = () => {
+    const name = pendingAction
+    setWarningAcknowledged(true)
+    setPendingAction(null)
+    runAction(name)
+  }
+
   const handleSignaturesComplete = async (techUrl, custUrl) => {
     const signedAt = new Date().toISOString()
     setInv(v => ({ ...v, technician_signature_url: techUrl, customer_signature_url: custUrl, technician_signed_at: signedAt, customer_signed_at: signedAt }))
@@ -815,14 +842,14 @@ export default function InvoiceBuilder() {
         <h1 className="text-white font-bold text-base flex-1">Invoice Builder</h1>
         <div className="flex gap-2">
           {!isLocked && (
-            <Button variant="secondary" className="text-white border-white/30 py-1.5 px-3" onClick={save} disabled={saving}>
+            <Button variant="secondary" className="text-white border-white/30 py-1.5 px-3" onClick={() => requestAction('save')} disabled={saving}>
               <Save size={14} /> {saving ? '…' : 'Save'}
             </Button>
           )}
-          <Button variant="gold" className="py-1.5 px-3" onClick={print} disabled={saving}>
+          <Button variant="gold" className="py-1.5 px-3" onClick={() => requestAction('print')} disabled={saving}>
             <Printer size={14} /> Print
           </Button>
-          <Button variant="secondary" className="text-white border-white/30 py-1.5 px-3" onClick={printAsQuoteHandler} disabled={saving}>
+          <Button variant="secondary" className="text-white border-white/30 py-1.5 px-3" onClick={() => requestAction('quote')} disabled={saving}>
             <Printer size={14} /> Print as Quote
           </Button>
         </div>
@@ -836,7 +863,7 @@ export default function InvoiceBuilder() {
 
       {/* Edit form — no-print */}
       <div className="no-print px-4 py-5 space-y-5 max-w-2xl mx-auto">
-        {newInvoiceWarning && !saved && (newInvoiceWarning.problems.length > 0 || newInvoiceWarning.overflow > 0) && (
+        {missingFromInvoice && (
           <div role="alert" className="bg-red-50 border-2 border-red-500 rounded-xl px-4 py-3">
             <p className="text-sm font-bold text-red-700">Not on this invoice:</p>
             <ul className="mt-1 space-y-0.5">
@@ -1231,6 +1258,30 @@ export default function InvoiceBuilder() {
             </Button>
             <Button type="button" variant="destructive" className="flex-1 min-h-[44px]" onClick={confirmRemoveLastLine}>
               Remove
+            </Button>
+          </div>
+        </Modal>,
+        document.body
+      )}
+
+      {createPortal(
+        <Modal open={pendingAction !== null} onClose={() => setPendingAction(null)} title="Not everything is on this invoice">
+          <ul className="space-y-1 mb-4">
+            {newInvoiceWarning?.problems.map((p, i) => (
+              <li key={i} className="text-sm font-bold text-red-700">{`${p.title} - ${p.message}`}</li>
+            ))}
+            {newInvoiceWarning?.overflow > 0 && (
+              <li className="text-sm font-bold text-red-700">
+                {`${newInvoiceWarning.overflow} more ${newInvoiceWarning.overflow === 1 ? 'line' : 'lines'} didn't fit (${MAX_LINES} line maximum) - ${money(newInvoiceWarning.overflowAmount)} not included.`}
+              </li>
+            )}
+          </ul>
+          <div className="flex gap-2">
+            <Button type="button" variant="secondary" className="flex-1 min-h-[44px]" onClick={() => setPendingAction(null)}>
+              Go back
+            </Button>
+            <Button type="button" variant="primary" className="flex-1 min-h-[44px]" onClick={confirmPendingAction}>
+              {PENDING_ACTION_LABELS[pendingAction]}
             </Button>
           </div>
         </Modal>,
