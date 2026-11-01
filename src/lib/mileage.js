@@ -5,6 +5,7 @@ import { supabase } from './supabase'
 import db from './db'
 import { upsertLocal } from './sync'
 import { loadHomeAddress } from './appSettings'
+import { cityFromAddress } from './cityFromAddress'
 
 const TZ = 'America/Chicago'
 const METERS_PER_MILE = 1609.344
@@ -89,13 +90,6 @@ const MESSAGES = {
 export const friendlyReason = (reason) => MESSAGES[reason] ?? MESSAGES.unknown
 
 // ---------- finding a day's stops ----------
-
-function cityFromAddress(address) {
-  const parts = (address ?? '').split(',').map(p => p.trim()).filter(Boolean)
-  if (/^(USA|United States)$/i.test(parts[parts.length - 1] ?? '')) parts.pop()
-  if (parts.length < 3) return ''
-  return /^[A-Z]{2}(\s+\d{5}(-\d{4})?)?$/.test(parts[parts.length - 1]) ? parts[parts.length - 2] : ''
-}
 
 const stopLabel = (s, i) => {
   const base = s.job_number ?? `Stop ${i + 1}`

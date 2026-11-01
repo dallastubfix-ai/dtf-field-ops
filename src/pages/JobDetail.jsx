@@ -67,6 +67,10 @@ const LEAD_OPTIONS = [
 
 const REVIEW_LINK = 'https://g.page/r/CZ3g5Gm0_pYiEBM/review'
 
+const IMAGE_TYPE_RANK = { before: 0, after: 1, collage: 2 }
+const imageBadgeClass = (type) =>
+  type === 'before' ? 'bg-green-500 text-white' : type === 'collage' ? 'bg-navy text-white' : 'bg-gold text-white'
+
 // The Mileage page owns starts_from_home. Never send this page's copy, which can be stale.
 const withoutStartsFromHome = ({ starts_from_home, ...rest }) => rest
 
@@ -300,6 +304,7 @@ export default function JobDetail() {
   }
 
   const toggleImageType = async (img) => {
+    if (img.image_type === 'collage') return
     const newType = img.image_type === 'before' ? 'after' : 'before'
     try {
       await supabase.from('images').update({ image_type: newType }).eq('id', img.id)
@@ -698,7 +703,7 @@ export default function JobDetail() {
   }
 
   const sortedImages = [...images].sort(
-    (a, b) => (a.image_type === 'before' ? 0 : 1) - (b.image_type === 'before' ? 0 : 1)
+    (a, b) => (IMAGE_TYPE_RANK[a.image_type] ?? 1) - (IMAGE_TYPE_RANK[b.image_type] ?? 1)
   )
 
   const invoiceLocked = !!(invoice?.technician_signature_url && invoice?.customer_signature_url)
@@ -979,7 +984,7 @@ export default function JobDetail() {
                         <div className="w-5 h-5 animate-spin rounded-full border-2 border-[#E5E7EB] border-t-navy" />
                       </div>
                     )}
-                    <span className={`absolute top-1 left-1 text-xs font-bold px-1.5 py-0.5 rounded ${img.image_type === 'before' ? 'bg-green-500 text-white' : 'bg-gold text-white'}`}>
+                    <span className={`absolute top-1 left-1 text-xs font-bold px-1.5 py-0.5 rounded ${imageBadgeClass(img.image_type)}`}>
                       {img.image_type?.toUpperCase()}
                     </span>
                   </div>
@@ -1169,13 +1174,19 @@ export default function JobDetail() {
           onClick={() => setLightboxImg(null)}
         >
           <div className="flex items-center justify-between px-4 py-3" onClick={e => e.stopPropagation()}>
-            <button
-              onClick={e => { e.stopPropagation(); toggleImageType(lightboxImg.img) }}
-              className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-1 rounded ${lightboxImg.img.image_type === 'before' ? 'bg-green-500 text-white' : 'bg-gold text-white'}`}
-            >
-              {lightboxImg.img.image_type?.toUpperCase()}
-              <ArrowLeftRight size={12} />
-            </button>
+            {lightboxImg.img.image_type === 'collage' ? (
+              <span className={`inline-flex items-center text-xs font-bold px-2 py-1 rounded ${imageBadgeClass('collage')}`}>
+                COLLAGE
+              </span>
+            ) : (
+              <button
+                onClick={e => { e.stopPropagation(); toggleImageType(lightboxImg.img) }}
+                className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-1 rounded ${imageBadgeClass(lightboxImg.img.image_type)}`}
+              >
+                {lightboxImg.img.image_type?.toUpperCase()}
+                <ArrowLeftRight size={12} />
+              </button>
+            )}
             <div className="flex items-center gap-3">
               <button
                 onClick={() => deletePhoto(lightboxImg.img)}
