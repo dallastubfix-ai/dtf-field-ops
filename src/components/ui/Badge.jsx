@@ -1,16 +1,15 @@
+// Only these three get their own look; contact, quote, appointment and any
+// unknown status fall through to the neutral badge.
 const statusColors = {
-  contact:     'bg-gray-100 text-gray-600',
-  quote:       'bg-amber-100 text-amber-700',
-  appointment: 'bg-blue-100 text-blue-700',
-  active:      'bg-green-100 text-green-700',
-  completed:   'bg-green-700 text-white',
-  cancelled:   'bg-red-100 text-red-600',
+  active:    'ui-badge-active',
+  completed: 'ui-badge-completed',
+  cancelled: 'ui-badge-cancelled',
 }
 
 export default function Badge({ status, className = '' }) {
-  const colors = statusColors[status] ?? 'bg-gray-100 text-gray-600'
+  const colors = statusColors[status] ?? 'ui-badge-neutral'
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold capitalize ${colors} ${className}`}>
+    <span className={`ui-badge inline-flex items-center capitalize ${colors} ${className}`}>
       {status}
     </span>
   )

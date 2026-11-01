@@ -13,15 +13,15 @@ export default function Modal({ open, onClose, title, children }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-end lg:items-center justify-center">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative w-full lg:max-w-lg bg-white rounded-t-2xl lg:rounded-2xl shadow-xl max-h-[90vh] flex flex-col">
-        <div className="flex items-center justify-between px-4 py-4 border-b border-[#E5E7EB]">
-          <h2 className="font-bold text-[#1F2937] text-base">{title}</h2>
-          <button onClick={onClose} className="text-[#6B7280] hover:text-[#1F2937]">
+      <div className="ui-modal-scrim absolute inset-0" onClick={onClose} />
+      <div className="ui-modal-panel relative w-full lg:max-w-lg max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="ui-modal-title">{title}</h2>
+          <button type="button" onClick={onClose} aria-label="Close" className="ui-modal-close">
             <X size={20} />
           </button>
         </div>
-        <div className="overflow-y-auto flex-1 p-4">
+        <div className="ui-modal-body overflow-y-auto flex-1">
           {children}
         </div>
       </div>

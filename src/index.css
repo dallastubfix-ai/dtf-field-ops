@@ -37,9 +37,140 @@
     box-shadow: var(--glass-shadow);
     border-radius: var(--radius-card);
     padding: 16px;
+  }
+
+  /* Opt-in blur for surfaces that scroll over content (sticky headers, bottom bars, toasts) */
+  .glass-blur {
     -webkit-backdrop-filter: blur(var(--blur-glass)) saturate(var(--glass-saturate));
     backdrop-filter: blur(var(--blur-glass)) saturate(var(--glass-saturate));
   }
+
+  /* ── Shared UI primitives (src/components/ui). Colors, radii, fonts and borders
+     live here so page-level Tailwind utilities can still override them. ── */
+
+  /* Button */
+  .ui-btn {
+    min-height: 48px;
+    border: 0;
+    border-radius: var(--radius-md);
+    font-size: 15px;
+    font-weight: 700;
+    transition: opacity 150ms, transform 150ms;
+  }
+  .ui-btn:active:not(:disabled) { transform: scale(0.95); }
+  .ui-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .ui-btn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+  .ui-btn-primary {
+    background: linear-gradient(160deg, var(--primary-fill-from), var(--primary-fill-to));
+    color: var(--on-primary);
+    box-shadow: var(--primary-shadow);
+  }
+  .ui-btn-secondary {
+    background: transparent;
+    border: 1px solid var(--control-border);
+    color: var(--text);
+    box-shadow: none;
+  }
+  .ui-btn-destructive {
+    background: var(--danger-fill);
+    color: var(--on-danger);
+  }
+  .ui-btn-gold {
+    background: var(--fab-fill);
+    color: var(--on-fab);
+    border: 1.5px solid var(--fab-rim);
+    box-shadow: var(--fab-shadow);
+  }
+  .ui-btn-ghost {
+    background: transparent;
+    color: var(--text-secondary);
+  }
+
+  /* Card (no backdrop-filter: it sits on the page background) */
+  .ui-card {
+    background: var(--glass-fill);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-shadow);
+    border-radius: var(--radius-card);
+  }
+
+  /* Input / Select / Textarea. background-color (not the shorthand) so the
+     @tailwindcss/forms select arrow image survives. */
+  .ui-field {
+    background-color: var(--input-fill);
+    border: 1px solid var(--control-border);
+    border-radius: var(--radius-md);
+    color: var(--text);
+    font-size: 15px;
+    font-weight: 500;
+  }
+  [data-theme="light"] .ui-field { color-scheme: light; }
+  [data-theme="dark"] .ui-field { color-scheme: dark; }
+  .ui-field-h { min-height: 48px; }
+  .ui-field::placeholder { color: var(--text-secondary); opacity: 1; }
+  .ui-field:focus,
+  .ui-field:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+    box-shadow: none;
+    border-color: var(--control-border);
+  }
+  .ui-field-label {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-label);
+  }
+
+  /* Badge */
+  .ui-badge {
+    padding: 4px 10px;
+    border-radius: var(--radius-pill);
+    font-size: 12.5px;
+    font-weight: 700;
+  }
+  .ui-badge-completed { background: var(--success-solid-fill); color: var(--on-success-solid); }
+  .ui-badge-active    { background: var(--success-tint-fill); color: var(--success-tint-text); }
+  .ui-badge-cancelled { background: var(--neutral-badge-fill); color: var(--message-red); }
+  .ui-badge-neutral   { background: var(--neutral-badge-fill); color: var(--neutral-badge-text); }
+
+  /* Modal */
+  .ui-modal-scrim {
+    background: var(--scrim);
+    -webkit-backdrop-filter: blur(var(--blur-scrim));
+    backdrop-filter: blur(var(--blur-scrim));
+  }
+  .ui-modal-panel {
+    padding: 20px;
+    background: var(--modal-fill);
+    border: 1px solid var(--glass-border);
+    /* Bottom sheet on phones (top corners only), full radius on lg like before */
+    border-radius: var(--radius-modal) var(--radius-modal) 0 0;
+    box-shadow: var(--modal-shadow);
+    -webkit-backdrop-filter: blur(var(--blur-modal)) saturate(var(--glass-saturate));
+    backdrop-filter: blur(var(--blur-modal)) saturate(var(--glass-saturate));
+  }
+  @media (min-width: 1024px) {
+    .ui-modal-panel { border-radius: var(--radius-modal); }
+  }
+  .ui-modal-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text);
+  }
+  .ui-modal-body { color: var(--text-secondary); }
+  .ui-modal-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
+    margin: -8px -10px -8px 0;
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+  }
+  .ui-modal-close:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 
   /* Appearance card */
   .appearance-head {
@@ -166,6 +297,7 @@
 
   @media (prefers-reduced-motion: reduce) {
     .switch-thumb { transition: none; }
+    .ui-btn { transition: none; }
   }
 }
 
