@@ -8,7 +8,7 @@ import db from '../lib/db'
 import { upsertLocal } from '../lib/sync'
 import { normalize as normalizeWarrantyYears, warrantyExpiry } from '../lib/warranty'
 import { formatEnum } from '../lib/formatEnum'
-import { getJobSurfaceText } from '../lib/fixtures'
+import { getJobSurfaceText, buildInvoiceLines } from '../lib/fixtures'
 import Button from '../components/ui/Button'
 import Modal from '../components/ui/Modal'
 import AddressAutocomplete from '../components/ui/AddressAutocomplete'
@@ -271,6 +271,7 @@ export default function InvoiceBuilder() {
   const [saving, setSaving] = useState(false)
   const [printAsQuote, setPrintAsQuote] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [newInvoiceWarning, setNewInvoiceWarning] = useState(null) // { problems, overflow, overflowAmount }, set only for a new invoice
   const [existingWarranty, setExistingWarranty] = useState(null)
   const [toast, setToast] = useState('')
   const [showSigCapture, setShowSigCapture] = useState(false)
@@ -304,8 +305,17 @@ export default function InvoiceBuilder() {
       if (isNew) {
         const { job, customer, appt } = await loadJobContext(jobId)
         if (!job) return
+        const cards = Array.isArray(job.fixtures) ? job.fixtures : []
+        let cardLines = null
+        if (cards.length) {
+          const built = buildInvoiceLines(cards, MAX_LINES)
+          cardLines = [...built.lines]
+          while (cardLines.length < MIN_LINES) cardLines.push({ description: '', notes: '', rate: '', amount: '' })
+          setNewInvoiceWarning({ problems: built.problems, overflow: built.overflow, overflowAmount: built.overflowAmount })
+        }
         setInv(v => ({
           ...v,
+          ...(cardLines ? { line_items: cardLines } : {}),
           invoice_number: job.job_number ?? '',
           service_date: appt?.appointment_datetime ? format(new Date(appt.appointment_datetime), 'yyyy-MM-dd') : '',
           surface_type:  getJobSurfaceText(job),
@@ -826,6 +836,21 @@ export default function InvoiceBuilder() {
 
       {/* Edit form — no-print */}
       <div className="no-print px-4 py-5 space-y-5 max-w-2xl mx-auto">
+        {newInvoiceWarning && !saved && (newInvoiceWarning.problems.length > 0 || newInvoiceWarning.overflow > 0) && (
+          <div role="alert" className="bg-red-50 border-2 border-red-500 rounded-xl px-4 py-3">
+            <p className="text-sm font-bold text-red-700">Not on this invoice:</p>
+            <ul className="mt-1 space-y-0.5">
+              {newInvoiceWarning.problems.map((p, i) => (
+                <li key={i} className="text-sm font-bold text-red-700">{`${p.title} - ${p.message}`}</li>
+              ))}
+              {newInvoiceWarning.overflow > 0 && (
+                <li className="text-sm font-bold text-red-700">
+                  {`${newInvoiceWarning.overflow} more ${newInvoiceWarning.overflow === 1 ? 'line' : 'lines'} didn't fit (${MAX_LINES} line maximum) - ${money(newInvoiceWarning.overflowAmount)} not included.`}
+                </li>
+              )}
+            </ul>
+          </div>
+        )}
         {isLocked && (
           <div className="bg-amber-50 border border-amber-300 rounded-xl px-4 py-3 flex items-center justify-between gap-3">
             <p className="text-sm text-amber-800 font-medium">This invoice has been signed by both parties and is locked.</p>

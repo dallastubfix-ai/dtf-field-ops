@@ -401,6 +401,89 @@ export function priceJob(cards) {
   return { lines, total: toDollars(totalCents), problems }
 }
 
+// ---------- New invoice lines ----------
+
+function sentenceCase(text) {
+  return text ? text.charAt(0).toUpperCase() + text.slice(1) : ''
+}
+
+// Notes column text. Repair cards list each repair ("Small chip, small crack, large rust");
+// the tub + walls card names both surfaces; everything else has no notes.
+function describeInvoiceNotes(card) {
+  if (card.service === 'repair') {
+    const repairs = Array.isArray(card.repairs) ? card.repairs : []
+    return sentenceCase(
+      repairs.map(r => `${REPAIR_SIZE_LABELS[r.size]} ${DAMAGE_LABELS[r.damage]}`.toLowerCase()).join(', ')
+    )
+  }
+  if (card.fixture === 'bathtub_shower_walls') {
+    return `${SURFACE_LABELS[card.surface]} tub, ${SURFACE_LABELS[card.walls_surface]} walls`
+  }
+  return ''
+}
+
+// Turns the job's cards into invoice line items. Amounts come from priceJob; this only words them.
+// Returns { lines: [{ description, notes, rate, amount }], problems: [{ title, message }],
+// overflow, overflowAmount }. Cards with problems add no lines (one problem entry each).
+// Lines past maxLines are dropped; overflow counts them and overflowAmount is their total in dollars.
+export function buildInvoiceLines(cards, maxLines = 12) {
+  const list = Array.isArray(cards) ? cards.filter(Boolean) : []
+  const titles = getFixtureTitles(list)
+  const priced = priceJob(list)
+
+  const lines = []
+  const lineCents = []
+  list.forEach((card, i) => {
+    const mine = priced.lines.filter(l => l.cardId === card.id)
+    if (!mine.length) return
+    const [service, strip] = mine
+
+    const label = FIXTURE_LABELS[card.fixture]
+    const subject = describeSubject(card)
+    // Name if there is one; else the numbered title for an unnamed duplicate; else nothing.
+    const prefix = hasName(card) ? card.name.trim() : (titles[i] !== label ? titles[i] : '')
+
+    // priceJob's description is "<subject> - <service part>"; keep only the service part.
+    const servicePart = service.description.slice(`${subject} - `.length)
+    const amount = service.amount.toFixed(2)
+    lines.push({
+      description: [prefix, subject, servicePart].filter(Boolean).join(' - '),
+      notes: describeInvoiceNotes(card),
+      rate: amount,
+      amount,
+    })
+    lineCents.push(Math.round(service.amount * 100))
+
+    if (strip) {
+      const owner = hasName(card) ? `${prefix} ${label.toLowerCase()}` : (prefix || subject)
+      const stripAmount = strip.amount.toFixed(2)
+      lines.push({
+        description: `${owner} - ${strip.description}`,
+        notes: '',
+        rate: stripAmount,
+        amount: stripAmount,
+      })
+      lineCents.push(Math.round(strip.amount * 100))
+    }
+  })
+
+  const seen = new Set()
+  const problems = []
+  priced.problems.forEach(p => {
+    if (seen.has(p.cardId)) return
+    seen.add(p.cardId)
+    problems.push({ title: p.title, message: p.message })
+  })
+
+  const droppedCents = lineCents.slice(maxLines).reduce((sum, c) => sum + c, 0)
+  return {
+    lines: lines.slice(0, maxLines),
+    problems,
+    overflow: Math.max(0, lines.length - maxLines),
+    overflowAmount: toDollars(droppedCents),
+  }
+}
+
 // ---------- Job list helpers ----------
 
 // Short text for a job list line. New fixture cards win; old jobs fall back to fixture_type / surface_type.
