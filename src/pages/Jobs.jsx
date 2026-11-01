@@ -6,7 +6,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import db from '../lib/db'
 import { supabase } from '../lib/supabase'
 import { upsertLocal } from '../lib/sync'
-import { formatEnum } from '../lib/formatEnum'
+import { summarizeJobFixtures } from '../lib/fixtures'
 import Badge from '../components/ui/Badge'
 import EmptyState from '../components/ui/EmptyState'
 
@@ -136,6 +136,7 @@ export default function Jobs() {
         ) : (
           jobs.map(job => {
             const customer = customers[job.customer_id]
+            const fixtureSummary = summarizeJobFixtures(job)
             return (
               <div
                 key={job.id || job._localId}
@@ -156,9 +157,9 @@ export default function Jobs() {
                   {customer?.full_name ?? 'Unknown Customer'}
                 </div>
                 <div className="text-sm text-[#6B7280] mt-0.5">{customer?.phone}</div>
-                {(job.fixture_type || job.surface_type) && (
+                {fixtureSummary && (
                   <div className="text-xs text-[#9CA3AF] mt-1">
-                    {[job.fixture_type, job.surface_type].filter(Boolean).map(formatEnum).join(' · ')}
+                    {fixtureSummary}
                   </div>
                 )}
                 <div className="text-xs text-[#9CA3AF] mt-1">

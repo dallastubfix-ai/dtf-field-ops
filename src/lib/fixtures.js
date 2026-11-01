@@ -427,3 +427,20 @@ export function hasJobDetails(job) {
   if (!job) return false
   return (Array.isArray(job.fixtures) && job.fixtures.length > 0) || !!job.fixture_type || !!job.surface_type
 }
+
+// Surface text pre-filled on a new invoice. With cards: distinct surface labels in card order
+// (the tub + walls card gives its surface, then its walls surface), joined with ", ".
+// Cards but no surfaces (e.g. toilet only) gives ''. Old jobs: their surface_type, exactly as before.
+export function getJobSurfaceText(job) {
+  const cards = job && Array.isArray(job.fixtures) ? job.fixtures : []
+  if (!cards.length) return (job && job.surface_type) ?? ''
+  const labels = []
+  for (const card of cards) {
+    if (!card) continue
+    for (const value of [card.surface, card.walls_surface]) {
+      const label = SURFACE_LABELS[value]
+      if (label && !labels.includes(label)) labels.push(label)
+    }
+  }
+  return labels.join(', ')
+}

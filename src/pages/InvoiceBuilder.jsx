@@ -7,6 +7,7 @@ import db from '../lib/db'
 import { upsertLocal } from '../lib/sync'
 import { normalize as normalizeWarrantyYears, warrantyExpiry } from '../lib/warranty'
 import { formatEnum } from '../lib/formatEnum'
+import { getJobSurfaceText } from '../lib/fixtures'
 import Button from '../components/ui/Button'
 import AddressAutocomplete from '../components/ui/AddressAutocomplete'
 import { useAuth } from '../context/AuthContext'
@@ -242,7 +243,7 @@ export default function InvoiceBuilder() {
           ...v,
           invoice_number: job.job_number ?? '',
           service_date: appt?.appointment_datetime ? format(new Date(appt.appointment_datetime), 'yyyy-MM-dd') : '',
-          surface_type:  job.surface_type  ?? '',
+          surface_type:  getJobSurfaceText(job),
           surface_color: job.surface_color ?? '',
           ...customerFields(customer),
           // Address comes from the appointment location first, customer profile second
