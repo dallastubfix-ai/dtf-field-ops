@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Search, X, Briefcase, CloudOff } from 'lucide-react'
+import { Search, X, Briefcase, CloudOff, ChevronDown } from 'lucide-react'
 import { format } from 'date-fns'
 import { useLiveQuery } from 'dexie-react-hooks'
 import db from '../lib/db'
@@ -103,17 +103,19 @@ export default function Jobs() {
 
       {/* Mobile: dropdown selector */}
       <div className="lg:hidden px-4 pt-3">
-        <select
-          value={filter}
-          onChange={e => setFilter(e.target.value)}
-          aria-label="Filter jobs by status"
-          className="ui-field ui-field-h w-full px-3 py-2.5 appearance-none"
-          style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236B7280' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 12px center', paddingRight: '36px' }}
-        >
-          {FILTERS.map(f => (
-            <option key={f.value} value={f.value}>{f.label}</option>
-          ))}
-        </select>
+        <div className="relative">
+          <select
+            value={filter}
+            onChange={e => setFilter(e.target.value)}
+            aria-label="Filter jobs by status"
+            className="ui-field ui-field-h w-full pl-3 pr-9 py-2.5 appearance-none bg-none"
+          >
+            {FILTERS.map(f => (
+              <option key={f.value} value={f.value}>{f.label}</option>
+            ))}
+          </select>
+          <ChevronDown size={16} aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-secondary)]" />
+        </div>
       </div>
 
       {/* Desktop: full tab bar */}

@@ -6,7 +6,8 @@
 
 @layer base {
   body {
-    @apply font-sans text-[#1F2937] bg-white;
+    @apply font-sans text-[#1F2937];
+    background-color: var(--page-base);
     -webkit-tap-highlight-color: transparent;
   }
   input, select, textarea {
@@ -22,6 +23,7 @@
       radial-gradient(380px 360px at 100% 40%, var(--bg-blob-2), rgba(0,0,0,0) 70%),
       radial-gradient(420px 360px at 0% 78%, var(--bg-blob-3), rgba(0,0,0,0) 70%),
       var(--page-base);
+    color: var(--text);
   }
   [data-theme="dark"] .glass-page {
     background:
@@ -80,6 +82,11 @@
     color: var(--on-fab);
     border: 1.5px solid var(--fab-rim);
     box-shadow: var(--fab-shadow);
+  }
+  /* Outline danger (JobDetail "Cancel job"): red text and border, AA on the page in both themes */
+  .ui-btn-secondary.ui-btn-danger-outline {
+    border: 1.5px solid var(--message-red);
+    color: var(--message-red);
   }
   .ui-btn-ghost {
     background: transparent;
@@ -1212,6 +1219,24 @@
     -webkit-backdrop-filter: blur(var(--blur-modal)) saturate(var(--glass-saturate));
     backdrop-filter: blur(var(--blur-modal)) saturate(var(--glass-saturate));
   }
+  /* Toast with one action (JobDetail's Undo): the button keeps a 44px target inside the pill */
+  .ui-toast--action {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 0 4px 0 16px;
+  }
+  .ui-toast-action {
+    min-height: 44px;
+    min-width: 44px;
+    padding: 0 12px;
+    border-radius: var(--radius-pill);
+    color: var(--accent-text);
+    font-weight: 700;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .ui-toast-action:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
 
   /* Spinner (src/components/ui/LoadingSpinner, plus small inline ones) */
   @keyframes ui-spin { to { transform: rotate(360deg); } }

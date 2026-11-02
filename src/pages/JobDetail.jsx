@@ -166,7 +166,37 @@ export default function JobDetail() {
   const touchStartX = useRef(null)
   const [collageOpen, setCollageOpen] = useState(false)
 
-  const flashToast = (msg, ms = 1800, kind = 'success') => { setToast({ text: msg, kind }); setTimeout(() => setToast(null), ms) }
+  // Each timer clears only its own toast, so an older timer can't cut a newer toast short.
+  const flashToast = (msg, ms = 1800, kind = 'success') => {
+    const next = { text: msg, kind }
+    setToast(next)
+    setTimeout(() => setToast(cur => (cur === next ? null : cur)), ms)
+  }
+
+  // Cancel job: confirm modal, then a "Job cancelled" toast with Undo. The previous status lives
+  // only in the toast (memory), never in storage.
+  const [confirmCancel, setConfirmCancel] = useState(false)
+  const undoTimerRef = useRef(null)
+  const undoBtnRef = useRef(null)
+  const restoreBtnRef = useRef(null)
+  const cancelBtnRef = useRef(null)
+  const pendingFocusRef = useRef(null) // 'undo' | 'cancel-button'
+
+  useEffect(() => {
+    if (pendingFocusRef.current === 'undo' && toast?.undoStatus) {
+      pendingFocusRef.current = null
+      undoBtnRef.current?.focus({ preventScroll: true })
+    }
+  }, [toast])
+
+  useEffect(() => {
+    if (pendingFocusRef.current === 'cancel-button' && job?.status && job.status !== 'cancelled') {
+      pendingFocusRef.current = null
+      cancelBtnRef.current?.focus({ preventScroll: true })
+    }
+  }, [job?.status])
+
+  useEffect(() => () => clearTimeout(undoTimerRef.current), [])
 
   // Local state gets the full merged job. The server and Dexie get ONLY the changed fields,
   // so fields written elsewhere (drive_folder_id, customer_id) can't be overwritten by a stale copy.
@@ -427,9 +457,36 @@ export default function JobDetail() {
     flashSaved(synced, `Status → ${formatEnum(status)}`)
   }
 
-  const handleCancelJob = () => {
-    if (!window.confirm('Cancel this job? It will be marked cancelled and excluded from active work, but not deleted.')) return
-    saveStatus('cancelled')
+  // Runs from the "Cancel job" modal. Same save as before; the previous status is kept for Undo.
+  const handleCancelJob = async () => {
+    setConfirmCancel(false)
+    const previousStatus = jobRef.current?.status
+    await saveStatus('cancelled')
+    if (!previousStatus || previousStatus === 'cancelled') return
+    const next = { text: 'Job cancelled', kind: 'neutral', undoStatus: previousStatus }
+    pendingFocusRef.current = 'undo'
+    setToast(next)
+    clearTimeout(undoTimerRef.current)
+    undoTimerRef.current = setTimeout(() => {
+      // Focus was on Undo: hand it to Restore, which does the same job from here on.
+      const hadFocus = !!undoBtnRef.current && undoBtnRef.current === document.activeElement
+      setToast(cur => (cur === next ? null : cur))
+      if (hadFocus) restoreBtnRef.current?.focus()
+    }, 8000)
+  }
+
+  // Keep job / Escape / scrim: close and put focus back on the button that opened the modal.
+  const keepJob = () => {
+    setConfirmCancel(false)
+    cancelBtnRef.current?.focus({ preventScroll: true })
+  }
+
+  // Undo goes through saveStatus, exactly like the Status dropdown, so sync and mileage match.
+  const handleUndoCancel = (status) => {
+    clearTimeout(undoTimerRef.current)
+    setToast(null)
+    pendingFocusRef.current = 'cancel-button'
+    saveStatus(status)
   }
 
   const handleUncancelJob = () => {
@@ -751,20 +808,29 @@ export default function JobDetail() {
             <Trash2 size={20} />
           </button>
         )}
-        {job.status !== 'cancelled' ? (
-          <button type="button" onClick={handleCancelJob} className="icon-btn" aria-label="Cancel job">
-            <X size={22} />
-          </button>
-        ) : (
-          <button type="button" onClick={handleUncancelJob} className="link-btn shrink-0 px-2">
+        {job.status === 'cancelled' && (
+          <button ref={restoreBtnRef} type="button" onClick={handleUncancelJob} className="link-btn shrink-0 px-2">
             Restore
           </button>
         )}
       </PageHeader>
 
       {toast && (
-        <div className={`ui-toast ui-toast--${toast.kind}`}>
-          {toast.text}
+        <div className={`ui-toast ui-toast--${toast.kind}${toast.undoStatus ? ' ui-toast--action' : ''}`}>
+          {toast.undoStatus ? (
+            <>
+              <span id="job-toast-text">{toast.text}</span>
+              <button
+                ref={undoBtnRef}
+                type="button"
+                onClick={() => handleUndoCancel(toast.undoStatus)}
+                aria-describedby="job-toast-text"
+                className="ui-toast-action"
+              >
+                Undo
+              </button>
+            </>
+          ) : toast.text}
         </div>
       )}
 
@@ -1131,6 +1197,19 @@ export default function JobDetail() {
             </div>
           )}
         </Section>
+
+        {job.status !== 'cancelled' && (
+          <div className="pt-3">
+            <button
+              ref={cancelBtnRef}
+              type="button"
+              onClick={() => setConfirmCancel(true)}
+              className="ui-btn ui-btn-secondary ui-btn-danger-outline inline-flex items-center justify-center gap-2 px-4 w-full"
+            >
+              Cancel job
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Fixed bottom action stack */}
@@ -1341,6 +1420,21 @@ export default function JobDetail() {
           />
           <Button variant="primary" className="w-full" onClick={addAppointment} disabled={saving}>
             {saving ? 'Saving…' : 'Save Appointment'}
+          </Button>
+        </div>
+      </Modal>
+
+      {/* Cancel Job Modal */}
+      <Modal open={confirmCancel} onClose={keepJob} title="Cancel this job?">
+        <p className="text-sm mb-4">
+          It will be marked cancelled and excluded from active work, but not deleted.
+        </p>
+        <div className="flex gap-2">
+          <Button type="button" variant="secondary" className="flex-1 min-h-[44px]" autoFocus onClick={keepJob}>
+            Keep job
+          </Button>
+          <Button type="button" variant="destructive" className="flex-1 min-h-[44px]" onClick={handleCancelJob}>
+            Cancel job
           </Button>
         </div>
       </Modal>

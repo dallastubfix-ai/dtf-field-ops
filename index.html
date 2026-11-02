@@ -4,6 +4,30 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <meta name="theme-color" content="#E6E9EE" />
+    <!-- Sets the theme before first paint so a dark-mode phone doesn't flash light while the app loads.
+         Mirrors src/lib/theme.js (storage keys, DEFAULT_THEME_PREF, THEME_COLORS, signing pages always light);
+         applyTheme() takes over from there. -->
+    <script>
+      (function () {
+        var pref = 'system'
+        var accents = 'on'
+        try {
+          var p = localStorage.getItem('dtf-theme-pref')
+          var a = localStorage.getItem('dtf-accents')
+          if (p === 'system' || p === 'light' || p === 'dark') pref = p
+          if (a === 'on' || a === 'off') accents = a
+        } catch (e) {}
+        var dark = false
+        try { dark = window.matchMedia('(prefers-color-scheme: dark)').matches } catch (e) {}
+        var signing = location.pathname.indexOf('/sign/') === 0
+        var theme = signing ? 'light' : pref === 'system' ? (dark ? 'dark' : 'light') : pref
+        var root = document.documentElement
+        root.setAttribute('data-theme', theme)
+        root.setAttribute('data-accents', accents)
+        var meta = document.querySelector('meta[name="theme-color"]')
+        if (meta) meta.setAttribute('content', theme === 'dark' ? '#0A0B0D' : '#E6E9EE')
+      })()
+    </script>
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="DTF Field" />

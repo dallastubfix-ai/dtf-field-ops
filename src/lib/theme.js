@@ -5,14 +5,22 @@ const ACCENTS_KEY = 'dtf-accents'
 const THEME_PREFS = ['system', 'light', 'dark']
 const ACCENT_VALUES = ['on', 'off']
 
-// Final phase of the UI polish flips this to 'system'.
-export const DEFAULT_THEME_PREF = 'light'
+// index.html has a first-paint copy of the keys, this default and THEME_COLORS; keep them in step.
+export const DEFAULT_THEME_PREF = 'system'
 const DEFAULT_ACCENTS = 'on'
 
 const DARK_QUERY = '(prefers-color-scheme: dark)'
 
 // Page-base token values, used for the Android status bar / nav bar color.
 const THEME_COLORS = { light: '#E6E9EE', dark: '#0A0B0D' }
+
+// Customer signing links (/sign/:token in App.jsx) are styled as white paper, so they always
+// resolve light, whatever the stored choice or the phone says. Nothing is written to storage.
+const SIGNING_PATH_PREFIX = '/sign/'
+
+export function isSigningPath(pathname = window.location.pathname) {
+  return pathname.startsWith(SIGNING_PATH_PREFIX)
+}
 
 function readKey(key, allowed, fallback) {
   try {
@@ -52,9 +60,11 @@ function systemPrefersDark() {
 
 // Sets both data attributes on <html>. While the pref is "system", it also
 // listens for the phone's light/dark setting changing and re-applies.
+// On a signing page it is always light and does not listen; App re-runs this on leaving one.
 export function applyTheme() {
   const pref = getThemePref()
-  const resolved = pref === 'system' ? (systemPrefersDark() ? 'dark' : 'light') : pref
+  const signing = isSigningPath()
+  const resolved = signing ? 'light' : pref === 'system' ? (systemPrefersDark() ? 'dark' : 'light') : pref
   const root = document.documentElement
   root.dataset.theme = resolved
   root.dataset.accents = getAccents()
@@ -72,7 +82,7 @@ export function applyTheme() {
     mediaQuery = null
     mediaListener = null
   }
-  if (pref === 'system') {
+  if (pref === 'system' && !signing) {
     try {
       mediaQuery = window.matchMedia(DARK_QUERY)
       mediaListener = () => applyTheme()

@@ -288,7 +288,7 @@ export default function VideoCapture() {
           </button>
         ) : (
           <div className="flex gap-3 w-full">
-            <Button variant="secondary" className="flex-1 text-white border-white/30 hover:bg-white/10" onClick={reRecord} disabled={uploading}>
+            <Button variant="secondary" className="flex-1 text-white border-white/60 hover:bg-white/10" onClick={reRecord} disabled={uploading}>
               <RefreshCw size={16} /> Re-record
             </Button>
             <Button variant="gold" className="flex-1" onClick={uploadToDrive} disabled={uploading || uploadState === 'done'}>
@@ -316,7 +316,7 @@ export default function VideoCapture() {
             Choose from Gallery
           </button>
         )}
-        <p className="text-white/40 text-xs">
+        <p className="text-white/60 text-xs">
           {recording ? 'Tap to stop recording' : blob ? '' : 'Tap to start recording'}
         </p>
       </div>

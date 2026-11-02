@@ -167,6 +167,7 @@ export default function FixtureCardsEditor({ cards, onChange }) {
   const expandCard = (id) => setExpanded(m => ({ ...m, [id]: true }))
 
   const removeCard = (id) => {
+    intentRef.current = { kind: 'removed', id, index: list.findIndex(c => c.id === id) }
     onChange(list.filter(c => c.id !== id))
     setExpanded(m => {
       const next = { ...m }
@@ -186,6 +187,8 @@ export default function FixtureCardsEditor({ cards, onChange }) {
   useEffect(() => {
     const intent = intentRef.current
     if (!intent) return
+    // Wait for the commit that actually drops the removed card.
+    if (intent.kind === 'removed' && list.some(c => c.id === intent.id)) return
     intentRef.current = null
     cancelScrollRef.current?.()
     cancelScrollRef.current = null
@@ -202,6 +205,16 @@ export default function FixtureCardsEditor({ cards, onChange }) {
       const card = list.find(c => c.id === intent.id)
       if (!card) return
       const key = nextTargetKey(card, intent.from, intent.repairIndex)
+      const raf = requestAnimationFrame(() => scrollToKey(key))
+      cancelScrollRef.current = () => cancelAnimationFrame(raf)
+      return
+    }
+
+    // Remove: focus the card above (or the new first card), else Add fixture, so focus isn't lost.
+    if (intent.kind === 'removed') {
+      const target = list[intent.index - 1] ?? list[0]
+      const key = target ? `card-${target.id}` : 'add'
+      find(key)?.focus({ preventScroll: true })
       const raf = requestAnimationFrame(() => scrollToKey(key))
       cancelScrollRef.current = () => cancelAnimationFrame(raf)
       return

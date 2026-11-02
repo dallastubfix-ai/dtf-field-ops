@@ -1,7 +1,8 @@
 import { useEffect } from 'react'
-import { Routes, Route, Navigate, useNavigate } from 'react-router-dom'
+import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { ensurePushRegistration } from './lib/push'
+import { applyTheme, isSigningPath } from './lib/theme'
 import AppShell from './components/layout/AppShell'
 import LoadingSpinner from './components/ui/LoadingSpinner'
 import ErrorBoundary from './components/ErrorBoundary'
@@ -40,6 +41,13 @@ function AuthGuard({ children }) {
 function AppRoutes() {
   const { user, loading } = useAuth()
   const navigate = useNavigate()
+  const onSigningPage = isSigningPath(useLocation().pathname)
+
+  // Signing pages are always light. Re-apply when the app moves onto or off one in-app
+  // (a notification tap or back/forward), so leaving restores the normal theme.
+  useEffect(() => {
+    applyTheme()
+  }, [onSigningPage])
 
   // Push: verify this phone is registered on every app open while signed in,
   // and again right after sign-in.

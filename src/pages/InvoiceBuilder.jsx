@@ -544,8 +544,8 @@ export default function InvoiceBuilder() {
   }
 
   // Move an existing warranty's expiry date to match a changed warranty length.
-  // Writes ONLY expiry_date. Never throws: returns a message to show when the
-  // server copy could not be confirmed, or null when there is nothing to report.
+  // Writes ONLY expiry_date. Never throws: returns a toast ({ text, kind }) to show when
+  // the server copy could not be confirmed, or null when there is nothing to report.
   const updateWarrantyExpiry = async (invoiceUploaded) => {
     try {
       // Counted from the warranty's own service date so the warranty document
@@ -580,17 +580,17 @@ export default function InvoiceBuilder() {
       if (error) {
         await queueUpload()
         savedWarrantyYears.current = warrantyYears
-        return 'Invoice saved. The new warranty expiry date is saved on this device and will upload when the connection is back.'
+        return { text: 'Invoice saved. The new warranty expiry date is saved on this device and will upload when the connection is back.', kind: 'neutral' }
       }
       // No error but nothing changed: the server refused or has no such warranty.
       if (!data || data.length === 0) {
-        return 'Invoice saved, but the warranty expiry date was not updated on the server. It is correct on this device. Tap Save again to retry.'
+        return { text: 'Invoice saved, but the warranty expiry date was not updated on the server. It is correct on this device. Tap Save again to retry.', kind: 'error' }
       }
       await db.warranties.where('id').equals(warrantyId).modify({ _synced: true })
       savedWarrantyYears.current = warrantyYears
       return null
     } catch {
-      return 'Invoice saved, but the warranty expiry date could not be updated. Tap Save again to retry.'
+      return { text: 'Invoice saved, but the warranty expiry date could not be updated. Tap Save again to retry.', kind: 'error' }
     }
   }
 
@@ -672,8 +672,7 @@ export default function InvoiceBuilder() {
       if (warrantyNote) {
         // Stay on the page so the message can be read.
         toastMs = 6000
-        // "Invoice saved. ..." means it was queued for upload; "Invoice saved, but ..." means it failed.
-        setToast({ text: warrantyNote, kind: warrantyNote.startsWith('Invoice saved.') ? 'success' : 'error' })
+        setToast(warrantyNote)
         return
       }
       setToast({ text: wasNew ? 'Invoice saved ✓' : 'Invoice updated ✓', kind: 'success' })
