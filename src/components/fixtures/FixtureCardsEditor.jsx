@@ -22,11 +22,6 @@ const SERVICE_HELP = {
   bottom_rebuild: 'Rebuild a damaged fiberglass or acrylic floor.',
 }
 
-const chipClass = (selected) =>
-  `px-3 py-1.5 min-h-[44px] rounded-full text-sm border transition-all ${
-    selected ? 'bg-navy text-white border-navy' : 'border-dtf-border text-dtf-sub'
-  }`
-
 // True if the card has anything filled in (used to decide whether removing needs a confirm).
 function hasContent(card) {
   const sqFt = card.square_feet
@@ -38,7 +33,7 @@ function hasContent(card) {
 }
 
 function FieldLabel({ children }) {
-  return <div className="text-xs font-semibold uppercase tracking-wide text-dtf-sub mb-2">{children}</div>
+  return <div className="ui-field-label mb-2">{children}</div>
 }
 
 function Chips({ values, labels, selected, onSelect }) {
@@ -50,7 +45,7 @@ function Chips({ values, labels, selected, onSelect }) {
           type="button"
           aria-pressed={selected === v}
           onClick={() => onSelect(v)}
-          className={chipClass(selected === v)}
+          className="fx-chip"
         >
           {labels[v]}
         </button>
@@ -62,24 +57,24 @@ function Chips({ values, labels, selected, onSelect }) {
 function Stepper({ label, count, min, max, onMinus, onPlus, minusLabel, plusLabel }) {
   return (
     <div className="flex items-center justify-between">
-      <span className="text-xs font-semibold uppercase tracking-wide text-dtf-sub">{label}</span>
+      <span className="ui-field-label">{label}</span>
       <div className="flex items-center gap-3">
         <button
           type="button"
           aria-label={minusLabel}
           disabled={count <= min}
           onClick={onMinus}
-          className="w-11 h-11 rounded-lg border border-dtf-border flex items-center justify-center text-navy disabled:opacity-40"
+          className="fx-step"
         >
           <Minus size={18} />
         </button>
-        <span className="w-6 text-center text-base font-semibold text-dtf-text">{count}</span>
+        <span className="fx-count">{count}</span>
         <button
           type="button"
           aria-label={plusLabel}
           disabled={count >= max}
           onClick={onPlus}
-          className="w-11 h-11 rounded-lg border border-dtf-border flex items-center justify-center text-navy disabled:opacity-40"
+          className="fx-step"
         >
           <Plus size={18} />
         </button>
@@ -160,8 +155,8 @@ export default function FixtureCardsEditor({ cards, onChange }) {
 
         return (
           <div key={card.id}>
-            <Card className="space-y-4">
-              <h3 className="font-bold text-dtf-text">{titles[i]}</h3>
+            <Card className="fx-card">
+              <h3 className="fx-title">{titles[i]}</h3>
 
               <div>
                 <FieldLabel>Name (optional)</FieldLabel>
@@ -172,7 +167,7 @@ export default function FixtureCardsEditor({ cards, onChange }) {
                       type="button"
                       aria-pressed={card.name === pick}
                       onClick={() => updateCard(i, { name: card.name === pick ? '' : pick })}
-                      className={chipClass(card.name === pick)}
+                      className="fx-chip"
                     >
                       {pick}
                     </button>
@@ -183,7 +178,6 @@ export default function FixtureCardsEditor({ cards, onChange }) {
                   value={card.name}
                   onChange={e => updateCard(i, { name: e.target.value })}
                   placeholder="Or type a name"
-                  className="min-h-[44px]"
                 />
               </div>
 
@@ -226,20 +220,19 @@ export default function FixtureCardsEditor({ cards, onChange }) {
                   <FieldLabel>Service</FieldLabel>
                   <div className="flex flex-wrap gap-2">
                     {services.map(s => (
-                      <Button
+                      <button
                         key={s}
                         type="button"
-                        variant={card.service === s ? 'primary' : 'secondary'}
-                        className="min-h-[44px]"
+                        className="fx-option"
                         aria-pressed={card.service === s}
                         onClick={() => updateCard(i, { service: s })}
                       >
                         {SERVICE_LABELS[s]}
-                      </Button>
+                      </button>
                     ))}
                   </div>
                   {SERVICE_HELP[card.service] && (
-                    <p className="text-xs text-dtf-sub mt-2">{SERVICE_HELP[card.service]}</p>
+                    <p className="fx-help mt-2">{SERVICE_HELP[card.service]}</p>
                   )}
                 </div>
               )}
@@ -250,11 +243,11 @@ export default function FixtureCardsEditor({ cards, onChange }) {
                   role="switch"
                   aria-checked={card.strip}
                   onClick={() => updateCard(i, { strip: !card.strip })}
-                  className="w-full min-h-[44px] flex items-center justify-between gap-3"
+                  className="switch-row"
                 >
-                  <span className="text-sm font-medium text-dtf-text">Strip</span>
-                  <span className={`w-10 h-6 rounded-full transition-colors flex items-center px-1 ${card.strip ? 'bg-navy' : 'bg-gray-300'}`}>
-                    <span className={`w-4 h-4 rounded-full bg-white shadow transition-transform ${card.strip ? 'translate-x-4' : 'translate-x-0'}`} />
+                  <span className="switch-label">Strip</span>
+                  <span className="switch-track">
+                    <span className="switch-thumb" />
                   </span>
                 </button>
               )}
@@ -267,7 +260,6 @@ export default function FixtureCardsEditor({ cards, onChange }) {
                   value={card.square_feet ?? ''}
                   onChange={e => updateCard(i, { square_feet: e.target.value })}
                   placeholder="e.g. 22"
-                  className="min-h-[44px]"
                 />
               )}
 
@@ -284,20 +276,19 @@ export default function FixtureCardsEditor({ cards, onChange }) {
                     plusLabel="Add a repair"
                   />
                   {card.repairs.map((r, j) => (
-                    <div key={j} className="rounded-lg border border-dtf-border p-3 space-y-3">
-                      <div className="text-sm font-semibold text-dtf-text">Repair {j + 1}</div>
+                    <div key={j} className="fx-repair">
+                      <div className="fx-repair-title">Repair {j + 1}</div>
                       <div className="flex gap-2">
                         {Object.keys(REPAIR_SIZE_LABELS).map(size => (
-                          <Button
+                          <button
                             key={size}
                             type="button"
-                            variant={r.size === size ? 'primary' : 'secondary'}
-                            className="flex-1 min-h-[44px]"
+                            className="fx-option flex-1"
                             aria-pressed={r.size === size}
                             onClick={() => updateRepair(i, j, { size })}
                           >
                             {REPAIR_SIZE_LABELS[size]}
-                          </Button>
+                          </button>
                         ))}
                       </div>
                       <Chips
@@ -312,11 +303,11 @@ export default function FixtureCardsEditor({ cards, onChange }) {
               )}
 
               {cardLines.length > 0 && (
-                <div className="border-t border-dtf-border pt-3 space-y-1">
+                <div className="fx-lines">
                   {cardLines.map((l, k) => (
-                    <div key={k} className="flex justify-between gap-3 text-sm text-dtf-text">
-                      <span>{l.description}</span>
-                      <span className="font-medium whitespace-nowrap">{money.format(l.amount)}</span>
+                    <div key={k} className="fx-line">
+                      <span className="fx-line-desc">{l.description}</span>
+                      <span className="fx-line-amount">{money.format(l.amount)}</span>
                     </div>
                   ))}
                 </div>
@@ -324,7 +315,7 @@ export default function FixtureCardsEditor({ cards, onChange }) {
             </Card>
 
             {notes.length > 0 && (
-              <ul className="mt-1.5 px-1 space-y-0.5 text-xs text-dtf-sub">
+              <ul className="fx-note mt-1.5 px-1 space-y-0.5">
                 {notes.map(n => <li key={n}>{n}</li>)}
               </ul>
             )}
@@ -333,13 +324,13 @@ export default function FixtureCardsEditor({ cards, onChange }) {
       })}
 
       {list.length > 0 && (
-        <div className="rounded-xl border border-dtf-border bg-dtf-bg px-4 py-3">
+        <div className="fx-total">
           <div className="flex items-baseline justify-between">
-            <span className="font-bold text-dtf-text">{cardsNeedingDetails ? 'Total so far' : 'Total'}</span>
-            <span className="text-lg font-bold text-navy">{money.format(priced.total)}</span>
+            <span className="fx-total-label">{cardsNeedingDetails ? 'Total so far' : 'Total'}</span>
+            <span className="fx-total-amount">{money.format(priced.total)}</span>
           </div>
           {cardsNeedingDetails > 0 && (
-            <p className="text-xs text-dtf-sub mt-1">
+            <p className="fx-note mt-1">
               {cardsNeedingDetails} {cardsNeedingDetails === 1 ? 'card needs' : 'cards need'} details
             </p>
           )}
@@ -349,7 +340,7 @@ export default function FixtureCardsEditor({ cards, onChange }) {
       {/* Portal keeps the Modal's un-typed close button outside the surrounding <form>. */}
       {createPortal(
         <Modal open={confirmRemove} onClose={() => setConfirmRemove(false)} title="Remove fixture?">
-          <p className="text-sm text-dtf-text mb-4">
+          <p className="fx-modal-text mb-4">
             {last ? `"${titles[titles.length - 1]}"` : 'This fixture'} has details filled in. Remove it?
           </p>
           <div className="flex gap-2">

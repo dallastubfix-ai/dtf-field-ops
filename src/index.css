@@ -775,6 +775,193 @@
     color: var(--text-secondary);
   }
 
+  /* ── Fixture cards (src/components/fixtures). Sits on .ui-card, which supplies
+     the glass fill, border, shadow and radius. No blur. ── */
+  .fx-card {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 16px;
+  }
+  .fx-title {
+    font-size: 17px;
+    line-height: 22px;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  /* Pill chips (name quick-picks, fixture, surface, walls surface, damage) */
+  .fx-chip {
+    min-height: 44px;
+    padding: 0 14px;
+    border-radius: var(--radius-pill);
+    border: 1px solid var(--chip-border);
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 14px;
+    font-weight: 500;
+  }
+  /* Option buttons (service, repair size) */
+  .fx-option {
+    min-height: 48px;
+    padding: 0 16px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--chip-border);
+    background: transparent;
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 500;
+  }
+  .fx-chip[aria-pressed="true"],
+  .fx-option[aria-pressed="true"] {
+    background: linear-gradient(160deg, var(--selected-fill-from), var(--selected-fill-to));
+    border-color: var(--selected-border);
+    color: var(--on-selected);
+    font-weight: 700;
+  }
+  .fx-help {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+  }
+
+  /* Steppers (Fixtures, Repairs) */
+  .fx-step {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--control-border);
+    background: transparent;
+    color: var(--text);
+  }
+  .fx-step:disabled { opacity: 0.4; }
+  .fx-count {
+    width: 28px;
+    text-align: center;
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  .fx-chip:focus-visible,
+  .fx-option:focus-visible,
+  .fx-step:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+
+  /* Repair boxes */
+  .fx-repair {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px;
+    background: var(--box-fill);
+    border: 1px solid var(--inset-fill);
+    border-radius: var(--radius-lg);
+  }
+  .fx-repair-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  /* Price lines: one divider above the block */
+  .fx-lines {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding-top: 12px;
+    border-top: 1px solid var(--inset-fill);
+  }
+  .fx-line {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .fx-line-desc {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text);
+  }
+  .fx-line-amount {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text);
+    white-space: nowrap;
+  }
+
+  /* Validation messages stay gray, never red */
+  .fx-note {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+  }
+
+  /* Footer total box (editor) */
+  .fx-total {
+    padding: 14px 16px;
+    background: var(--glass-fill);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-shadow);
+    border-radius: var(--radius-lg);
+  }
+  .fx-total-label {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-secondary);
+  }
+  .fx-total-amount {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--accent-text);
+  }
+
+  .fx-modal-text {
+    font-size: 15px;
+    line-height: 22px;
+    font-weight: 500;
+    color: var(--text-secondary);
+  }
+
+  /* Fixture summary (job page, read-only) */
+  .fx-sum-card {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 12px;
+    background: var(--box-fill);
+    border: 1px solid var(--inset-fill);
+    border-radius: var(--radius-lg);
+  }
+  .fx-sum-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text);
+  }
+  .fx-sum-line {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 13.5px;
+    font-weight: 500;
+    color: var(--text);
+  }
+  .fx-sum-amount {
+    font-weight: 700;
+    text-align: right;
+    white-space: nowrap;
+  }
+  .fx-sum-total {
+    padding: 12px 14px;
+    background: var(--box-fill);
+    border: 1px solid var(--inset-fill);
+    border-radius: var(--radius-lg);
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .switch-thumb { transition: none; }
     .ui-btn { transition: none; }
