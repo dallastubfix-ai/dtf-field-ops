@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Search, X, Briefcase } from 'lucide-react'
+import { Search, X, Briefcase, CloudOff } from 'lucide-react'
 import { format } from 'date-fns'
 import { useLiveQuery } from 'dexie-react-hooks'
 import db from '../lib/db'
@@ -9,6 +9,7 @@ import { mergeServerRows, upsertServerRow } from '../lib/sync'
 import { summarizeJobFixtures } from '../lib/fixtures'
 import Badge from '../components/ui/Badge'
 import EmptyState from '../components/ui/EmptyState'
+import PageHeader from '../components/layout/PageHeader'
 
 const FILTERS = [
   { label: 'All',        value: 'all'        },
@@ -74,31 +75,38 @@ export default function Jobs() {
   return (
     <div className="min-h-screen">
       {/* Header */}
-      <header className="bg-navy px-4 py-4 flex items-center justify-between">
-        <h1 className="text-white font-bold text-lg">Jobs</h1>
-        <button onClick={() => { setSearchOpen(s => !s); setQuery('') }} className="text-white">
-          {searchOpen ? <X size={20} /> : <Search size={20} />}
+      <PageHeader title="Jobs">
+        <button
+          type="button"
+          onClick={() => { setSearchOpen(s => !s); setQuery('') }}
+          className="icon-btn"
+          aria-label={searchOpen ? 'Close search' : 'Search jobs'}
+          aria-expanded={searchOpen}
+        >
+          {searchOpen ? <X size={20} aria-hidden="true" /> : <Search size={20} aria-hidden="true" />}
         </button>
-      </header>
+      </PageHeader>
 
       {searchOpen && (
-        <div className="bg-white px-4 py-3 border-b border-[#E5E7EB]">
+        <div className="px-4 pt-3">
           <input
             autoFocus
             value={query}
             onChange={e => setQuery(e.target.value)}
             placeholder="Search by name, phone, or job #…"
-            className="w-full border border-[#E5E7EB] rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-navy"
+            aria-label="Search jobs"
+            className="ui-field ui-field-h w-full px-3 py-2.5"
           />
         </div>
       )}
 
       {/* Mobile: dropdown selector */}
-      <div className="lg:hidden bg-white border-b border-[#E5E7EB] px-4 py-3">
+      <div className="lg:hidden px-4 pt-3">
         <select
           value={filter}
           onChange={e => setFilter(e.target.value)}
-          className="w-full border border-[#E5E7EB] rounded-lg px-3 py-2.5 text-sm font-medium text-[#1F2937] bg-white focus:outline-none focus:ring-2 focus:ring-[#1E40AF] appearance-none"
+          aria-label="Filter jobs by status"
+          className="ui-field ui-field-h w-full px-3 py-2.5 appearance-none"
           style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236B7280' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 12px center', paddingRight: '36px' }}
         >
           {FILTERS.map(f => (
@@ -108,17 +116,15 @@ export default function Jobs() {
       </div>
 
       {/* Desktop: full tab bar */}
-      <div className="hidden lg:block bg-white border-b border-[#E5E7EB]">
-        <div className="flex px-4">
+      <div className="hidden lg:block px-4 pt-3">
+        <div className="flex">
           {FILTERS.map(f => (
             <button
               key={f.value}
+              type="button"
               onClick={() => setFilter(f.value)}
-              className={`px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
-                filter === f.value
-                  ? 'border-[#1E40AF] text-[#1E40AF]'
-                  : 'border-transparent text-[#6B7280] hover:text-[#1F2937]'
-              }`}
+              aria-pressed={filter === f.value}
+              className="job-tab"
             >
               {f.label}
             </button>
@@ -127,7 +133,7 @@ export default function Jobs() {
       </div>
 
       {/* Job list */}
-      <div className="px-4 py-4 space-y-3">
+      <div className="px-4 pt-3 pb-4 space-y-[10px]">
         {!jobs || jobs.length === 0 ? (
           <EmptyState
             icon={Briefcase}
@@ -139,34 +145,44 @@ export default function Jobs() {
             const customer = customers[job.customer_id]
             const fixtureSummary = summarizeJobFixtures(job)
             return (
-              <div
+              <button
+                type="button"
                 key={job.id || job._localId}
                 onClick={() => navigate(`/jobs/${job.id}`)}
-                className="bg-white rounded-xl border border-[#E5E7EB] shadow-sm p-4 cursor-pointer hover:shadow-md transition-shadow"
+                className="glass-row job-row"
               >
-                <div className="flex items-start justify-between mb-1">
-                  <div className="flex items-center gap-1.5">
-                    <span
-                      className={`w-1.5 h-1.5 rounded-full ${job._synced === false ? 'bg-amber-400' : 'bg-green-500'}`}
-                      title={job._synced === false ? 'Pending sync' : 'Synced'}
-                    />
-                    <span className="text-xs font-semibold text-navy">{job.job_number}</span>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    {job._synced === false ? (
+                      <span
+                        role="img"
+                        aria-label="Waiting to sync"
+                        title="Waiting to sync"
+                        className="flex shrink-0 text-[var(--text-secondary)]"
+                      >
+                        <CloudOff size={14} aria-hidden="true" />
+                      </span>
+                    ) : (
+                      <span
+                        role="img"
+                        aria-label="Synced"
+                        title="Synced"
+                        className="w-2 h-2 shrink-0 rounded-full bg-[var(--status-dot-success)]"
+                      />
+                    )}
+                    <span className="job-id">{job.job_number}</span>
                   </div>
                   <Badge status={job.status} />
                 </div>
-                <div className="font-bold text-[#1F2937]">
+                <div className="job-name">
                   {customer?.full_name ?? 'Unknown Customer'}
                 </div>
-                <div className="text-sm text-[#6B7280] mt-0.5">{customer?.phone}</div>
-                {fixtureSummary && (
-                  <div className="text-xs text-[#9CA3AF] mt-1">
-                    {fixtureSummary}
-                  </div>
+                {customer?.phone && <div className="job-phone">{customer.phone}</div>}
+                {fixtureSummary && <div className="job-meta">{fixtureSummary}</div>}
+                {job.created_at && (
+                  <div className="job-meta">{format(new Date(job.created_at), 'MMM d, yyyy')}</div>
                 )}
-                <div className="text-xs text-[#9CA3AF] mt-1">
-                  {job.created_at ? format(new Date(job.created_at), 'MMM d, yyyy') : ''}
-                </div>
-              </div>
+              </button>
             )
           })
         )}

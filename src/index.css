@@ -355,6 +355,154 @@
   }
   .glass-fab:active { transform: scale(0.95); }
 
+  /* ── Page header (src/components/layout/PageHeader) ── */
+  .page-header-wrap { padding: 20px 16px 0 16px; }
+  .page-header {
+    height: 64px;
+    border-radius: var(--radius-card);
+    padding: 0 12px 0 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    background: var(--glass-fill);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-shadow);
+  }
+  .page-header-title {
+    min-width: 0;
+    font-size: 20px;
+    line-height: 24px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .date-chip {
+    flex-shrink: 0;
+    padding: 6px 12px;
+    border-radius: var(--radius-pill);
+    background: var(--inset-fill);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+    white-space: nowrap;
+  }
+  .icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 44px;
+    height: 44px;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text);
+  }
+  .icon-btn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+
+  /* Flat glass surface for rows and tiles (no blur: it sits on the page background) */
+  .glass-row {
+    background: var(--glass-fill);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-shadow);
+    border-radius: var(--radius-row);
+  }
+
+  /* ── Home ── */
+  .home-stat { padding: 14px; }
+  .home-stat-num {
+    font-size: 30px;
+    line-height: 33px;
+    font-weight: 700;
+    color: var(--text);
+  }
+  .home-stat-label {
+    font-size: 12.5px;
+    font-weight: 500;
+    color: var(--text-secondary);
+  }
+  .home-quick {
+    min-height: 88px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+  .home-quick:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+  .home-quick-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--inset-fill);
+    color: var(--text);
+  }
+  .home-quick-label {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text);
+  }
+  .section-label {
+    margin: 8px 4px 0;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.09em;
+    color: var(--text-label);
+  }
+
+  /* ── Jobs ── */
+  .job-row {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    width: 100%;
+    padding: 14px 16px;
+    text-align: left;
+    border-radius: var(--radius-card);
+  }
+  .job-row:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+  .job-id {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--accent-text);
+  }
+  .job-name {
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--text);
+  }
+  .job-phone {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-secondary);
+  }
+  .job-meta {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+  }
+  .job-tab {
+    padding: 12px 16px;
+    min-height: 44px;
+    font-size: 14px;
+    font-weight: 500;
+    white-space: nowrap;
+    border-bottom: 2px solid transparent;
+    color: var(--text-secondary);
+  }
+  .job-tab[aria-pressed="true"] {
+    border-bottom-color: var(--accent-text);
+    color: var(--accent-text);
+    font-weight: 700;
+  }
+  .job-tab:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
+
   @media (prefers-reduced-motion: reduce) {
     .switch-thumb { transition: none; }
     .ui-btn { transition: none; }

@@ -35,11 +35,6 @@ export default defineConfig({
               networkTimeoutSeconds: 10,
               expiration: { maxEntries: 100, maxAgeSeconds: 86400 }
             }
-          },
-          {
-            urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
-            handler: 'CacheFirst',
-            options: { cacheName: 'google-fonts', expiration: { maxAgeSeconds: 31536000 } }
           }
         ]
       }

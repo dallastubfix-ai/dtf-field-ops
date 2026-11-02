@@ -9,6 +9,7 @@ import { mergeServerRows, upsertServerRow } from '../lib/sync'
 import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
 import EmptyState from '../components/ui/EmptyState'
+import PageHeader from '../components/layout/PageHeader'
 
 export default function Home() {
   const navigate = useNavigate()
@@ -119,40 +120,40 @@ export default function Home() {
   return (
     <div className="min-h-screen">
       {/* Header */}
-      <header className="bg-navy px-4 pt-4 pb-4 flex items-center justify-between">
-        <span className="text-white font-bold text-lg">DTF Field Ops</span>
-        <span className="text-blue-200 text-sm">{format(today, 'EEE, MMM d')}</span>
-      </header>
+      <PageHeader title="DTF Field Ops">
+        <span className="date-chip">{format(today, 'EEE, MMM d')}</span>
+      </PageHeader>
 
-      <div className="px-4 py-4 space-y-5">
-        {/* Stats strip */}
-        <div className="flex gap-3 overflow-x-auto pb-1">
+      <div className="px-4 pt-3 pb-4 space-y-3">
+        {/* Stats (exactly three tiles) */}
+        <div className="grid grid-cols-3 gap-[10px]">
           {stats.map(s => (
-            <div key={s.label} className="flex-shrink-0 bg-white rounded-xl border border-[#E5E7EB] shadow-sm px-4 py-3 min-w-[110px]">
-              <div className="text-2xl font-bold text-navy">{s.value}</div>
-              <div className="text-xs text-[#6B7280] mt-0.5">{s.label}</div>
+            <div key={s.label} className="glass-row home-stat">
+              <div className="home-stat-num">{s.value}</div>
+              <div className="home-stat-label">{s.label}</div>
             </div>
           ))}
         </div>
 
         {/* Quick actions */}
-        <div className="flex gap-3">
+        <div className="grid grid-cols-3 gap-[10px]">
           {quickActions.map(({ label, icon: Icon, to }) => (
             <button
               key={to}
+              type="button"
               onClick={() => navigate(to)}
-              className="flex-1 bg-white rounded-xl border border-[#E5E7EB] shadow-sm flex flex-col items-center gap-2 py-4 hover:bg-blue-50 transition-colors"
+              className="glass-row home-quick"
             >
-              <Icon size={20} className="text-navy" />
-              <span className="text-xs font-medium text-[#1F2937]">{label}</span>
+              <span className="home-quick-icon"><Icon size={22} aria-hidden="true" /></span>
+              <span className="home-quick-label">{label}</span>
             </button>
           ))}
         </div>
 
         {/* Today's schedule */}
-        <div>
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-[#6B7280] mb-3">
-            Today's Schedule
+        <div className="space-y-3">
+          <h2 className="section-label">
+            TODAY'S SCHEDULE
           </h2>
           {!appointments || appointments.length === 0 ? (
             <EmptyState
@@ -168,22 +169,22 @@ export default function Home() {
                 return (
                   <Card
                     key={appt.id || appt._localId}
-                    className="cursor-pointer hover:shadow-md transition-shadow"
+                    className="cursor-pointer rounded-[var(--radius-row)]"
                     onClick={() => job && navigate(`/jobs/${job.id}`)}
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex-1 min-w-0">
-                        <div className="text-xs font-semibold text-navy mb-0.5">
+                        <div className="text-xs font-semibold text-[var(--accent-text)] mb-0.5">
                           {job?.job_number ?? '—'}
                         </div>
-                        <div className="font-bold text-[#1F2937] text-sm">
+                        <div className="font-bold text-[var(--text)] text-sm">
                           {customer?.full_name ?? 'Unknown Customer'}
                         </div>
-                        <div className="text-[#6B7280] text-xs mt-0.5">
+                        <div className="text-[var(--text-secondary)] text-xs mt-0.5">
                           {format(new Date(appt.appointment_datetime), 'h:mm a')}
                         </div>
                         {appt.location_address && (
-                          <div className="text-[#6B7280] text-xs">{appt.location_address}</div>
+                          <div className="text-[var(--text-secondary)] text-xs">{appt.location_address}</div>
                         )}
                       </div>
                       {job?.status && <Badge status={job.status} />}
