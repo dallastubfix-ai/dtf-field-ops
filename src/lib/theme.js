@@ -11,6 +11,9 @@ const DEFAULT_ACCENTS = 'on'
 
 const DARK_QUERY = '(prefers-color-scheme: dark)'
 
+// Page-base token values, used for the Android status bar / nav bar color.
+const THEME_COLORS = { light: '#E6E9EE', dark: '#0A0B0D' }
+
 function readKey(key, allowed, fallback) {
   try {
     const value = localStorage.getItem(key)
@@ -55,6 +58,14 @@ export function applyTheme() {
   const root = document.documentElement
   root.dataset.theme = resolved
   root.dataset.accents = getAccents()
+
+  let themeMeta = document.querySelector('meta[name="theme-color"]')
+  if (!themeMeta) {
+    themeMeta = document.createElement('meta')
+    themeMeta.name = 'theme-color'
+    document.head.appendChild(themeMeta)
+  }
+  themeMeta.setAttribute('content', THEME_COLORS[resolved])
 
   if (mediaQuery && mediaListener) {
     mediaQuery.removeEventListener('change', mediaListener)
