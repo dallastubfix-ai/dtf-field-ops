@@ -825,30 +825,167 @@
     color: var(--text-secondary);
   }
 
-  /* Steppers (Fixtures, Repairs) */
-  .fx-step {
+  /* Add fixture (glass, no blur) and Add repair (plain dashed) */
+  .fx-add {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    min-height: 52px;
+    padding: 0 16px;
+    background: var(--glass-fill);
+    border: 1.5px dashed var(--chip-border);
+    box-shadow: var(--glass-shadow);
+    border-radius: 18px;
+    color: var(--text);
+    font-size: 15px;
+    font-weight: 700;
+  }
+  .fx-add--empty { min-height: 64px; }
+  .fx-add-repair {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    min-height: 48px;
+    padding: 0 16px;
+    background: transparent;
+    border: 1.5px dashed var(--chip-border);
+    border-radius: var(--radius-md);
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 700;
+  }
+
+  /* Header row (card title, "Repair N") with an optional trash button */
+  .fx-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-height: 24px;
+  }
+  .fx-trash {
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    flex-shrink: 0;
     width: 44px;
     height: 44px;
-    border-radius: var(--radius-sm);
-    border: 1px solid var(--control-border);
+    margin: -10px -10px -10px 0;
     background: transparent;
+    border: 0;
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+  }
+
+  /* Collapsed card: one glass row (no blur) */
+  .fx-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 12px 14px;
+    text-align: left;
+    background: var(--glass-fill);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-shadow);
+    border-radius: var(--radius-row);
+  }
+  .fx-row-check {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+    border-radius: var(--radius-pill);
+    background: var(--inset-fill);
     color: var(--text);
   }
-  .fx-step:disabled { opacity: 0.4; }
-  .fx-count {
-    width: 28px;
-    text-align: center;
-    font-size: 16px;
+  .fx-row-text {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+  }
+  .fx-row-title {
+    font-size: 15px;
+    line-height: 20px;
     font-weight: 700;
     color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .fx-row-service {
+    font-size: 13px;
+    line-height: 18px;
+    font-weight: 500;
+    color: var(--text-secondary);
+  }
+  .fx-row-amount {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--accent-text);
+    white-space: nowrap;
+  }
+  .fx-row-chevron {
+    flex-shrink: 0;
+    color: var(--text-secondary);
+  }
+
+  /* Collapse / expand: grid rows 1fr <-> 0fr plus opacity and transform. Hidden side leaves the
+     tab order (visibility flips after the animation). Overflow clips only while closed or closing,
+     so the open card keeps its shadow and focus rings. */
+  .fx-collapse {
+    display: grid;
+    grid-template-rows: 1fr;
+    opacity: 1;
+    transform: none;
+    visibility: visible;
+    transition:
+      grid-template-rows 220ms ease-out,
+      opacity 220ms ease-out,
+      transform 220ms ease-out,
+      visibility 0s linear 0s;
+  }
+  .fx-collapse[data-open="false"] {
+    grid-template-rows: 0fr;
+    opacity: 0;
+    transform: translateY(-6px);
+    visibility: hidden;
+    pointer-events: none;
+    transition:
+      grid-template-rows 220ms ease-out,
+      opacity 220ms ease-out,
+      transform 220ms ease-out,
+      visibility 0s linear 220ms;
+  }
+  .fx-collapse > .fx-collapse-inner { min-height: 0; }
+  .fx-collapse[data-open="true"] > .fx-collapse-inner {
+    overflow: visible;
+    transition: overflow 0s linear 220ms allow-discrete;
+  }
+  .fx-collapse[data-open="false"] > .fx-collapse-inner { overflow: hidden; }
+
+  /* Programmatic focus target after Add fixture; not a tab stop, so no ring */
+  .fx-section:focus { outline: none; }
+
+  /* Clears the sticky header (top) and the tab bar + floating + button (bottom) */
+  .fx-scroll-target {
+    scroll-margin-top: 88px;
+    scroll-margin-bottom: calc(160px + env(safe-area-inset-bottom));
   }
 
   .fx-chip:focus-visible,
   .fx-option:focus-visible,
-  .fx-step:focus-visible {
+  .fx-add:focus-visible,
+  .fx-add-repair:focus-visible,
+  .fx-trash:focus-visible,
+  .fx-row:focus-visible {
     outline: 2px solid var(--focus-ring);
     outline-offset: 2px;
   }
@@ -968,6 +1105,9 @@
     .glass-tab { transition: none; }
     .glass-fab { transition: none; }
     .glass-fab:active { transform: none; }
+    .fx-collapse,
+    .fx-collapse[data-open="false"],
+    .fx-collapse[data-open="true"] > .fx-collapse-inner { transition: none; }
   }
 }
 
