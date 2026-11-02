@@ -1075,7 +1075,14 @@ export default function JobDetail() {
             {invoice && (
               <div className="flex items-center gap-2 text-sm text-[var(--text-secondary)] mb-1">
                 <span className="font-medium text-[var(--text)]">Invoice #{invoice.invoice_number ?? job.job_number}</span>
-                <Badge status={invoice.payment_status === 'paid' ? 'completed' : invoice.payment_status === 'partial' ? 'quote' : 'contact'} />
+                {/* Same label and colors as the Invoices list; a missing status reads as Unpaid */}
+                <span className={`status-pill pr-[10px]${
+                  invoice.payment_status == null || invoice.payment_status === 'unpaid' ? ' status-pill--unpaid'
+                  : invoice.payment_status === 'paid' ? ' status-pill--paid'
+                  : ''
+                }`}>
+                  {invoice.payment_status ?? 'Unpaid'}
+                </span>
               </div>
             )}
             <div className="flex gap-2">

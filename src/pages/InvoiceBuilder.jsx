@@ -133,9 +133,8 @@ const INVOICE_PRINT_CSS = `
 .inv-print .svc-tbl tbody tr { border-bottom:1px solid var(--gray-bd); }
 .inv-print .svc-tbl tbody tr:nth-child(even) { background:var(--gray-bg); }
 .inv-print .svc-tbl tbody td { padding:2px 6px; height:22px; font-size:8pt; vertical-align:middle; }
-.inv-print .td-desc { width:44%; }
-.inv-print .td-notes { width:26%; }
-.inv-print .td-rate { width:15%; text-align:right; color:var(--gray-txt); }
+.inv-print .td-desc { width:53%; }
+.inv-print .td-notes { width:32%; }
 .inv-print .td-amt { width:15%; text-align:right; font-weight:600; }
 .inv-print .totals-wrap { display:flex; justify-content:flex-end; margin-bottom:7px; }
 .inv-print .totals-tbl { width:220px; border-collapse:collapse; }
@@ -938,22 +937,20 @@ export default function InvoiceBuilder() {
 
         <div className="glass-card space-y-2">
           <h3 className="ui-field-label mb-2">Line Items</h3>
-          <div className="grid grid-cols-12 gap-1 text-[10px] font-semibold uppercase text-[var(--text-secondary)] mb-1">
-            <span className="col-span-5">Description</span>
-            <span className="col-span-4">Notes/Type</span>
-            <span className="col-span-1">Rate</span>
-            <span className="col-span-2 text-right">Amt</span>
+          <div className="grid grid-cols-[minmax(0,3fr)_minmax(0,2fr)_96px] gap-1 text-[10px] font-semibold uppercase text-[var(--text-secondary)] mb-1">
+            <span>Description</span>
+            <span>Notes/Type</span>
+            <span className="text-right">Amount</span>
           </div>
           {inv.line_items.map((item, i) => (
-            <div key={i} className="grid grid-cols-12 gap-1">
+            <div key={i} className="grid grid-cols-[minmax(0,3fr)_minmax(0,2fr)_96px] gap-1">
               <input value={item.description} onChange={e => setItem(i, 'description', e.target.value)} disabled={isLocked}
-                className="ui-field col-span-5 min-w-0 min-h-[44px] rounded-[var(--radius-sm)] px-2 text-xs" />
+                className="ui-field min-w-0 min-h-[44px] rounded-[var(--radius-sm)] px-2 text-xs" />
               <input value={item.notes} onChange={e => setItem(i, 'notes', e.target.value)} disabled={isLocked}
-                className="ui-field col-span-4 min-w-0 min-h-[44px] rounded-[var(--radius-sm)] px-2 text-xs" />
-              <input value={item.rate} onChange={e => setItem(i, 'rate', e.target.value)} disabled={isLocked}
-                className="ui-field col-span-1 min-w-0 min-h-[44px] rounded-[var(--radius-sm)] px-2 text-xs" />
+                className="ui-field min-w-0 min-h-[44px] rounded-[var(--radius-sm)] px-2 text-xs" />
               <input value={item.amount} onChange={e => setItem(i, 'amount', e.target.value)} disabled={isLocked}
-                className="ui-field col-span-2 min-w-0 min-h-[44px] rounded-[var(--radius-sm)] px-2 text-xs text-right" />
+                inputMode="decimal"
+                className="ui-field min-w-0 min-h-[44px] rounded-[var(--radius-sm)] px-2 text-xs text-right" />
             </div>
           ))}
           {!isLocked && (
@@ -1044,6 +1041,12 @@ export default function InvoiceBuilder() {
               </button>
             ))}
           </div>
+          {inv.warranty_included && !inv.service_date && !isLocked && (
+            <p className="note-warn">
+              <AlertCircle size={16} aria-hidden="true" />
+              <span>Add a service date to create the warranty.</span>
+            </p>
+          )}
           {!inv.warranty_included && (
             <input value={inv.warranty_no_reason} onChange={e => set('warranty_no_reason', e.target.value)}
               placeholder="Reason warranty not included…" disabled={isLocked}
@@ -1140,7 +1143,6 @@ export default function InvoiceBuilder() {
               <tr>
                 <th className="td-desc">Description of Work</th>
                 <th className="td-notes">Type / Notes</th>
-                <th className="td-rate r">Rate</th>
                 <th className="td-amt r">Amount</th>
               </tr>
             </thead>
@@ -1151,7 +1153,6 @@ export default function InvoiceBuilder() {
                   <tr key={i}>
                     <td className="td-desc">{item.description || ''}</td>
                     <td className="td-notes">{item.notes || ''}</td>
-                    <td className="td-rate">{cellMoney(item.rate)}</td>
                     <td className="td-amt">{cellMoney(item.amount)}</td>
                   </tr>
                 )

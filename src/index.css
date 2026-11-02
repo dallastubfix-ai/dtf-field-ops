@@ -1658,12 +1658,20 @@
     grid-auto-flow: column;
     grid-auto-columns: minmax(0, 1fr);
     gap: 8px;
-    margin-top: 8px;
+    margin-top: 0;
     padding: 8px;
     background: var(--tab-fill);
     border: 1px solid var(--glass-border);
-    border-radius: var(--radius-card);
+    border-top: 0;
+    border-radius: 0 0 var(--radius-card) var(--radius-card);
     box-shadow: var(--glass-shadow);
+    -webkit-backdrop-filter: blur(var(--blur-glass)) saturate(var(--glass-saturate));
+    backdrop-filter: blur(var(--blur-glass)) saturate(var(--glass-saturate));
+  }
+  /* The header and the action row read as one glass block */
+  .page-header-wrap--sticky:has(> .builder-actions) > .page-header {
+    border-radius: var(--radius-card) var(--radius-card) 0 0;
+    box-shadow: none;
   }
   .builder-actions .ui-btn {
     min-height: 44px;
