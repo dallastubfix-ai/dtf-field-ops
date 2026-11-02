@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Check } from 'lucide-react'
-import Button from '../ui/Button'
+import { AlertCircle, Check } from 'lucide-react'
 import Card from '../ui/Card'
 import Input from '../ui/Input'
 import {
@@ -13,11 +12,6 @@ const MAX_DAMAGES = 2
 const ALL_DAMAGES = Object.keys(DAMAGE_LABELS)
 const EMPTY_PICK = { fixture: '', surface: '', service: '' }
 const DOT = ` ${String.fromCharCode(183)} `
-
-const chipClass = (selected) =>
-  `px-3 py-1.5 min-h-[44px] rounded-full text-sm border transition-all disabled:opacity-40 ${
-    selected ? 'bg-navy text-white border-navy' : 'border-dtf-border text-dtf-sub'
-  }`
 
 // The Save step's choices live here (called from CollageMaker) so they survive closing the
 // panel and "Make another". mode: 'one' card, 'many' cards (must pick), 'old' (fixture_type /
@@ -90,7 +84,7 @@ export function useSaveChoices({ job, appointments, existingNames }) {
 function Section({ title, children }) {
   return (
     <Card className="space-y-3">
-      <h2 className="text-xs font-semibold uppercase tracking-wide text-dtf-sub">{title}</h2>
+      <h2 className="ui-field-label">{title}</h2>
       {children}
     </Card>
   )
@@ -105,7 +99,7 @@ function Chips({ values, labels, selected, onSelect }) {
           type="button"
           aria-pressed={selected === v}
           onClick={() => onSelect(v)}
-          className={chipClass(selected === v)}
+          className="fx-chip"
         >
           {labels[v]}
         </button>
@@ -122,15 +116,16 @@ export default function SavePanel({ choices: c, status, savedName, warning }) {
     return (
       <div className="flex-1 overflow-y-auto overscroll-contain px-4 py-4">
         <Card className="space-y-3 text-center">
-          <div className="mx-auto w-12 h-12 rounded-full bg-green-100 text-green-600 flex items-center justify-center">
+          <div className="mx-auto w-12 h-12 rounded-full bg-[var(--success-tint-fill)] text-[var(--success-tint-text)] flex items-center justify-center">
             <Check size={26} />
           </div>
-          <h2 className="text-base font-bold text-dtf-text">Collage saved</h2>
-          <p className="text-xs text-dtf-sub break-all">{savedName}</p>
-          <p className="text-sm text-dtf-text">It is in this job's photos and in Google Drive. You can share it now.</p>
+          <h2 className="text-base font-bold text-[var(--text)]">Collage saved</h2>
+          <p className="text-xs text-[var(--text-secondary)] break-all">{savedName}</p>
+          <p className="text-sm text-[var(--text)]">It is in this job's photos and in Google Drive. You can share it now.</p>
           {warning && (
-            <p role="status" className="text-xs text-left text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-              {warning}
+            <p role="status" className="inset-box note-warn text-left px-3 py-2">
+              <AlertCircle size={16} aria-hidden="true" />
+              <span>{warning}</span>
             </p>
           )}
         </Card>
@@ -149,14 +144,14 @@ export default function SavePanel({ choices: c, status, savedName, warning }) {
         <Section title="Fixture">
           {c.mode === 'one' && (
             <div>
-              <div className="text-sm font-semibold text-dtf-text">{c.titles[0]}</div>
-              {c.fixtureText && <div className="text-xs text-dtf-sub mt-0.5">{c.fixtureText}</div>}
+              <div className="text-sm font-semibold text-[var(--text)]">{c.titles[0]}</div>
+              {c.fixtureText && <div className="text-xs text-[var(--text-secondary)] mt-0.5">{c.fixtureText}</div>}
             </div>
           )}
 
           {c.mode === 'many' && (
             <>
-              <p className="text-xs text-dtf-sub">Which fixture is this collage for?</p>
+              <p className="text-xs text-[var(--text-secondary)]">Which fixture is this collage for?</p>
               <div className="flex flex-wrap gap-2">
                 {c.titles.map((title, i) => (
                   <button
@@ -164,7 +159,7 @@ export default function SavePanel({ choices: c, status, savedName, warning }) {
                     type="button"
                     aria-pressed={c.cardIndex === i}
                     onClick={() => c.setCardIndex(i)}
-                    className={chipClass(c.cardIndex === i)}
+                    className="fx-chip"
                   >
                     {title}
                   </button>
@@ -175,14 +170,14 @@ export default function SavePanel({ choices: c, status, savedName, warning }) {
 
           {c.mode === 'old' && (
             <div>
-              <div className="text-sm font-semibold text-dtf-text">{c.fixtureText}</div>
-              <div className="text-xs text-dtf-sub mt-0.5">Recorded before fixture cards</div>
+              <div className="text-sm font-semibold text-[var(--text)]">{c.fixtureText}</div>
+              <div className="text-xs text-[var(--text-secondary)] mt-0.5">Recorded before fixture cards</div>
             </div>
           )}
 
           {c.mode === 'pick' && (
             <div className="space-y-3">
-              <p className="text-xs text-dtf-sub">
+              <p className="text-xs text-[var(--text-secondary)]">
                 Nothing is recorded for this job. These are optional and only shape the file name.
               </p>
               <Chips
@@ -204,16 +199,15 @@ export default function SavePanel({ choices: c, status, savedName, warning }) {
         <Section title="View">
           <div className="flex gap-2">
             {VIEWS.map(([value, label]) => (
-              <Button
+              <button
                 key={value}
                 type="button"
-                variant={c.view === value ? 'primary' : 'secondary'}
-                className="flex-1 min-h-[44px]"
+                className="fx-option flex-1"
                 aria-pressed={c.view === value}
                 onClick={() => c.setView(value)}
               >
                 {label}
-              </Button>
+              </button>
             ))}
           </div>
         </Section>
@@ -221,7 +215,7 @@ export default function SavePanel({ choices: c, status, savedName, warning }) {
         {c.view === 'close-up' && (c.damageOptions.length > 0 || c.card) && (
           <Section title="Damage shown">
             {c.damageOptions.length === 0 ? (
-              <p className="text-xs text-dtf-sub">No damage is recorded on this fixture, so none goes in the file name.</p>
+              <p className="text-xs text-[var(--text-secondary)]">No damage is recorded on this fixture, so none goes in the file name.</p>
             ) : (
               <>
                 <div className="flex flex-wrap gap-2">
@@ -234,14 +228,14 @@ export default function SavePanel({ choices: c, status, savedName, warning }) {
                         aria-pressed={on}
                         disabled={!on && damagesFull}
                         onClick={() => c.toggleDamage(d)}
-                        className={chipClass(on)}
+                        className="fx-chip"
                       >
                         {DAMAGE_LABELS[d]}
                       </button>
                     )
                   })}
                 </div>
-                <p className="text-xs text-dtf-sub">
+                <p className="text-xs text-[var(--text-secondary)]">
                   {damagesFull
                     ? 'Two picked, the most the file name holds. Untick one to choose a different damage.'
                     : 'Pick up to 2 for the file name. Skipping is fine.'}
@@ -260,7 +254,7 @@ export default function SavePanel({ choices: c, status, savedName, warning }) {
             autoComplete="off"
             className="min-h-[44px]"
           />
-          <p className="text-xs text-dtf-sub">
+          <p className="text-xs text-[var(--text-secondary)]">
             {c.hasAutoCity
               ? 'Taken from the appointment address. Change it if it is wrong.'
               : 'No city found in the appointment address. Type one, or leave it blank.'}
@@ -269,8 +263,8 @@ export default function SavePanel({ choices: c, status, savedName, warning }) {
 
         <Section title="File name">
           {c.filename
-            ? <p className="text-sm text-dtf-text break-all font-mono">{c.filename}</p>
-            : <p className="text-sm text-dtf-sub">{c.missing}</p>}
+            ? <p className="text-sm text-[var(--text)] break-all font-mono">{c.filename}</p>
+            : <p className="text-sm text-[var(--text-secondary)]">{c.missing}</p>}
         </Section>
       </fieldset>
     </div>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { RefreshCw, X } from 'lucide-react'
+import Button from '../ui/Button'
 
 /**
  * Gentle, dismissible prompt shown when a new app build has been downloaded
@@ -37,19 +38,17 @@ export default function UpdateBanner() {
   }
 
   return (
-    <div className="sticky top-0 z-50 flex items-center gap-3 bg-navy px-4 py-2.5 text-white shadow-md">
-      <RefreshCw size={16} className="shrink-0 text-gold" />
-      <span className="flex-1 text-sm font-medium">A new version is available</span>
-      <button
-        onClick={handleRefresh}
-        className="shrink-0 rounded-lg bg-gold px-3 py-1.5 text-xs font-semibold text-white transition-all hover:bg-amber-500 active:scale-95"
-      >
+    <div className="glass-banner glass-blur sticky top-0 z-50">
+      <RefreshCw size={16} className="shrink-0 text-[var(--text-secondary)]" />
+      <span className="flex-1">A new version is available</span>
+      <Button className="shrink-0 min-h-[44px]" onClick={handleRefresh}>
         Refresh
-      </button>
+      </Button>
       <button
+        type="button"
         onClick={handleDismiss}
         aria-label="Dismiss update notification"
-        className="shrink-0 text-blue-200 transition-colors hover:text-white"
+        className="icon-btn"
       >
         <X size={18} />
       </button>

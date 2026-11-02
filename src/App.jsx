@@ -28,7 +28,7 @@ function AuthGuard({ children }) {
   const { user, loading } = useAuth()
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex items-center justify-center min-h-screen glass-page">
         <LoadingSpinner size="lg" />
       </div>
     )
@@ -65,7 +65,7 @@ function AppRoutes() {
       <Routes>
         <Route path="/sign/:token" element={<CustomerSign />} />
         <Route path="*" element={
-          <div className="flex items-center justify-center min-h-screen">
+          <div className="flex items-center justify-center min-h-screen glass-page">
             <LoadingSpinner size="lg" />
           </div>
         } />

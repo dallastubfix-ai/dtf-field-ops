@@ -1,12 +1,13 @@
 import { useRef, useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { ArrowLeft, Camera, Image, X, Upload } from 'lucide-react'
+import { Camera, Check, Image, X, Upload } from 'lucide-react'
 import { format } from 'date-fns'
 import { supabase } from '../lib/supabase'
 import db from '../lib/db'
 import { getValidProviderToken } from '../lib/googleToken'
 import heic2any from 'heic2any'
+import PageHeader from '../components/layout/PageHeader'
 import Button from '../components/ui/Button'
 
 // iPhones / some Androids deliver image/heic which browsers can't render.
@@ -50,7 +51,7 @@ export default function ImageCapture() {
   const [uploading, setUploading] = useState(false)
   const [progress, setProgress] = useState({})
   const [coords, setCoords] = useState(null)
-  const [toast, setToast] = useState('')
+  const [toast, setToast] = useState(null) // { text, kind }
 
   useEffect(() => {
     window.scrollTo(0, 0)
@@ -95,7 +96,7 @@ export default function ImageCapture() {
 
     const providerToken = await getValidProviderToken()
     if (!providerToken) {
-      setToast('Google Drive not connected — please try again')
+      setToast({ text: 'Google Drive not connected — please try again', kind: 'error' })
       setUploading(false)
       return
     }
@@ -128,7 +129,7 @@ export default function ImageCapture() {
         await db.jobs.where('id').equals(id).modify({ drive_folder_id: folderId })
       } catch (err) {
         console.error('Drive folder creation error:', err)
-        setToast('Could not create Drive folder — please try again')
+        setToast({ text: 'Could not create Drive folder — please try again', kind: 'error' })
         setUploading(false)
         return
       }
@@ -199,48 +200,43 @@ export default function ImageCapture() {
     setUploading(false)
     const ok = pending.length - failed
     if (failed > 0) {
-      setToast(`${ok} uploaded · ${failed} failed — please try again`)
+      setToast({ text: `${ok} uploaded · ${failed} failed — please try again`, kind: 'error' })
       return
     }
-    setToast(`${ok} photo${ok > 1 ? 's' : ''} uploaded!`)
+    setToast({ text: `${ok} photo${ok > 1 ? 's' : ''} uploaded!`, kind: 'success' })
     setTimeout(() => navigate(`/jobs/${id}`, { replace: true }), 900)
   }
 
   return (
     <div className="min-h-screen">
-      <header className="bg-navy px-4 py-4 flex items-center gap-3 sticky top-0 z-30">
-        <button onClick={() => navigate(-1)} className="text-white"><ArrowLeft size={20} /></button>
-        <h1 className="text-white font-bold text-base flex-1">
-          Add Photos {job?.job_number ? `— ${job.job_number}` : ''}
-        </h1>
-      </header>
+      <PageHeader
+        title={`Add Photos ${job?.job_number ? `— ${job.job_number}` : ''}`}
+        sticky
+        onBack={() => navigate(-1)}
+      />
 
       {toast && (
-        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-white text-sm px-4 py-2 rounded-lg shadow-lg">
-          {toast}
+        <div className={`ui-toast ui-toast--${toast.kind}`}>
+          {toast.text}
         </div>
       )}
 
       <div className="px-4 py-5 space-y-5 max-w-lg mx-auto">
         {/* Before / After toggle */}
-        <div className="flex gap-2">
+        <div className="theme-segmented" role="group" aria-label="Photo type">
           <button
+            type="button"
+            className="theme-segment"
+            aria-pressed={imageType === 'before'}
             onClick={() => { userHasToggled.current = true; setImageType('before') }}
-            className={`flex-1 py-3 rounded-xl font-semibold text-sm transition-all ${
-              imageType === 'before'
-                ? 'bg-green-500 text-white shadow-sm'
-                : 'bg-white border border-[#E5E7EB] text-[#6B7280]'
-            }`}
           >
             BEFORE
           </button>
           <button
+            type="button"
+            className="theme-segment"
+            aria-pressed={imageType === 'after'}
             onClick={() => { userHasToggled.current = true; setImageType('after') }}
-            className={`flex-1 py-3 rounded-xl font-semibold text-sm transition-all ${
-              imageType === 'after'
-                ? 'bg-gold text-white shadow-sm'
-                : 'bg-white border border-[#E5E7EB] text-[#6B7280]'
-            }`}
           >
             AFTER
           </button>
@@ -249,18 +245,20 @@ export default function ImageCapture() {
         {/* Capture buttons */}
         <div className="flex gap-3">
           <button
+            type="button"
             onClick={() => cameraRef.current?.click()}
-            className="flex-1 bg-white border border-[#E5E7EB] rounded-xl py-6 flex flex-col items-center gap-2 shadow-sm hover:bg-blue-50 transition-colors"
+            className="glass-row home-quick flex-1"
           >
-            <Camera size={28} className="text-navy" />
-            <span className="text-sm font-medium text-[#1F2937]">Take Photo</span>
+            <span className="home-quick-icon"><Camera size={22} /></span>
+            <span className="home-quick-label">Take Photo</span>
           </button>
           <button
+            type="button"
             onClick={() => fileRef.current?.click()}
-            className="flex-1 bg-white border border-[#E5E7EB] rounded-xl py-6 flex flex-col items-center gap-2 shadow-sm hover:bg-blue-50 transition-colors"
+            className="glass-row home-quick flex-1"
           >
-            <Image size={28} className="text-navy" />
-            <span className="text-sm font-medium text-[#1F2937]">Choose File</span>
+            <span className="home-quick-icon"><Image size={22} /></span>
+            <span className="home-quick-label">Choose File</span>
           </button>
         </div>
 
@@ -270,27 +268,29 @@ export default function ImageCapture() {
         {/* Captured thumbnails */}
         {captured.length > 0 && (
           <div>
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-[#6B7280] mb-2">
+            <h2 className="ui-field-label mb-2">
               This Session ({captured.length})
             </h2>
             <div className="grid grid-cols-3 gap-2">
               {captured.map(item => (
-                <div key={item.id} className="relative rounded-xl overflow-hidden aspect-square bg-[#F3F4F6]">
+                <div key={item.id} className="photo-tile">
                   <img src={item.preview} alt="" className="w-full h-full object-cover" />
-                  <span className={`absolute top-1 left-1 text-xs font-bold px-1 py-0.5 rounded ${item.type === 'before' ? 'bg-green-500 text-white' : 'bg-gold text-white'}`}>
+                  <span className="photo-pill">
                     {item.type.toUpperCase()}
                   </span>
                   {progress[item.id] === 'done' && (
-                    <div className="absolute inset-0 bg-green-500/40 flex items-center justify-center">
-                      <span className="text-white font-bold text-xs">✓</span>
+                    <div className="photo-done">
+                      <span className="photo-done-dot"><Check size={18} strokeWidth={3} /></span>
                     </div>
                   )}
                   {!uploading && (
                     <button
+                      type="button"
                       onClick={() => remove(item.id)}
-                      className="absolute top-1 right-1 w-5 h-5 bg-black/50 rounded-full flex items-center justify-center"
+                      aria-label="Remove photo"
+                      className="photo-remove"
                     >
-                      <X size={10} className="text-white" />
+                      <span className="photo-remove-dot"><X size={14} /></span>
                     </button>
                   )}
                 </div>

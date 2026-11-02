@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { X, Search } from 'lucide-react'
+import { X, Search, AlertCircle } from 'lucide-react'
 import { format } from 'date-fns'
 import { supabase } from '../lib/supabase'
 import db from '../lib/db'
@@ -8,6 +8,7 @@ import { writeRecord, updateRecord } from '../lib/sync'
 import { recalcAfterAppointmentChange } from '../lib/mileage'
 import { formatEnum } from '../lib/formatEnum'
 import { useOnlineStatus } from '../hooks/useOnlineStatus'
+import PageHeader from '../components/layout/PageHeader'
 import Input from '../components/ui/Input'
 import Select from '../components/ui/Select'
 import Textarea from '../components/ui/Textarea'
@@ -100,7 +101,7 @@ export default function NewIntake() {
   const [draftRestored, setDraftRestored] = useState(!!initialDraft)
   const savedRef = useRef(false)
   const [saving, setSaving] = useState(false)
-  const [toast, setToast] = useState('')
+  const [toast, setToast] = useState(null) // { text, kind }
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState([])
@@ -207,11 +208,11 @@ export default function NewIntake() {
       savedRef.current = true
       removeDraft()
 
-      setToast(`Saved! Job ${jobNumber}`)
+      setToast({ text: `Saved! Job ${jobNumber}`, kind: 'success' })
       navigate(`/jobs/${savedJob.id}`, { replace: true })
     } catch (err) {
       console.error('Job save failed:', err)
-      setToast('Error saving. Try again.')
+      setToast({ text: 'Error saving. Try again.', kind: 'error' })
       setSaving(false)
       return
     }
@@ -255,34 +256,32 @@ export default function NewIntake() {
 
   return (
     <div className="min-h-screen glass-page flex flex-col">
-      {/* Header */}
-      <header className="bg-navy px-4 py-4 flex items-center justify-between sticky top-0 z-30">
-        <h1 className="text-white font-bold text-lg">New Call</h1>
-        <button onClick={() => navigate(-1)} className="text-white">
+      <PageHeader title="New Call" sticky>
+        <button type="button" onClick={() => navigate(-1)} className="icon-btn" aria-label="Close">
           <X size={22} />
         </button>
-      </header>
+      </PageHeader>
 
       {toast && (
-        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-white text-sm px-4 py-2 rounded-lg shadow-lg">
-          {toast}
+        <div className={`ui-toast ui-toast--${toast.kind}`}>
+          {toast.text}
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="flex-1 px-4 py-5 space-y-6 max-w-lg mx-auto w-full">
+      <form onSubmit={handleSubmit} className="flex-1 px-4 py-5 space-y-4 max-w-lg mx-auto w-full">
 
         {draftRestored && (
-          <div className="flex items-center justify-between gap-3 text-sm bg-blue-50 text-navy rounded-lg pl-3 pr-1">
+          <div className="inset-box flex items-center justify-between gap-3 text-sm text-[var(--text)] pl-3 pr-1">
             <span>Draft restored</span>
-            <button type="button" onClick={clearDraft} className="min-h-[44px] px-3 font-semibold underline">
+            <button type="button" onClick={clearDraft} className="link-btn px-3">
               Clear draft
             </button>
           </div>
         )}
 
         {/* Section 1 — Customer */}
-        <section>
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-[#6B7280] mb-3">Customer</h2>
+        <section className="glass-card">
+          <h2 className="ui-field-label mb-3">Customer</h2>
           <div className="space-y-3">
             <Input
               label="Full Name"
@@ -303,17 +302,17 @@ export default function NewIntake() {
               placeholder="(214) 555-0100"
             />
             {linkedCustomer ? (
-              <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 rounded-lg px-3 py-2">
+              <div className="flex items-center gap-2 text-sm font-medium rounded-[var(--radius-lg)] pl-3 bg-[var(--success-tint-fill)] text-[var(--success-tint-text)]">
                 <span>Linked: {linkedCustomer.full_name}</span>
-                <button type="button" onClick={() => setLinkedCustomer(null)} className="ml-auto text-red-500">
-                  <X size={14} />
+                <button type="button" onClick={() => setLinkedCustomer(null)} aria-label="Unlink customer" className="icon-btn ml-auto text-[var(--message-red)]">
+                  <X size={16} />
                 </button>
               </div>
             ) : (
               <button
                 type="button"
                 onClick={() => setSearchOpen(true)}
-                className="text-xs text-navy underline"
+                className="link-btn"
               >
                 Existing customer?
               </button>
@@ -322,39 +321,45 @@ export default function NewIntake() {
         </section>
 
         {/* Section 2 — Job Details */}
-        <section>
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-[#6B7280] mb-3">Job Details</h2>
-          <div className="space-y-3">
-            <Input
-              label="Call Date & Time"
-              id="call_datetime"
-              type="datetime-local"
-              value={form.call_datetime}
-              onChange={e => set('call_datetime', e.target.value)}
-            />
-            <FixtureCardsEditor cards={form.fixtures} onChange={cards => set('fixtures', cards)} />
-            <Input
-              label="Surface Color (optional)"
-              id="surface_color"
-              value={form.surface_color}
-              onChange={e => set('surface_color', e.target.value)}
-              placeholder="e.g. Almond, Biscuit, White"
-            />
-          </div>
+        <section className="glass-card">
+          <h2 className="ui-field-label mb-3">Job Details</h2>
+          <Input
+            label="Call Date & Time"
+            id="call_datetime"
+            type="datetime-local"
+            value={form.call_datetime}
+            onChange={e => set('call_datetime', e.target.value)}
+          />
+        </section>
+
+        {/* On the page, not nested in a card: fixture cards are glass themselves */}
+        <FixtureCardsEditor cards={form.fixtures} onChange={cards => set('fixtures', cards)} />
+
+        <section className="glass-card">
+          <Input
+            label="Surface Color (optional)"
+            id="surface_color"
+            value={form.surface_color}
+            onChange={e => set('surface_color', e.target.value)}
+            placeholder="e.g. Almond, Biscuit, White"
+          />
         </section>
 
         {/* Section 3 — Appointment */}
-        <section>
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-[#6B7280] mb-3">Appointment</h2>
-          <label className="flex items-center gap-3 cursor-pointer">
-            <div
-              onClick={() => set('schedule_appointment', !form.schedule_appointment)}
-              className={`w-10 h-6 rounded-full transition-colors flex items-center px-1 ${form.schedule_appointment ? 'bg-navy' : 'bg-gray-300'}`}
-            >
-              <div className={`w-4 h-4 rounded-full bg-white shadow transition-transform ${form.schedule_appointment ? 'translate-x-4' : 'translate-x-0'}`} />
-            </div>
-            <span className="text-sm font-medium text-[#1F2937]">Schedule Appointment</span>
-          </label>
+        <section className="glass-card">
+          <h2 className="ui-field-label mb-1">Appointment</h2>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={form.schedule_appointment}
+            className="switch-row"
+            onClick={() => set('schedule_appointment', !form.schedule_appointment)}
+          >
+            <span className="switch-label">Schedule Appointment</span>
+            <span className="switch-track" aria-hidden="true">
+              <span className="switch-thumb" />
+            </span>
+          </button>
           {form.schedule_appointment && (
             <div className="mt-3 space-y-3">
               <Input
@@ -376,7 +381,7 @@ export default function NewIntake() {
         </section>
 
         {/* Section 4 — Notes */}
-        <section>
+        <section className="glass-card">
           <Textarea
             label="Notes"
             id="notes"
@@ -388,8 +393,8 @@ export default function NewIntake() {
         </section>
 
         {/* Section 5 — Lead Source */}
-        <section>
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-[#6B7280] mb-3">Lead Source</h2>
+        <section className="glass-card">
+          <h2 className="ui-field-label mb-3">Lead Source</h2>
           <div className="space-y-3">
             <Select
               label="How did they hear about us?"
@@ -410,19 +415,23 @@ export default function NewIntake() {
           </div>
         </section>
 
-        <section>
-          <label className="flex items-center gap-3 cursor-pointer">
-            <div
-              onClick={() => set('is_test', !form.is_test)}
-              className={`w-10 h-6 rounded-full transition-colors flex items-center px-1 ${form.is_test ? 'bg-amber-500' : 'bg-gray-300'}`}
-            >
-              <div className={`w-4 h-4 rounded-full bg-white shadow transition-transform ${form.is_test ? 'translate-x-4' : 'translate-x-0'}`} />
-            </div>
-            <span className="text-sm font-medium text-[#1F2937]">Mark as Test Job</span>
-          </label>
+        <section className="glass-card">
+          <button
+            type="button"
+            role="switch"
+            aria-checked={form.is_test}
+            className="switch-row"
+            onClick={() => set('is_test', !form.is_test)}
+          >
+            <span className="switch-label">Mark as Test Job</span>
+            <span className="switch-track" aria-hidden="true">
+              <span className="switch-thumb" />
+            </span>
+          </button>
           {form.is_test && (
-            <p className="text-xs text-amber-700 mt-2">
-              This job will not use a real job number and can be safely deleted later.
+            <p className="note-warn mt-2">
+              <AlertCircle size={16} aria-hidden="true" />
+              <span>This job will not use a real job number and can be safely deleted later.</span>
             </p>
           )}
         </section>
@@ -444,13 +453,13 @@ export default function NewIntake() {
       <Modal open={searchOpen} onClose={() => setSearchOpen(false)} title="Find Existing Customer">
         <div className="space-y-3">
           <div className="relative">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-secondary)]" />
             <input
               autoFocus
               value={searchQuery}
               onChange={e => searchCustomers(e.target.value)}
               placeholder="Name or phone…"
-              className="w-full border border-[#E5E7EB] rounded-lg pl-9 pr-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-navy"
+              className="ui-field ui-field-h w-full pl-9 pr-3 py-2.5"
             />
           </div>
           <div className="space-y-2">
@@ -464,14 +473,14 @@ export default function NewIntake() {
                   set('phone', c.phone || '')
                   setSearchOpen(false)
                 }}
-                className="w-full text-left px-3 py-2 rounded-lg border border-[#E5E7EB] hover:bg-blue-50"
+                className="inset-box w-full min-h-[44px] text-left px-3 py-2"
               >
-                <div className="font-medium text-sm text-[#1F2937]">{c.full_name}</div>
-                <div className="text-xs text-[#6B7280]">{c.phone}</div>
+                <div className="font-medium text-sm text-[var(--text)]">{c.full_name}</div>
+                <div className="text-xs text-[var(--text-secondary)]">{c.phone}</div>
               </button>
             ))}
             {searchQuery.length >= 2 && searchResults.length === 0 && (
-              <p className="text-sm text-[#6B7280] text-center py-4">No customers found</p>
+              <p className="text-sm text-[var(--text-secondary)] text-center py-4">No customers found</p>
             )}
           </div>
         </div>

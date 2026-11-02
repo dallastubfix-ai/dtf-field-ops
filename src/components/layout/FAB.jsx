@@ -17,7 +17,7 @@ export default function FAB() {
       >
         <Plus size={26} strokeWidth={2.4} />
       </button>
-      <span className="absolute right-16 top-1/2 -translate-y-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none hidden lg:block">
+      <span className="absolute right-16 top-1/2 -translate-y-1/2 fab-tooltip text-xs px-2 py-1 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none hidden lg:block">
         Log New Call
       </span>
     </div>

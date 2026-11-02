@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Loader2, Save, Share2, X } from 'lucide-react'
+import PageHeader from '../layout/PageHeader'
 import Button from '../ui/Button'
 import Card from '../ui/Card'
+import LoadingSpinner from '../ui/LoadingSpinner'
 import {
   DEFAULT_LABEL_POSITION, EXPORT_FILENAME, LONG_SIDE, decodePhoto, exportCollage, loadLabelFont, renderCollage, supportsBrightness,
 } from '../../lib/collageRender'
@@ -74,7 +76,7 @@ function useDecodedPhoto(url) {
 function Panel({ title, children }) {
   return (
     <Card className="space-y-4">
-      <h2 className="text-xs font-semibold uppercase tracking-wide text-dtf-sub">{title}</h2>
+      <h2 className="ui-field-label">{title}</h2>
       {children}
     </Card>
   )
@@ -87,10 +89,12 @@ function PhotoPicker({ photos, selectedKey, onSelect }) {
         p.usable ? (
           <button
             key={p.key}
+            type="button"
             onClick={() => onSelect(p.key)}
             aria-label={`Use this ${p.type} photo`}
-            className={`relative w-[72px] h-[72px] shrink-0 rounded-lg overflow-hidden border-2 ${
-              p.key === selectedKey ? 'border-navy' : 'border-transparent'
+            aria-pressed={p.key === selectedKey}
+            className={`relative w-[72px] h-[72px] shrink-0 rounded-[16px] overflow-hidden border-2 ${
+              p.key === selectedKey ? 'border-[var(--selected-border)]' : 'border-transparent'
             }`}
           >
             <img src={p.url} alt="" decoding="async" loading="lazy" className="w-full h-full object-cover" />
@@ -101,7 +105,7 @@ function PhotoPicker({ photos, selectedKey, onSelect }) {
         ) : (
           <div
             key={p.key}
-            className="w-[72px] h-[72px] shrink-0 rounded-lg bg-dtf-border flex items-center justify-center text-[10px] text-dtf-sub text-center px-1"
+            className="inset-box w-[72px] h-[72px] shrink-0 flex items-center justify-center text-[10px] text-[var(--text-secondary)] text-center px-1"
           >
             Not loaded
           </div>
@@ -114,19 +118,18 @@ function PhotoPicker({ photos, selectedKey, onSelect }) {
 function LabelGrid({ value, onChange, name }) {
   return (
     <div>
-      <div className="text-sm text-dtf-text mb-2">Label position</div>
+      <div className="text-sm text-[var(--text)] mb-2">Label position</div>
       <div className="grid grid-cols-3 gap-1.5 w-[168px]">
         {Array.from({ length: 9 }, (_, i) => (
           <button
             key={i}
+            type="button"
             onClick={() => onChange(i)}
             aria-label={`${name} label ${ROWS[Math.floor(i / 3)]} ${COLS[i % 3]}`}
             aria-pressed={value === i}
-            className={`h-12 rounded-lg border flex items-center justify-center ${
-              value === i ? 'bg-navy border-navy' : 'bg-white border-dtf-border'
-            }`}
+            className="fx-option p-0 flex items-center justify-center"
           >
-            {value === i && <span className="w-2.5 h-2.5 rounded-full bg-white" />}
+            {value === i && <span className="w-2.5 h-2.5 rounded-full bg-[var(--on-selected)]" />}
           </button>
         ))}
       </div>
@@ -137,7 +140,7 @@ function LabelGrid({ value, onChange, name }) {
 function Brightness({ value, onChange }) {
   return (
     <div>
-      <div className="flex items-center justify-between text-sm text-dtf-text">
+      <div className="flex items-center justify-between text-sm text-[var(--text)]">
         <span>Brightness</span>
         <span className="font-semibold">{value}%</span>
       </div>
@@ -149,7 +152,7 @@ function Brightness({ value, onChange }) {
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
         disabled={!BRIGHTNESS_SUPPORTED}
-        className="w-full h-10 accent-navy"
+        className="w-full h-10 accent-[var(--selected-fill-to)]"
         aria-label="Brightness"
       />
     </div>
@@ -159,7 +162,7 @@ function Brightness({ value, onChange }) {
 function Message({ children, onClose }) {
   return (
     <div className="flex-1 flex flex-col items-center justify-center text-center px-6 gap-4">
-      <p className="text-sm text-dtf-text">{children}</p>
+      <p className="text-sm text-[var(--text)]">{children}</p>
       <Button className="min-h-[44px]" onClick={onClose}>Close</Button>
     </div>
   )
@@ -478,19 +481,19 @@ export default function CollageMaker({
   } else if (fontStatus === 'loading') {
     body = (
       <div className="flex-1 flex items-center justify-center">
-        <div className="w-8 h-8 animate-spin rounded-full border-2 border-dtf-border border-t-navy" />
+        <LoadingSpinner />
       </div>
     )
   } else {
     body = (
       <>
-        <div className="relative h-[46dvh] shrink-0 bg-dtf-border flex items-center justify-center p-2">
-          <canvas ref={canvasRef} className="bg-white shadow rounded-sm" style={{ maxWidth: '100%', maxHeight: '100%' }} />
+        <div className="relative h-[46dvh] shrink-0 mt-3 bg-[var(--inset-fill)] flex items-center justify-center p-2">
+          <canvas ref={canvasRef} className="bg-[var(--box-fill)] shadow rounded-sm" style={{ maxWidth: '100%', maxHeight: '100%' }} />
           {busy && (
             <span className="absolute top-2 left-2 text-xs bg-black/60 text-white px-2 py-1 rounded">Preparing photos…</span>
           )}
           {renderError && (
-            <span className="absolute bottom-2 inset-x-2 text-xs text-center bg-red-600 text-white px-2 py-1 rounded">
+            <span className="absolute bottom-2 inset-x-2 text-xs text-center bg-[var(--danger-fill)] text-[var(--on-danger)] px-2 py-1 rounded">
               The preview couldn't be drawn. Try picking different photos.
             </span>
           )}
@@ -500,15 +503,15 @@ export default function CollageMaker({
           <Panel title="Layout">
             <div className="flex gap-2">
               {[['stacked', 'Stacked'], ['side', 'Side by side']].map(([value, label]) => (
-                <Button
+                <button
                   key={value}
-                  variant={layout === value ? 'primary' : 'secondary'}
-                  className="flex-1 min-h-[44px]"
+                  type="button"
+                  className="fx-option flex-1"
                   aria-pressed={layout === value}
                   onClick={() => setLayout(value)}
                 >
                   {label}
-                </Button>
+                </button>
               ))}
             </div>
           </Panel>
@@ -516,7 +519,7 @@ export default function CollageMaker({
           <Panel title="Before photo">
             <PhotoPicker photos={beforeList} selectedKey={beforePhoto?.key} onSelect={setBeforeKey} />
             {before.status === 'error' && (
-              <p className="text-xs text-red-600">That photo couldn't be opened. Pick a different one.</p>
+              <p className="text-xs text-[var(--message-red)]">That photo couldn't be opened. Pick a different one.</p>
             )}
             <Brightness value={beforeBright} onChange={setBeforeBright} />
             <LabelGrid value={beforePos} onChange={setBeforePos} name="Before" />
@@ -525,7 +528,7 @@ export default function CollageMaker({
           <Panel title="After photo">
             <PhotoPicker photos={afterList} selectedKey={afterPhoto?.key} onSelect={setAfterKey} />
             {after.status === 'error' && (
-              <p className="text-xs text-red-600">That photo couldn't be opened. Pick a different one.</p>
+              <p className="text-xs text-[var(--message-red)]">That photo couldn't be opened. Pick a different one.</p>
             )}
             <Brightness value={afterBright} onChange={setAfterBright} />
             <LabelGrid value={afterPos} onChange={setAfterPos} name="After" />
@@ -534,29 +537,26 @@ export default function CollageMaker({
           <Panel title="Label color">
             <div className="flex gap-2">
               <button
+                type="button"
                 onClick={() => setColorMode('black')}
                 aria-pressed={colorMode === 'black'}
-                className={`flex-1 min-h-[44px] rounded-lg border flex items-center justify-center gap-2 text-sm font-semibold ${
-                  colorMode === 'black' ? 'border-navy ring-2 ring-navy' : 'border-dtf-border'
-                }`}
+                className="fx-option flex-1 px-2 flex items-center justify-center gap-2"
               >
-                <span className="w-5 h-5 rounded-full bg-black" /> Black
+                <span className="w-5 h-5 rounded-full bg-black border border-[var(--chip-border)]" /> Black
               </button>
               <button
+                type="button"
                 onClick={() => setColorMode('white')}
                 aria-pressed={colorMode === 'white'}
-                className={`flex-1 min-h-[44px] rounded-lg border flex items-center justify-center gap-2 text-sm font-semibold ${
-                  colorMode === 'white' ? 'border-navy ring-2 ring-navy' : 'border-dtf-border'
-                }`}
+                className="fx-option flex-1 px-2 flex items-center justify-center gap-2"
               >
-                <span className="w-5 h-5 rounded-full bg-white border border-dtf-sub" /> White
+                <span className="w-5 h-5 rounded-full bg-white border border-[var(--chip-border)]" /> White
               </button>
               <label
-                className={`relative flex-1 min-h-[44px] rounded-lg border flex items-center justify-center gap-2 text-sm font-semibold ${
-                  colorMode === 'custom' ? 'border-navy ring-2 ring-navy' : 'border-dtf-border'
-                }`}
+                data-selected={colorMode === 'custom'}
+                className="fx-option relative flex-1 px-2 flex items-center justify-center gap-2"
               >
-                <span className="w-5 h-5 rounded-full border border-dtf-sub" style={{ backgroundColor: customColor }} /> Custom
+                <span className="w-5 h-5 rounded-full border border-[var(--chip-border)]" style={{ backgroundColor: customColor }} /> Custom
                 <input
                   type="color"
                   value={customColor}
@@ -570,7 +570,7 @@ export default function CollageMaker({
           </Panel>
 
           {!BRIGHTNESS_SUPPORTED && (
-            <p className="text-xs text-dtf-sub">Brightness isn't available in this browser.</p>
+            <p className="text-xs text-[var(--text-secondary)]">Brightness isn't available in this browser.</p>
           )}
         </div>
       </>
@@ -582,34 +582,36 @@ export default function CollageMaker({
       role="dialog"
       aria-modal="true"
       aria-label="Make collage"
-      className="fixed inset-0 z-[70] bg-dtf-bg flex flex-col overscroll-contain"
+      className="fixed inset-0 z-[70] glass-page flex flex-col overscroll-contain"
     >
-      <header className="bg-navy px-4 py-4 flex items-center gap-3 shrink-0">
-        <h1 className="text-white font-bold text-base flex-1">{saveOpen ? 'Save Collage' : 'Make Collage'}</h1>
-        <button
-          onClick={close}
-          disabled={saving}
-          aria-label="Close"
-          className="w-11 h-11 -mr-2 flex items-center justify-center text-white disabled:opacity-40"
-        >
-          <X size={22} />
-        </button>
-      </header>
+      <div className="shrink-0">
+        <PageHeader title={saveOpen ? 'Save Collage' : 'Make Collage'}>
+          <button
+            type="button"
+            onClick={close}
+            disabled={saving}
+            aria-label="Close"
+            className="icon-btn disabled:opacity-40"
+          >
+            <X size={22} />
+          </button>
+        </PageHeader>
+      </div>
       <div className={saveOpen ? 'hidden' : 'contents'}>{body}</div>
       {saveOpen && (
         <SavePanel choices={choices} status={saveStatus} savedName={savedName} warning={saveWarning} />
       )}
       {toast && (
-        <div role="status" className="fixed top-16 left-1/2 -translate-x-1/2 z-[80] bg-green-600 text-white text-sm px-4 py-2 rounded-lg shadow-lg">
+        <div role="status" className="ui-toast ui-toast--success z-[80]">
           {toast}
         </div>
       )}
-      <div className="shrink-0 bg-white border-t border-dtf-border px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
+      <div className="glass-bottom-bar glass-blur shrink-0">
         {footerNote && (
           <p
             role="status"
             className={`text-xs text-center mb-2 ${
-              footerNote.tone === 'error' ? 'text-red-600' : footerNote.tone === 'ok' ? 'text-green-600' : 'text-dtf-sub'
+              footerNote.tone === 'error' ? 'text-[var(--message-red)]' : footerNote.tone === 'ok' ? 'text-[var(--success-tint-text)]' : 'text-[var(--text-secondary)]'
             }`}
           >
             {footerNote.text}
@@ -633,7 +635,7 @@ export default function CollageMaker({
               Back
             </Button>
             <Button type="button" className="flex-1 min-h-[48px]" disabled={!!saveReason || saving} onClick={handleSave}>
-              {saving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+              {saving ? <Loader2 size={18} className="animate-spin motion-reduce:[animation-duration:2s]" /> : <Save size={18} />}
               {saving ? 'Saving...' : 'Save'}
             </Button>
           </div>

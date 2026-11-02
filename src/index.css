@@ -506,6 +506,27 @@
   /* ── PageHeader extensions (leading slot, centered title) ── */
   .page-header--leading { padding-left: 12px; }
   .page-header-title--centered { flex: 1; text-align: center; }
+  .page-header--leading .page-header-title { flex: 1; }
+  .page-header-titles { flex: 1; min-width: 0; }
+  .page-header-subtitle {
+    font-size: 13px;
+    line-height: 16px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  /* Rests 20px down like the plain header (margin, not padding, so it sticks at 12px).
+     --tab-fill, not --glass-fill: content scrolls under this one. */
+  .page-header-wrap--sticky {
+    position: sticky;
+    top: 12px;
+    z-index: 30;
+    margin-top: 20px;
+    padding-top: 0;
+  }
+  .page-header--sticky { background: var(--tab-fill); }
 
   /* ── Invoices ── */
   .invoice-summary {
@@ -812,8 +833,10 @@
     font-size: 14px;
     font-weight: 500;
   }
+  .fx-chip:disabled { opacity: 0.4; }
   .fx-chip[aria-pressed="true"],
-  .fx-option[aria-pressed="true"] {
+  .fx-option[aria-pressed="true"],
+  .fx-option[data-selected="true"] {
     background: linear-gradient(160deg, var(--selected-fill-from), var(--selected-fill-to));
     border-color: var(--selected-border);
     color: var(--on-selected);
@@ -982,6 +1005,7 @@
 
   .fx-chip:focus-visible,
   .fx-option:focus-visible,
+  .fx-option:has(input:focus-visible),
   .fx-add:focus-visible,
   .fx-add-repair:focus-visible,
   .fx-trash:focus-visible,
@@ -1099,7 +1123,461 @@
     border-radius: var(--radius-lg);
   }
 
+  /* ── Shared bits for the remaining screens ── */
+
+  /* Inset box inside a card (appointment items, info rows, photo placeholders) */
+  .inset-box {
+    background: var(--box-fill);
+    border: 1px solid var(--inset-fill);
+    border-radius: var(--radius-lg);
+  }
+  /* The token fills are translucent and written for the page background, so on the
+     always-black video page they sit on --page-base to stay readable in both themes. */
+  .inset-box--opaque { background: linear-gradient(var(--box-fill), var(--box-fill)), var(--page-base); }
+  .theme-segmented--opaque { background: linear-gradient(var(--track-fill), var(--track-fill)), var(--page-base); }
+
+  /* Links and link-style buttons (44px hit area) */
+  .link-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 44px;
+    background: transparent;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--accent-text);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .link-btn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+  /* Top-right of a text block: keeps the 44px target without making the row taller */
+  .link-btn--corner {
+    flex-shrink: 0;
+    justify-content: center;
+    min-width: 44px;
+    margin: -12px -8px -12px 0;
+    padding: 0 8px;
+  }
+
+  /* Status chips (Mileage) */
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+    padding: 4px 10px;
+    border-radius: var(--radius-pill);
+    font-size: 12.5px;
+    font-weight: 700;
+    white-space: nowrap;
+    background: var(--neutral-badge-fill);
+    color: var(--neutral-badge-text);
+  }
+  .chip--success { background: var(--success-tint-fill); color: var(--success-tint-text); }
+  .chip--error { color: var(--message-red); }
+
+  /* Retired-amber warnings: gray text with an icon */
+  .note-warn {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+  }
+  .note-warn svg { flex-shrink: 0; margin-top: 1px; }
+
+  /* Toasts (one position, kept in one place) */
+  .ui-toast {
+    position: fixed;
+    top: calc(92px + env(safe-area-inset-top));
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 50;
+    width: max-content;
+    max-width: calc(100vw - 32px);
+    padding: 10px 16px;
+    border-radius: var(--radius-pill);
+    font-size: 14px;
+    font-weight: 700;
+    text-align: center;
+    box-shadow: var(--modal-shadow);
+  }
+  .ui-toast--success { background: var(--success-solid-fill); color: var(--on-success-solid); }
+  .ui-toast--error { background: var(--danger-fill); color: var(--on-danger); }
+  .ui-toast--neutral {
+    background: var(--modal-fill);
+    color: var(--text);
+    -webkit-backdrop-filter: blur(var(--blur-modal)) saturate(var(--glass-saturate));
+    backdrop-filter: blur(var(--blur-modal)) saturate(var(--glass-saturate));
+  }
+
+  /* Spinner (src/components/ui/LoadingSpinner, plus small inline ones) */
+  @keyframes ui-spin { to { transform: rotate(360deg); } }
+  .ui-spinner {
+    border: 2px solid var(--inset-fill);
+    border-top-color: var(--accent-text);
+    border-radius: 50%;
+    animation: ui-spin 1s linear infinite;
+  }
+
+  /* Glass surfaces that sit over content */
+  .glass-bottom-bar {
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+    background: var(--tab-fill);
+    border-top: 1px solid var(--glass-border);
+    border-radius: 24px 24px 0 0;
+    box-shadow: var(--glass-shadow);
+  }
+  .glass-banner {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 12px 16px 0;
+    padding: 6px 6px 6px 16px;
+    background: var(--tab-fill);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-card);
+    box-shadow: var(--glass-shadow);
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text);
+  }
+  .glass-banner--notice {
+    justify-content: center;
+    gap: 8px;
+    padding: 8px 16px;
+    font-size: 13px;
+    color: var(--text-secondary);
+  }
+
+  /* Photos: tiles, labels and overlays. Literal black and white here on purpose: they sit
+     on the photo, not on the theme. */
+  .photo-tile {
+    position: relative;
+    overflow: hidden;
+    aspect-ratio: 1;
+    border-radius: 16px;
+    background: var(--box-fill);
+    border: 1px solid var(--inset-fill);
+  }
+  .photo-pill {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    padding: 3px 8px;
+    border-radius: var(--radius-pill);
+    background: rgba(0,0,0,0.6);
+    color: #FFFFFF;
+    font-size: 11px;
+    line-height: 14px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+  }
+  .photo-remove {
+    position: absolute;
+    top: 0;
+    right: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+  }
+  .photo-remove:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
+  .photo-remove-dot {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: rgba(0,0,0,0.65);
+    color: #FFFFFF;
+  }
+  .photo-done {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0,0,0,0.6);
+  }
+  .photo-done-dot {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--success-solid-fill);
+    color: var(--on-success-solid);
+  }
+
+  /* Lightbox: stays dark in both themes, like a photo viewer */
+  .lightbox-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    min-height: 44px;
+    padding: 0 14px;
+    border-radius: var(--radius-pill);
+    background: rgba(255,255,255,0.14);
+    color: #FFFFFF;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+  }
+  .lightbox-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: var(--radius-sm);
+    background: rgba(255,255,255,0.14);
+    color: #FFFFFF;
+  }
+  .lightbox-btn--danger { background: var(--danger-fill); color: var(--on-danger); }
+  .lightbox-nav {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: rgba(0,0,0,0.6);
+    color: #FFFFFF;
+  }
+  .lightbox-tag:focus-visible,
+  .lightbox-btn:focus-visible,
+  .lightbox-nav:focus-visible { outline: 2px solid #FFFFFF; outline-offset: 2px; }
+
+  /* ── JobDetail ── */
+  .section-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    min-height: 52px;
+    padding: 4px 6px 4px 16px;
+    text-align: left;
+    background: transparent;
+  }
+  .section-toggle:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
+  .section-chevron {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 44px;
+    height: 44px;
+    color: var(--text-secondary);
+  }
+
+  /* --action-stack (the stack's height) is set by the page. On phones the shell already leaves
+     154px, and the stack starts 98px up, so 16px of clearance needs stack - 40. */
+  .job-page { padding-bottom: calc(var(--action-stack) - 40px); }
+  .job-page .fx-scroll-target {
+    scroll-margin-bottom: calc(114px + var(--action-stack) + env(safe-area-inset-bottom));
+  }
+
+  /* Bottom action stack: no strip behind it, lines up with the floating + button.
+     Only the buttons take taps, so the gaps still scroll the page. */
+  .job-actions {
+    position: fixed;
+    left: 16px;
+    right: 88px;
+    bottom: calc(98px + env(safe-area-inset-bottom));
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    pointer-events: none;
+  }
+  .job-actions > * { pointer-events: auto; }
+  .job-actions .ui-btn {
+    min-height: 56px;
+    border-radius: 18px;
+  }
+  /* Transparent by default; these float over scrolling text */
+  .job-actions .ui-btn-secondary {
+    background: var(--tab-fill);
+    -webkit-backdrop-filter: blur(var(--blur-glass)) saturate(var(--glass-saturate));
+    backdrop-filter: blur(var(--blur-glass)) saturate(var(--glass-saturate));
+  }
+  .job-actions-row {
+    display: flex;
+    gap: 10px;
+  }
+  .job-actions-row .ui-btn {
+    flex: 1 1 0;
+    min-width: 0;
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+  .job-cancelled {
+    padding: 10px 16px;
+    text-align: center;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--message-red);
+    background: linear-gradient(var(--neutral-badge-fill), var(--neutral-badge-fill)), var(--tab-fill);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--glass-shadow);
+  }
+  .action-note {
+    align-self: center;
+    padding: 6px 12px;
+    border-radius: var(--radius-pill);
+    background: var(--modal-fill);
+    box-shadow: var(--glass-shadow);
+    font-size: 12px;
+    font-weight: 700;
+    text-align: center;
+  }
+  @media (min-width: 1024px) {
+    /* No tab bar: the shell leaves no bottom space and the + button drops to 24px */
+    .job-page { padding-bottom: calc(var(--action-stack) + 40px); }
+    .job-actions {
+      left: 256px;
+      bottom: calc(24px + env(safe-area-inset-bottom));
+    }
+  }
+
+  /* ── Send collage picker: a real checkbox, restyled. The tick is a CSS mask so it takes
+     --on-selected, which keeps it visible in both themes with accents on or off. ── */
+  input[type="checkbox"].check-box {
+    appearance: none;
+    -webkit-appearance: none;
+    position: relative;
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    color: transparent;
+    background: transparent;
+    background-image: none;
+    border: 1px solid var(--control-border);
+    border-radius: 8px;
+  }
+  input[type="checkbox"].check-box:checked {
+    background: linear-gradient(160deg, var(--selected-fill-from), var(--selected-fill-to));
+    border-color: var(--selected-border);
+  }
+  input[type="checkbox"].check-box:checked::after {
+    content: "";
+    position: absolute;
+    inset: 2px;
+    background: var(--on-selected);
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E") center / contain no-repeat;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E") center / contain no-repeat;
+  }
+  input[type="checkbox"].check-box:focus,
+  input[type="checkbox"].check-box:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+    box-shadow: none;
+  }
+  input[type="checkbox"].check-box:disabled { opacity: 0.5; }
+
+  /* ── Chat ── */
+  .chat-who {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-secondary);
+  }
+  .chat-bubble {
+    max-width: 85%;
+    padding: 12px 16px;
+    border-radius: var(--radius-lg);
+  }
+  .chat-bubble--customer {
+    background: var(--selected-fill-to);
+    color: var(--on-selected);
+  }
+  .chat-bubble--assistant {
+    background: var(--box-fill);
+    border: 1px solid var(--inset-fill);
+    color: var(--text);
+  }
+  .chat-meta {
+    font-size: 12px;
+    font-weight: 500;
+    opacity: 0.8;
+  }
+  .chat-bubble--assistant .chat-meta {
+    color: var(--text-secondary);
+    opacity: 1;
+  }
+
+  /* ── Desktop sidebar ── */
+  .side-nav {
+    background: var(--tab-fill);
+    border-right: 1px solid var(--glass-border);
+  }
+  .side-nav-head { border-bottom: 1px solid var(--glass-border); }
+  .side-nav-title {
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: var(--text);
+  }
+  .side-link {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 44px;
+    padding: 0 12px;
+    border-radius: var(--radius-sm);
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-secondary);
+  }
+  .side-link:hover { background: var(--inset-fill); }
+  .side-link[aria-current="page"] {
+    background: var(--tab-active-fill);
+    color: var(--tab-active-text);
+    font-weight: 700;
+  }
+  .side-link:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+
+  /* Login */
+  .login-mark {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: linear-gradient(160deg, var(--primary-fill-from), var(--primary-fill-to));
+    color: var(--on-primary);
+  }
+
+  /* Settings avatar */
+  .account-avatar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: linear-gradient(160deg, var(--primary-fill-from), var(--primary-fill-to));
+    color: var(--on-primary);
+    font-size: 14px;
+    font-weight: 700;
+  }
+
+  /* Desktop + button tooltip */
+  .fab-tooltip {
+    background: var(--modal-fill);
+    border: 1px solid var(--glass-border);
+    color: var(--text);
+  }
+
   @media (prefers-reduced-motion: reduce) {
+    /* A stopped spinner reads as a hang, so it slows down instead */
+    .ui-spinner { animation-duration: 2s; }
     .switch-thumb { transition: none; }
     .ui-btn { transition: none; }
     .glass-tab { transition: none; }

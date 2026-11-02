@@ -159,12 +159,12 @@ export default function SendCollage({ images, signedUrls }) {
 
   const single = items.length === 1
   const barNote = open ? null : (note ?? (single && !items[0].file ? { kind: 'info', text: 'Collage is still loading' } : null))
-  const noteClass = (n) => (n.kind === 'error' ? 'text-red-600' : n.kind === 'ok' ? 'text-green-600' : 'text-[#6B7280]')
+  const noteClass = (n) => (n.kind === 'error' ? 'text-[var(--message-red)]' : n.kind === 'ok' ? 'text-[var(--success-tint-text)]' : 'text-[var(--text-secondary)]')
 
   return (
     <>
       {barNote && (
-        <p role="status" className={`text-xs text-center ${noteClass(barNote)}`}>{barNote.text}</p>
+        <p role="status" className={`action-note ${noteClass(barNote)}`}>{barNote.text}</p>
       )}
       <Button
         type="button"
@@ -182,11 +182,11 @@ export default function SendCollage({ images, signedUrls }) {
             {items.map((it) => (
               <label
                 key={it.key}
-                className={`flex items-center gap-3 min-h-[44px] rounded-lg border border-[#E5E7EB] p-2 ${it.file ? '' : 'opacity-60'}`}
+                className={`inset-box flex items-center gap-3 min-h-[44px] p-2 ${it.file ? '' : 'opacity-60'}`}
               >
                 <input
                   type="checkbox"
-                  className="w-6 h-6 rounded text-navy shrink-0"
+                  className="check-box"
                   checked={!!it.file && !unticked.has(it.key)}
                   disabled={!it.file || busy}
                   onChange={() => toggle(it.key)}
@@ -194,16 +194,16 @@ export default function SendCollage({ images, signedUrls }) {
                 {isBlobUrl(it.url) ? (
                   <img src={it.url} alt="" className="w-14 h-14 rounded-md object-cover shrink-0" />
                 ) : (
-                  <div className="w-14 h-14 rounded-md bg-[#F3F4F6] flex items-center justify-center shrink-0">
-                    <div className="w-5 h-5 animate-spin rounded-full border-2 border-[#E5E7EB] border-t-navy" />
+                  <div className="inset-box w-14 h-14 flex items-center justify-center shrink-0">
+                    <div className="ui-spinner w-5 h-5" />
                   </div>
                 )}
                 <div className="min-w-0 flex-1">
-                  <div className="text-sm font-semibold text-[#1F2937]">{it.label}</div>
+                  <div className="text-sm font-semibold text-[var(--text)]">{it.label}</div>
                   {it.file ? (
-                    <div className="text-xs text-[#6B7280] break-all">{it.img.filename}</div>
+                    <div className="text-xs text-[var(--text-secondary)] break-all">{it.img.filename}</div>
                   ) : (
-                    <div className="text-xs text-[#6B7280]">Collage is still loading</div>
+                    <div className="text-xs text-[var(--text-secondary)]">Collage is still loading</div>
                   )}
                 </div>
               </label>

@@ -1,10 +1,11 @@
 import { useRef, useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Circle, Square, RefreshCw, Upload } from 'lucide-react'
+import { AlertCircle, Circle, Square, RefreshCw, Upload } from 'lucide-react'
 import { format } from 'date-fns'
 import { supabase } from '../lib/supabase'
 import db from '../lib/db'
 import { getValidProviderToken } from '../lib/googleToken'
+import PageHeader from '../components/layout/PageHeader'
 import Button from '../components/ui/Button'
 
 function useTimer(running) {
@@ -33,7 +34,7 @@ export default function VideoCapture() {
   const [blob, setBlob] = useState(null)
   const [blobUrl, setBlobUrl] = useState(null)
   const [uploading, setUploading] = useState(false)
-  const [toast, setToast] = useState('')
+  const [toast, setToast] = useState(null) // { text, kind }
   const [noProvider, setNoProvider] = useState(false)
   const [job, setJob] = useState(null)
   const [gallerySrc, setGallerySrc] = useState(null)
@@ -149,11 +150,11 @@ export default function VideoCapture() {
       await supabase.from('videos').insert(record)
       await db.videos.add({ ...record, _synced: true })
 
-      setToast('Video uploaded to Google Drive!')
+      setToast({ text: 'Video uploaded to Google Drive!', kind: 'success' })
       setTimeout(() => navigate(`/jobs/${id}`, { replace: true }), 900)
     } catch (err) {
       const msg = err?.message ?? String(err)
-      setToast(`Upload failed: ${msg}`)
+      setToast({ text: `Upload failed: ${msg}`, kind: 'error' })
     } finally {
       setUploading(false)
     }
@@ -168,40 +169,39 @@ export default function VideoCapture() {
         className="hidden"
         onChange={handleGalleryPick}
       />
-      <header className="bg-navy px-4 py-4 flex items-center gap-3 z-30">
-        <button onClick={() => navigate(-1)} className="text-white"><ArrowLeft size={20} /></button>
-        <h1 className="text-white font-bold text-base flex-1">
-          Record Video {job?.job_number ? `— ${job.job_number}` : ''}
-        </h1>
-      </header>
+      <PageHeader
+        title={`Record Video ${job?.job_number ? `— ${job.job_number}` : ''}`}
+        onBack={() => navigate(-1)}
+      />
 
       {toast && (
-        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-white text-sm px-4 py-2 rounded-lg shadow-lg">
-          {toast}
+        <div className={`ui-toast ui-toast--${toast.kind}`}>
+          {toast.text}
         </div>
       )}
 
       {noProvider && (
-        <div className="mx-4 mt-4 bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800">
-          Google Drive not connected yet. Complete Google OAuth setup to enable video upload.
+        <div className="inset-box inset-box--opaque note-warn mx-4 mt-4 p-4">
+          <AlertCircle size={16} aria-hidden="true" />
+          <span>Google Drive not connected yet. Complete Google OAuth setup to enable video upload.</span>
         </div>
       )}
 
       {/* Before / After toggle */}
-      <div className="flex gap-2 px-4 py-3">
-        {['before', 'after'].map(t => (
-          <button
-            key={t}
-            onClick={() => setVideoType(t)}
-            className={`flex-1 py-2 rounded-lg font-semibold text-sm transition-all ${
-              videoType === t
-                ? t === 'before' ? 'bg-green-500 text-white' : 'bg-gold text-white'
-                : 'bg-white/10 text-white/60'
-            }`}
-          >
-            {t.toUpperCase()}
-          </button>
-        ))}
+      <div className="px-4 py-3">
+        <div className="theme-segmented theme-segmented--opaque" role="group" aria-label="Video type">
+          {['before', 'after'].map(t => (
+            <button
+              key={t}
+              type="button"
+              className="theme-segment"
+              aria-pressed={videoType === t}
+              onClick={() => setVideoType(t)}
+            >
+              {t.toUpperCase()}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Camera preview or playback */}
@@ -221,7 +221,9 @@ export default function VideoCapture() {
 
         {!blob ? (
           <button
+            type="button"
             onClick={recording ? stopRecording : startRecording}
+            aria-label={recording ? 'Stop recording' : 'Start recording'}
             className={`w-20 h-20 rounded-full flex items-center justify-center shadow-lg transition-all ${
               recording
                 ? 'bg-red-500 animate-pulse'
@@ -246,8 +248,9 @@ export default function VideoCapture() {
         )}
         {!blob && !recording && (
           <button
+            type="button"
             onClick={() => fileInputRef.current?.click()}
-            className="mt-1 text-white/60 text-sm underline underline-offset-2"
+            className="mt-1 min-h-[44px] text-white/60 text-sm underline underline-offset-2"
           >
             Choose from Gallery
           </button>

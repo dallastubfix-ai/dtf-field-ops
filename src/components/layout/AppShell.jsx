@@ -23,9 +23,9 @@ export default function AppShell({ children }) {
   return (
     <div className="flex min-h-screen glass-page">
       {/* Desktop sidebar — hidden on mobile and in print */}
-      <aside className="no-print hidden lg:flex flex-col w-60 bg-navy fixed top-0 left-0 h-full z-40 shrink-0">
-        <div className="px-6 py-6 border-b border-navy-dark">
-          <span className="text-white font-bold text-lg tracking-tight">DTF Field Ops</span>
+      <aside className="side-nav no-print hidden lg:flex flex-col w-60 fixed top-0 left-0 h-full z-40 shrink-0">
+        <div className="side-nav-head px-6 py-6">
+          <span className="side-nav-title">DTF Field Ops</span>
           <div className="mt-1">
             <SyncIndicator />
           </div>
@@ -36,13 +36,7 @@ export default function AppShell({ children }) {
               key={to}
               to={to}
               end={to === '/'}
-              className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                  isActive
-                    ? 'bg-navy-dark text-white'
-                    : 'text-blue-200 hover:bg-navy-dark hover:text-white'
-                }`
-              }
+              className="side-link"
             >
               <Icon size={18} />
               {label}

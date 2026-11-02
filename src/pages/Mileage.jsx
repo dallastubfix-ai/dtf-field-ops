@@ -1,9 +1,10 @@
 import { useState, useEffect, useSyncExternalStore } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ChevronLeft, ChevronRight, ChevronDown, Car } from 'lucide-react'
+import { AlertCircle, ChevronLeft, ChevronRight, ChevronDown, Car } from 'lucide-react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { format } from 'date-fns'
 import db from '../lib/db'
+import PageHeader from '../components/layout/PageHeader'
 import Button from '../components/ui/Button'
 import EmptyState from '../components/ui/EmptyState'
 import LoadingSpinner from '../components/ui/LoadingSpinner'
@@ -113,55 +114,53 @@ export default function Mileage() {
   }
 
   const statusText = (day, row, status) => {
-    if (day > today) return { text: 'Scheduled', cls: 'bg-blue-100 text-blue-700' }
-    if (status === 'calculated') return { text: `${row.total_miles} mi`, cls: 'bg-green-100 text-green-700' }
-    if (status === 'pending') return { text: 'Waiting to calculate', cls: 'bg-amber-100 text-amber-700' }
-    if (status === 'failed') return { text: 'Needs attention', cls: 'bg-red-100 text-red-600' }
-    return { text: 'Not calculated', cls: 'bg-gray-100 text-gray-600' }
+    if (day > today) return { text: 'Scheduled', cls: '' }
+    if (status === 'calculated') return { text: `${row.total_miles} mi`, cls: 'chip--success' }
+    if (status === 'pending') return { text: 'Waiting to calculate', cls: '' }
+    if (status === 'failed') return { text: 'Needs attention', cls: 'chip--error' }
+    return { text: 'Not calculated', cls: '' }
   }
 
   const loading = rows === undefined || (isOnline && groups === null && !loadFailed)
 
   return (
     <div className="min-h-screen">
-      <header className="bg-navy px-4 py-4 flex items-center gap-2">
-        <button onClick={() => navigate('/more')} aria-label="Back" className="text-white">
-          <ChevronLeft size={22} />
-        </button>
-        <h1 className="text-white font-bold text-lg">Mileage</h1>
-      </header>
+      <PageHeader title="Mileage" onBack={() => navigate('/more')} />
 
-      <div className="flex items-center justify-between bg-white border-b border-[#E5E7EB] px-2 py-1">
-        <button onClick={() => changeMonth(-1)} aria-label="Previous month" className="p-3 text-navy">
-          <ChevronLeft size={20} />
-        </button>
-        <span className="font-semibold text-sm text-[#1F2937]">{monthLabel}</span>
-        <button onClick={() => changeMonth(1)} aria-label="Next month" className="p-3 text-navy">
-          <ChevronRight size={20} />
-        </button>
+      <div className="px-4 mt-3 max-w-lg mx-auto">
+        <div className="glass-row flex items-center justify-between px-1 py-1">
+          <button type="button" onClick={() => changeMonth(-1)} aria-label="Previous month" className="icon-btn">
+            <ChevronLeft size={22} />
+          </button>
+          <span className="font-semibold text-sm text-[var(--text)]">{monthLabel}</span>
+          <button type="button" onClick={() => changeMonth(1)} aria-label="Next month" className="icon-btn">
+            <ChevronRight size={22} />
+          </button>
+        </div>
       </div>
 
       <div className="px-4 py-4 space-y-3 max-w-lg mx-auto">
         <div className="grid grid-cols-2 gap-3">
-          <div className="bg-white rounded-xl border border-[#E5E7EB] shadow-sm p-3">
-            <div className="text-xs text-[#6B7280]">{monthName} total</div>
-            <div className="text-lg font-bold text-navy">{monthTotal} mi</div>
+          <div className="glass-row home-stat">
+            <div className="home-stat-label">{monthName} total</div>
+            <div className="text-lg font-bold text-[var(--accent-text)]">{monthTotal} mi</div>
           </div>
-          <div className="bg-white rounded-xl border border-[#E5E7EB] shadow-sm p-3">
-            <div className="text-xs text-[#6B7280]">{yearStart.slice(0, 4)} total</div>
-            <div className="text-lg font-bold text-navy">{yearTotal} mi</div>
+          <div className="glass-row home-stat">
+            <div className="home-stat-label">{yearStart.slice(0, 4)} total</div>
+            <div className="text-lg font-bold text-[var(--accent-text)]">{yearTotal} mi</div>
           </div>
         </div>
         {notIncluded > 0 && (
-          <p className="text-xs text-amber-600">
-            {notIncluded} day{notIncluded === 1 ? '' : 's'} not included yet
+          <p className="note-warn">
+            <AlertCircle size={16} aria-hidden="true" />
+            <span>{notIncluded} day{notIncluded === 1 ? '' : 's'} not included yet</span>
           </p>
         )}
         {!isOnline && (
-          <p className="text-xs text-red-500">You are offline. Connect to the internet to calculate mileage.</p>
+          <p className="text-xs text-[var(--message-red)]">You are offline. Connect to the internet to calculate mileage.</p>
         )}
         {loadFailed && (
-          <p className="text-xs text-red-500">Could not load your schedule. Check your connection and reopen this page.</p>
+          <p className="text-xs text-[var(--message-red)]">Could not load your schedule. Check your connection and reopen this page.</p>
         )}
 
         {loading ? (
@@ -180,20 +179,20 @@ export default function Mileage() {
           const skipped = row?.skipped?.length ? row.skipped : (group?.skipped ?? [])
           const isOpen = !!open[day]
           return (
-            <div key={day} className="bg-white rounded-xl border border-[#E5E7EB] shadow-sm p-4">
+            <div key={day} className="glass-card">
               <button
                 type="button"
                 aria-expanded={isOpen}
                 onClick={() => setOpen(o => ({ ...o, [day]: !o[day] }))}
-                className="w-full flex items-center justify-between gap-2 text-left"
+                className="w-full min-h-[44px] flex items-center justify-between gap-2 text-left"
               >
                 <div>
-                  <div className="font-semibold text-[#1F2937] text-sm">{prettyDay(day)}{day === today && ' · Today'}</div>
-                  <div className="text-xs text-[#6B7280]">{stopCount} stop{stopCount === 1 ? '' : 's'}</div>
+                  <div className="font-semibold text-[var(--text)] text-sm">{prettyDay(day)}{day === today && ' · Today'}</div>
+                  <div className="text-xs text-[var(--text-secondary)]">{stopCount} stop{stopCount === 1 ? '' : 's'}</div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${chip.cls}`}>{chip.text}</span>
-                  <ChevronDown size={16} className={`text-[#9CA3AF] transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                  <span className={`chip ${chip.cls}`}>{chip.text}</span>
+                  <ChevronDown size={16} className={`text-[var(--text-secondary)] transition-transform motion-reduce:transition-none ${isOpen ? 'rotate-180' : ''}`} />
                 </div>
               </button>
 
@@ -204,34 +203,35 @@ export default function Mileage() {
                       {stops.map((s, i) => (
                         <div key={s.appointment_id}>
                           {i > 0 && (
-                            <div className="flex items-center justify-between gap-3 py-2 pl-4 border-l-2 border-[#E5E7EB]">
-                              <span className="text-xs text-[#6B7280]">Went home in between</span>
+                            <div className="pl-4 border-l-2 border-[var(--inset-fill)]">
                               <button
                                 type="button"
                                 role="switch"
                                 aria-checked={isHome(s)}
-                                aria-label="Went home in between"
                                 onClick={() => handleFlip(day, s)}
-                                className={`w-10 h-6 rounded-full transition-colors flex items-center px-1 ${isHome(s) ? 'bg-navy' : 'bg-gray-300'}`}
+                                className="switch-row"
                               >
-                                <div className={`w-4 h-4 rounded-full bg-white shadow transition-transform ${isHome(s) ? 'translate-x-4' : 'translate-x-0'}`} />
+                                <span className="text-xs text-[var(--text-secondary)]">Went home in between</span>
+                                <span className="switch-track" aria-hidden="true">
+                                  <span className="switch-thumb" />
+                                </span>
                               </button>
                             </div>
                           )}
-                          <div className="text-xs text-[#1F2937]">
+                          <div className="text-xs text-[var(--text)]">
                             {i + 1}. {s.job_number ?? `Stop ${i + 1}`}{s.city ? `, ${s.city}` : ''}
                           </div>
                         </div>
                       ))}
                       {recalcWaiting && !isOnline && (
-                        <p className="text-xs text-[#6B7280]">Will recalculate when you're back online.</p>
+                        <p className="text-xs text-[var(--text-secondary)]">Will recalculate when you're back online.</p>
                       )}
                     </div>
                   )}
                   {row?.status === 'calculated' && row.legs?.length > 0 && (
                     <ul className="space-y-1">
                       {row.legs.map((leg, i) => (
-                        <li key={i} className="flex justify-between gap-3 text-xs text-[#6B7280]">
+                        <li key={i} className="flex justify-between gap-3 text-xs text-[var(--text-secondary)]">
                           <span>{leg.from} → {leg.to}</span>
                           <span className="shrink-0">{leg.miles} mi</span>
                         </li>
@@ -239,24 +239,25 @@ export default function Mileage() {
                     </ul>
                   )}
                   {skipped.length > 0 && (
-                    <p className="text-xs text-amber-600">
-                      Not counted (no address): {skipped.map(s => s.job_number ?? 'job').join(', ')}
+                    <p className="note-warn">
+                      <AlertCircle size={16} aria-hidden="true" />
+                      <span>Not counted (no address): {skipped.map(s => s.job_number ?? 'job').join(', ')}</span>
                     </p>
                   )}
                   {!(row?.legs?.length > 0) && skipped.length === 0 && !canFlip && (
-                    <p className="text-xs text-[#6B7280]">No trip details yet.</p>
+                    <p className="text-xs text-[var(--text-secondary)]">No trip details yet.</p>
                   )}
                 </div>
               )}
 
               {!recalcWaiting && (row?.status === 'pending' || row?.status === 'failed') && row.status_reason && (
-                <p className="mt-2 text-xs text-[#6B7280]">
+                <p className="mt-2 text-xs text-[var(--text-secondary)]">
                   {row.status === 'pending' && (row.attempts ?? 0) >= MAX_AUTO_ATTEMPTS
                     ? "Couldn't calculate automatically. Tap Try again."
                     : friendlyReason(row.status_reason)}
                 </p>
               )}
-              {notes[day] && <p className="mt-2 text-xs text-red-500">{notes[day]}</p>}
+              {notes[day] && <p className="mt-2 text-xs text-[var(--message-red)]">{notes[day]}</p>}
 
               {day <= today && (
                 <Button

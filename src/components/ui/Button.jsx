@@ -8,6 +8,7 @@ const variants = {
 
 export default function Button({
   variant = 'primary',
+  type = 'button',
   className = '',
   disabled = false,
   children,
@@ -15,6 +16,7 @@ export default function Button({
 }) {
   return (
     <button
+      type={type}
       disabled={disabled}
       className={`
         ui-btn inline-flex items-center justify-center gap-2 px-4

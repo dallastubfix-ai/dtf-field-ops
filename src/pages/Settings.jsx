@@ -7,6 +7,7 @@ import { useAuth } from '../context/AuthContext'
 import { ensurePushRegistration, getPushStatus, subscribePushStatus } from '../lib/push'
 import { supabase } from '../lib/supabase'
 import db from '../lib/db'
+import PageHeader from '../components/layout/PageHeader'
 import Button from '../components/ui/Button'
 import AddressAutocomplete from '../components/ui/AddressAutocomplete'
 import { useOnlineStatus } from '../hooks/useOnlineStatus'
@@ -151,9 +152,7 @@ export default function Settings() {
 
   return (
     <div className="min-h-screen">
-      <header className="bg-navy px-4 py-4">
-        <h1 className="text-white font-bold text-lg">Settings</h1>
-      </header>
+      <PageHeader title="Settings" />
 
       <div className="px-4 py-5 space-y-4 max-w-lg mx-auto">
 
@@ -202,21 +201,21 @@ export default function Settings() {
         </section>
 
         {/* Notifications */}
-        <div className="bg-white rounded-xl border border-[#E5E7EB] shadow-sm p-4">
+        <div className="glass-card">
           <div className="flex items-center gap-3 mb-3">
-            <Bell size={18} className="text-navy" />
-            <h2 className="font-semibold text-[#1F2937]">Notifications</h2>
+            <Bell size={18} className="text-[var(--accent-text)]" />
+            <h2 className="font-semibold text-[var(--text)]">Notifications</h2>
           </div>
           <p className={`text-sm ${
-            push.state === 'registered' ? 'text-green-600'
-              : push.state === 'checking' ? 'text-[#6B7280]'
-              : 'text-red-500'
+            push.state === 'registered' ? 'text-[var(--success-tint-text)]'
+              : push.state === 'checking' ? 'text-[var(--text-secondary)]'
+              : 'text-[var(--message-red)]'
           }`}>
             {push.message}
             {push.state === 'registered' && checkedLabel && ` - ${checkedLabel}`}
           </p>
           {(push.engine === 'current' || push.engine === 'old') && (
-            <p className={`text-xs mt-1 ${push.engine === 'current' ? 'text-[#6B7280]' : 'text-red-500'}`}>
+            <p className={`text-xs mt-1 ${push.engine === 'current' ? 'text-[var(--text-secondary)]' : 'text-[var(--message-red)]'}`}>
               {push.engine === 'current'
                 ? 'Notification engine: v2'
                 : 'Notification engine: old version - close and reopen the app'}
@@ -238,19 +237,19 @@ export default function Settings() {
             </>
           )}
           {testStatus && (
-            <p className={`text-xs mt-2 ${testStatus.ok ? 'text-green-600' : 'text-red-500'}`}>
+            <p className={`text-xs mt-2 ${testStatus.ok ? 'text-[var(--success-tint-text)]' : 'text-[var(--message-red)]'}`}>
               {testStatus.text}
             </p>
           )}
         </div>
 
         {/* Home Base Address */}
-        <div className="bg-white rounded-xl border border-[#E5E7EB] shadow-sm p-4">
+        <div className="glass-card">
           <div className="flex items-center gap-3 mb-3">
-            <Home size={18} className="text-navy" />
-            <h2 className="font-semibold text-[#1F2937]">Home Base Address</h2>
+            <Home size={18} className="text-[var(--accent-text)]" />
+            <h2 className="font-semibold text-[var(--text)]">Home Base Address</h2>
           </div>
-          <p className="text-sm text-[#6B7280] mb-3">
+          <p className="text-sm text-[var(--text-secondary)] mb-3">
             Used as the start and end point for automatic mileage tracking.
           </p>
           <AddressAutocomplete
@@ -267,10 +266,10 @@ export default function Settings() {
             {homeSaving ? 'Saving…' : 'Save Address'}
           </Button>
           {!isOnline && (
-            <p className="text-xs mt-2 text-red-500">Connect to the internet to save your home address.</p>
+            <p className="text-xs mt-2 text-[var(--message-red)]">Connect to the internet to save your home address.</p>
           )}
           {isOnline && homeStatus && (
-            <p className={`text-xs mt-2 ${homeStatus.ok ? 'text-green-600' : 'text-red-500'}`}>
+            <p className={`text-xs mt-2 ${homeStatus.ok ? 'text-[var(--success-tint-text)]' : 'text-[var(--message-red)]'}`}>
               {homeStatus.text}
             </p>
           )}
@@ -278,12 +277,12 @@ export default function Settings() {
 
         {/* Maintenance */}
         {pendingCount > 0 && (
-          <div className="bg-white rounded-xl border border-[#E5E7EB] shadow-sm p-4">
+          <div className="glass-card">
             <div className="flex items-center gap-3 mb-3">
-              <Trash2 size={18} className="text-red-400" />
-              <h2 className="font-semibold text-[#1F2937]">Maintenance</h2>
+              <Trash2 size={18} className="text-[var(--message-red)]" />
+              <h2 className="font-semibold text-[var(--text)]">Maintenance</h2>
             </div>
-            <p className="text-sm text-[#6B7280] mb-3">{pendingCount} item(s) pending sync</p>
+            <p className="text-sm text-[var(--text-secondary)] mb-3">{pendingCount} item(s) pending sync</p>
             <Button variant="destructive" className="w-full" onClick={clearSyncQueue}>
               Clear Sync Queue
             </Button>
@@ -291,14 +290,14 @@ export default function Settings() {
         )}
 
         {/* Account */}
-        <div className="bg-white rounded-xl border border-[#E5E7EB] shadow-sm p-4">
+        <div className="glass-card">
           <div className="flex items-center gap-3 mb-4">
-            <div className="w-9 h-9 rounded-full bg-navy flex items-center justify-center text-white font-bold text-sm">
+            <div className="account-avatar">
               {user?.email?.[0]?.toUpperCase() ?? 'J'}
             </div>
             <div>
-              <div className="font-semibold text-[#1F2937] text-sm">{user?.user_metadata?.full_name ?? 'John Figueroa'}</div>
-              <div className="text-xs text-[#6B7280]">{user?.email}</div>
+              <div className="font-semibold text-[var(--text)] text-sm">{user?.user_metadata?.full_name ?? 'John Figueroa'}</div>
+              <div className="text-xs text-[var(--text-secondary)]">{user?.email}</div>
             </div>
           </div>
           <Button variant="destructive" className="w-full" onClick={handleSignOut}>
@@ -307,12 +306,12 @@ export default function Settings() {
         </div>
 
         {/* App info */}
-        <div className="bg-white rounded-xl border border-[#E5E7EB] shadow-sm p-4">
+        <div className="glass-card">
           <div className="flex items-center gap-3 mb-1">
-            <Info size={18} className="text-[#9CA3AF]" />
-            <h2 className="font-semibold text-[#1F2937]">App Info</h2>
+            <Info size={18} className="text-[var(--text-secondary)]" />
+            <h2 className="font-semibold text-[var(--text)]">App Info</h2>
           </div>
-          <div className="text-sm text-[#6B7280] space-y-0.5 pl-7">
+          <div className="text-sm text-[var(--text-secondary)] space-y-0.5 pl-7">
             <div>Version 1.0.0</div>
             <div>DTF Field Ops · Dallas Tub Fix</div>
           </div>

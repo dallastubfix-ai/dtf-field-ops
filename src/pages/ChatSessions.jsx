@@ -3,24 +3,20 @@ import { useNavigate } from 'react-router-dom'
 import { MessageSquare } from 'lucide-react'
 import { format } from 'date-fns'
 import { supabase } from '../lib/supabase'
+import PageHeader from '../components/layout/PageHeader'
 import LoadingSpinner from '../components/ui/LoadingSpinner'
 import EmptyState from '../components/ui/EmptyState'
 
+// Only these two get their own look; everything else is the neutral badge.
 const intentColors = {
-  booking:    'bg-green-100 text-green-700',
-  query:      'bg-blue-100 text-blue-700',
-  cached:     'bg-gray-100 text-gray-600',
-  greeting:   'bg-gray-100 text-gray-600',
-  farewell:   'bg-gray-100 text-gray-600',
-  unclear:    'bg-amber-100 text-amber-700',
-  escalation: 'bg-red-100 text-red-600',
-  fallback:   'bg-amber-100 text-amber-700',
+  booking:    'ui-badge-active',
+  escalation: 'ui-badge-cancelled',
 }
 
 function IntentBadge({ intent }) {
-  const colors = intentColors[intent] ?? 'bg-gray-100 text-gray-600'
+  const colors = intentColors[intent] ?? 'ui-badge-neutral'
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold capitalize ${colors}`}>
+    <span className={`ui-badge inline-flex items-center capitalize ${colors}`}>
       {intent ?? 'unknown'}
     </span>
   )
@@ -70,9 +66,7 @@ export default function ChatSessions() {
 
   return (
     <div className="min-h-screen">
-      <header className="bg-navy px-4 py-4">
-        <h1 className="text-white font-bold text-lg">Chat Sessions</h1>
-      </header>
+      <PageHeader title="Chat Sessions" />
 
       <div className="px-4 py-4">
         {loading ? (
@@ -93,22 +87,22 @@ export default function ChatSessions() {
                 <div
                   key={session.session_id}
                   onClick={() => navigate(`/chat-sessions/${session.session_id}`)}
-                  className="bg-white rounded-xl border border-[#E5E7EB] shadow-sm p-4 cursor-pointer hover:shadow-md transition-shadow"
+                  className="glass-row p-4 cursor-pointer"
                 >
                   <div className="flex items-start justify-between mb-1.5">
-                    <span className="text-sm font-semibold text-[#1F2937]">
+                    <span className="text-sm font-semibold text-[var(--text)]">
                       {session.first.created_at
                         ? format(new Date(session.first.created_at), 'MMM d · h:mm a')
                         : '—'}
                     </span>
-                    <span className="text-xs font-medium bg-[#F3F4F6] text-[#6B7280] px-2 py-0.5 rounded-full">
+                    <span className="chip">
                       {session.count} {session.count === 1 ? 'message' : 'messages'}
                     </span>
                   </div>
                   <div className="mb-2">
                     <IntentBadge intent={session.last.intent} />
                   </div>
-                  <p className="text-sm text-[#6B7280]">
+                  <p className="text-sm text-[var(--text-secondary)]">
                     {preview.length > 60 ? preview.slice(0, 60) + '…' : preview}
                   </p>
                 </div>

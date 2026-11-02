@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import {
-  ArrowLeft, Phone, Camera, Video, FileText, Shield,
+  Phone, Camera, Video, FileText, Shield,
   ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Plus, Calendar, Trash2, X, MessageSquare, MapPin, ArrowLeftRight
 } from 'lucide-react'
 import { format } from 'date-fns'
@@ -13,9 +13,11 @@ import { removeJobLocally } from '../lib/localCleanup'
 import { getOtherJobsForCustomer, separateCustomer } from '../lib/customerSeparation'
 import { formatEnum } from '../lib/formatEnum'
 import { useOnlineStatus } from '../hooks/useOnlineStatus'
+import PageHeader from '../components/layout/PageHeader'
 import Badge from '../components/ui/Badge'
 import Button from '../components/ui/Button'
 import Card from '../components/ui/Card'
+import LoadingSpinner from '../components/ui/LoadingSpinner'
 import Modal from '../components/ui/Modal'
 import Input from '../components/ui/Input'
 import Select from '../components/ui/Select'
@@ -84,8 +86,6 @@ async function downloadDriveImage(fileId) {
 }
 
 const IMAGE_TYPE_RANK ={ before: 0, after: 1, collage: 2 }
-const imageBadgeClass = (type) =>
-  type === 'before' ? 'bg-green-500 text-white' : type === 'collage' ? 'bg-navy text-white' : 'bg-gold text-white'
 
 // The Mileage page owns starts_from_home. Never send this page's copy, which can be stale.
 const withoutStartsFromHome = ({ starts_from_home, ...rest }) => rest
@@ -100,11 +100,15 @@ function Section({ title, children, defaultOpen = true }) {
   return (
     <Card className="p-0 overflow-hidden">
       <button
-        className="w-full flex items-center justify-between px-4 py-3 text-left"
+        type="button"
+        aria-expanded={open}
+        className="section-toggle"
         onClick={() => setOpen(o => !o)}
       >
-        <span className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">{title}</span>
-        {open ? <ChevronUp size={16} className="text-[#9CA3AF]" /> : <ChevronDown size={16} className="text-[#9CA3AF]" />}
+        <span className="ui-field-label">{title}</span>
+        <span className="section-chevron" aria-hidden="true">
+          {open ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+        </span>
       </button>
       {open && <div className="px-4 pb-4">{children}</div>}
     </Card>
@@ -138,7 +142,7 @@ export default function JobDetail() {
   const [warranty, setWarranty] = useState(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [toast, setToast] = useState('')
+  const [toast, setToast] = useState(null) // { text, kind }
   const [deleting, setDeleting] = useState(false)
 
   // Edit state per section
@@ -162,7 +166,7 @@ export default function JobDetail() {
   const touchStartX = useRef(null)
   const [collageOpen, setCollageOpen] = useState(false)
 
-  const flashToast = (msg, ms = 1800) => { setToast(msg); setTimeout(() => setToast(''), ms) }
+  const flashToast = (msg, ms = 1800, kind = 'success') => { setToast({ text: msg, kind }); setTimeout(() => setToast(null), ms) }
 
   // Local state gets the full merged job. The server and Dexie get ONLY the changed fields,
   // so fields written elsewhere (drive_folder_id, customer_id) can't be overwritten by a stale copy.
@@ -174,7 +178,7 @@ export default function JobDetail() {
     return { synced: !!result?.synced }
   }
   const flashSaved = (synced, okMsg) =>
-    synced ? flashToast(okMsg) : flashToast('Saved on this phone, will sync when online', 3000)
+    synced ? flashToast(okMsg) : flashToast('Saved on this phone, will sync when online', 3000, 'neutral')
 
   const load = async () => {
     // Try Dexie first
@@ -483,7 +487,7 @@ export default function JobDetail() {
         if (result.refresh) {
           setSeparateOpen(false)
           getOtherJobsForCustomer(job, isOnline).then(setSharedJobs).catch(() => {})
-          flashToast(result.message, 4000)
+          flashToast(result.message, 4000, 'neutral')
         } else {
           setSeparateError(result.message)
         }
@@ -562,7 +566,7 @@ export default function JobDetail() {
       try {
         const token = await getValidProviderToken()
         if (!token) {
-          flashToast('Appointment saved. Calendar sync failed — sign in again to reconnect.')
+          flashToast('Appointment saved. Calendar sync failed — sign in again to reconnect.', undefined, 'error')
           return
         }
         const [apptDate, apptTime] = apptVal.appointment_datetime.split('T')
@@ -585,7 +589,7 @@ export default function JobDetail() {
           setAppointments(list => list.map(x => (x.id || x._localId) === key ? withEventId : x))
           await updateRecord('appointments', withoutStartsFromHome(withEventId), isOnline)
         } else if (eventId?.error) {
-          flashToast(`Appointment saved. Calendar sync failed — ${describeCalendarError(eventId)}`)
+          flashToast(`Appointment saved. Calendar sync failed — ${describeCalendarError(eventId)}`, undefined, 'error')
           return
         }
       } catch (e) { console.error('Calendar sync failed:', e) }
@@ -608,7 +612,7 @@ export default function JobDetail() {
     try {
       await db.appointments.add({ ...payload, _synced: false })
     } catch {
-      flashToast("Couldn't save the appointment. Please try again.")
+      flashToast("Couldn't save the appointment. Please try again.", undefined, 'error')
       setSaving(false)
       return
     }
@@ -638,7 +642,7 @@ export default function JobDetail() {
 
     if (outcome === 'failed') {
       try { await db.appointments.where('id').equals(payload.id).delete() } catch { /* nothing more to do */ }
-      flashToast("Couldn't save the appointment. Please try again.")
+      flashToast("Couldn't save the appointment. Please try again.", undefined, 'error')
       setSaving(false)
       return // modal stays open with the entered values; no status change, no calendar event
     }
@@ -657,14 +661,14 @@ export default function JobDetail() {
       flashToast('Appointment added')
     }
     if (outcome === 'queued') {
-      flashToast("Saved on this phone. It will sync when you're back online. Add it to Google Calendar yourself; it won't be created automatically.")
+      flashToast("Saved on this phone. It will sync when you're back online. Add it to Google Calendar yourself; it won't be created automatically.", undefined, 'neutral')
     }
     // Test jobs never create real calendar events (deleting a test job can't remove them).
     if (outcome === 'saved' && job?.is_test !== true) {
       try {
         const token = await getValidProviderToken()
         if (!token) {
-          flashToast('Calendar sync failed — sign in again to reconnect.')
+          flashToast('Calendar sync failed — sign in again to reconnect.', undefined, 'error')
           return
         }
         const [apptDate, apptTime] = newAppt.appointment_datetime.split('T')
@@ -681,7 +685,7 @@ export default function JobDetail() {
           setAppointments(prev => prev.map(a => a.id === payload.id ? withEventId : a))
           await updateRecord('appointments', withEventId, isOnline)
         } else if (eventId?.error) {
-          flashToast(`Calendar sync failed — ${describeCalendarError(eventId)}`)
+          flashToast(`Calendar sync failed — ${describeCalendarError(eventId)}`, undefined, 'error')
         }
       } catch (e) { console.error('Calendar sync failed:', e) }
     }
@@ -701,7 +705,7 @@ export default function JobDetail() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="w-8 h-8 animate-spin rounded-full border-2 border-[#E5E7EB] border-t-navy" />
+        <LoadingSpinner />
       </div>
     )
   }
@@ -709,8 +713,8 @@ export default function JobDetail() {
   if (!job) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen px-4">
-        <p className="text-[#6B7280]">Job not found.</p>
-        <button onClick={() => navigate('/jobs')} className="mt-4 text-navy underline text-sm">Back to Jobs</button>
+        <p className="text-[var(--text-secondary)]">Job not found.</p>
+        <button type="button" onClick={() => navigate('/jobs')} className="link-btn mt-2">Back to Jobs</button>
       </div>
     )
   }
@@ -727,34 +731,37 @@ export default function JobDetail() {
   const customerSigned = !!invoice?.customer_signature_url
   const hasWarranty = !!warranty
 
+  // Rows in the fixed action stack (the two Print buttons share one). The cancelled banner can
+  // wrap taller than a row, and Send Collage's note sits above its two buttons, so both get one more.
+  let actionRows = 1
+  if (job.status === 'appointment' || job.status === 'cancelled') actionRows = 2
+  else if (job.status === 'active' && (hasInvoice || hasWarranty)) actionRows = 2
+  else if (job.status === 'completed' && hasCollage) actionRows = 3
+  const actionStack = actionRows * 56 + (actionRows - 1) * 10
+
   return (
-    <div className={`min-h-screen ${job.status === 'completed' && hasCollage ? 'pb-56' : 'pb-40'}`}>
-      {/* Header */}
-      <header className="bg-navy px-4 py-4 flex items-center gap-3 sticky top-0 z-30">
-        <button onClick={() => navigate(-1)} className="text-white">
-          <ArrowLeft size={20} />
-        </button>
-        <span className="text-white font-bold text-base flex-1">{job.job_number}</span>
-        <Badge status={job.status} />
+    <div className="job-page min-h-screen" style={{ '--action-stack': `${actionStack}px` }}>
+      <PageHeader title={job.job_number} sticky onBack={() => navigate(-1)}>
+        <Badge status={job.status} className="shrink-0" />
         {job.is_test && (
-          <button onClick={handleDeleteTestJob} className="text-white/80 hover:text-white" disabled={deleting}>
-            <Trash2 size={18} />
+          <button type="button" onClick={handleDeleteTestJob} className="icon-btn" disabled={deleting} aria-label="Delete job">
+            <Trash2 size={20} />
           </button>
         )}
         {job.status !== 'cancelled' ? (
-          <button onClick={handleCancelJob} className="text-white/80 hover:text-white">
-            <X size={18} />
+          <button type="button" onClick={handleCancelJob} className="icon-btn" aria-label="Cancel job">
+            <X size={22} />
           </button>
         ) : (
-          <button onClick={handleUncancelJob} className="text-xs text-white/80 hover:text-white underline">
+          <button type="button" onClick={handleUncancelJob} className="link-btn shrink-0 px-2">
             Restore
           </button>
         )}
-      </header>
+      </PageHeader>
 
       {toast && (
-        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-white text-sm px-4 py-2 rounded-lg shadow-lg">
-          {toast}
+        <div className={`ui-toast ui-toast--${toast.kind}`}>
+          {toast.text}
         </div>
       )}
 
@@ -790,19 +797,19 @@ export default function JobDetail() {
           ) : (
             <div className="space-y-1">
               <div className="flex items-start justify-between gap-2">
-                <div className="font-bold text-[#1F2937]">{customer?.full_name ?? '—'}</div>
+                <div className="font-bold text-[var(--text)]">{customer?.full_name ?? '—'}</div>
                 {customer && (
-                  <button onClick={() => startEditCustomer()} className="text-xs text-navy underline shrink-0">Edit</button>
+                  <button type="button" onClick={() => startEditCustomer()} className="link-btn link-btn--corner">Edit</button>
                 )}
               </div>
               {sharedJobs.length > 0 && (
                 <>
-                  <div className="text-xs text-[#9CA3AF]">
+                  <div className="text-xs text-[var(--text-secondary)]">
                     Also on{' '}
                     {sharedJobs.slice(0, 3).map((j, i) => (
                       <span key={j.id}>
                         {i > 0 && ', '}
-                        <Link to={`/jobs/${j.id}`} className="text-navy underline">{j.job_number ?? 'job'}</Link>
+                        <Link to={`/jobs/${j.id}`} className="text-[var(--accent-text)] underline">{j.job_number ?? 'job'}</Link>
                       </span>
                     ))}
                     {sharedJobs.length > 3 && ` +${sharedJobs.length - 3} more`}
@@ -815,18 +822,18 @@ export default function JobDetail() {
                     >
                       Make this a separate customer
                     </Button>
-                    {!isOnline && <span className="text-xs text-[#6B7280]">Needs an internet connection</span>}
+                    {!isOnline && <span className="text-xs text-[var(--text-secondary)]">Needs an internet connection</span>}
                   </div>
                 </>
               )}
               {customer?.phone && (
-                <a href={`tel:${customer.phone}`} className="flex items-center gap-2 text-navy text-sm">
+                <a href={`tel:${customer.phone}`} className="link-btn">
                   <Phone size={14} /> {customer.phone}
                 </a>
               )}
-              {customer?.email && <div className="text-sm text-[#6B7280]">{customer.email}</div>}
+              {customer?.email && <div className="text-sm text-[var(--text-secondary)]">{customer.email}</div>}
               {customer?.lead_source && (
-                <div className="text-xs text-[#9CA3AF] pt-1">
+                <div className="text-xs text-[var(--text-secondary)] pt-1">
                   Lead: {customer.lead_source}{customer.referred_by ? ` · ${customer.referred_by}` : ''}
                 </div>
               )}
@@ -838,7 +845,7 @@ export default function JobDetail() {
         <Section title="Job Info">
           <div className="space-y-2">
             <div className="flex gap-2 items-center">
-              <span className="text-xs text-[#6B7280] w-28">Status</span>
+              <span className="text-xs text-[var(--text-label)] w-28">Status</span>
               <Select
                 value={job.status}
                 onChange={e => saveStatus(e.target.value)}
@@ -863,19 +870,19 @@ export default function JobDetail() {
               <div className="space-y-2 pt-1">
                 {Array.isArray(job.fixtures) && job.fixtures.length > 0 ? (
                   <>
-                    <div className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Fixtures</div>
+                    <div className="ui-field-label">Fixtures</div>
                     <FixtureSummary cards={job.fixtures} />
                   </>
                 ) : (job.fixture_type || job.surface_type) ? (
                   <div className="space-y-1">
-                    <div className="text-xs text-[#9CA3AF]">Recorded before fixture cards</div>
+                    <div className="text-xs text-[var(--text-secondary)]">Recorded before fixture cards</div>
                     {[
                       ['Fixture', formatEnum(job.fixture_type)],
                       ['Surface', formatEnum(job.surface_type)],
                     ].map(([label, value]) => value ? (
                       <div key={label} className="flex gap-2">
-                        <span className="text-xs text-[#6B7280] w-28">{label}</span>
-                        <span className="text-sm text-[#1F2937]">{value}</span>
+                        <span className="text-xs text-[var(--text-label)] w-28">{label}</span>
+                        <span className="text-sm text-[var(--text)]">{value}</span>
                       </div>
                     ) : null)}
                   </div>
@@ -903,11 +910,11 @@ export default function JobDetail() {
                   ['Color',   job.surface_color],
                 ].map(([label, value]) => value ? (
                   <div key={label} className="flex gap-2">
-                    <span className="text-xs text-[#6B7280] w-28">{label}</span>
-                    <span className="text-sm text-[#1F2937]">{value}</span>
+                    <span className="text-xs text-[var(--text-label)] w-28">{label}</span>
+                    <span className="text-sm text-[var(--text)]">{value}</span>
                   </div>
                 ) : null)}
-                <button onClick={startEditJob} className="text-xs text-navy underline mt-1">Edit job details</button>
+                <button type="button" onClick={startEditJob} className="link-btn">Edit job details</button>
               </>
             )}
           </div>
@@ -917,13 +924,13 @@ export default function JobDetail() {
         <Section title="Appointments">
           <div className="space-y-2">
             {appointments.length === 0 && (
-              <p className="text-sm text-[#6B7280]">No appointments yet.</p>
+              <p className="text-sm text-[var(--text-secondary)]">No appointments yet.</p>
             )}
             {appointments.map(a => {
               const key = a.id || a._localId
               const editing = editApptId === key
               return (
-                <div key={key} className="border border-[#E5E7EB] rounded-lg p-3">
+                <div key={key} className="inset-box p-3">
                   {editing ? (
                     <div className="space-y-3">
                       <Input label="Date & Time" type="datetime-local" value={apptVal.appointment_datetime}
@@ -942,35 +949,36 @@ export default function JobDetail() {
                   ) : (
                     <div className="flex items-start justify-between gap-2">
                       <div>
-                        <div className="font-semibold text-sm text-[#1F2937]">
+                        <div className="font-semibold text-sm text-[var(--text)]">
                           {format(new Date(a.appointment_datetime), 'EEE, MMM d · h:mm a')}
                         </div>
                         {a.location_address && (
                           <>
-                            <div className="text-xs text-[#6B7280] mt-0.5">{a.location_address}</div>
+                            <div className="text-xs text-[var(--text-secondary)] mt-0.5">{a.location_address}</div>
                             <a
                               href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(a.location_address)}`}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 text-navy text-xs font-medium mt-1"
+                              className="link-btn"
                             >
-                              <MapPin size={12} /> Open in Maps
+                              <MapPin size={14} /> Open in Maps
                             </a>
                           </>
                         )}
                         {a.notes && (
-                          <div className="text-xs text-[#6B7280] mt-0.5 whitespace-pre-wrap">{a.notes}</div>
+                          <div className="text-xs text-[var(--text-secondary)] mt-0.5 whitespace-pre-wrap">{a.notes}</div>
                         )}
                       </div>
-                      <button onClick={() => startEditAppt(a)} className="text-xs text-navy underline shrink-0">Edit</button>
+                      <button type="button" onClick={() => startEditAppt(a)} className="link-btn link-btn--corner">Edit</button>
                     </div>
                   )}
                 </div>
               )
             })}
             <button
+              type="button"
               onClick={() => setApptModal(true)}
-              className="flex items-center gap-2 text-navy text-sm font-medium mt-2"
+              className="link-btn"
             >
               <Plus size={14} /> Add Appointment
             </button>
@@ -985,7 +993,7 @@ export default function JobDetail() {
                 const key = img.id || img._localId
                 const url = signedUrls[key]
                 return (
-                  <div key={key} className="relative rounded-lg overflow-hidden aspect-square bg-[#F3F4F6]">
+                  <div key={key} className="photo-tile">
                     {url ? (
                       <img
                         src={url}
@@ -996,10 +1004,10 @@ export default function JobDetail() {
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">
-                        <div className="w-5 h-5 animate-spin rounded-full border-2 border-[#E5E7EB] border-t-navy" />
+                        <div className="ui-spinner w-5 h-5" />
                       </div>
                     )}
-                    <span className={`absolute top-1 left-1 text-xs font-bold px-1.5 py-0.5 rounded ${imageBadgeClass(img.image_type)}`}>
+                    <span className="photo-pill">
                       {img.image_type?.toUpperCase()}
                     </span>
                   </div>
@@ -1007,7 +1015,7 @@ export default function JobDetail() {
               })}
             </div>
           ) : (
-            <p className="text-sm text-[#6B7280] mb-3">No photos yet.</p>
+            <p className="text-sm text-[var(--text-secondary)] mb-3">No photos yet.</p>
           )}
           <div className="flex gap-2">
             <Button variant="secondary" className="flex-1" onClick={() => navigate(`/jobs/${id}/images`)}>
@@ -1024,27 +1032,32 @@ export default function JobDetail() {
           {videos.length > 0 && (
             <div className="space-y-2 mb-3">
               {videos.map(v => (
-                <div key={v.id || v._localId} className="flex items-center gap-2 border border-[#E5E7EB] rounded-lg p-3">
-                  <Video size={14} className="text-navy" />
-                  <div className="flex-1 min-w-0">
+                <div key={v.id || v._localId} className="inset-box flex items-center gap-2 px-3 py-1">
+                  <Video size={14} className="text-[var(--text-secondary)]" />
+                  <div className="flex-1 min-w-0 flex flex-wrap items-center gap-x-3">
                     <button
+                      type="button"
                       onClick={e => { e.stopPropagation(); toggleVideoType(v) }}
-                      className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-1 rounded ${v.video_type === 'before' ? 'bg-green-500 text-white' : 'bg-gold text-white'}`}
+                      className="inline-flex items-center min-h-[44px]"
                     >
-                      {v.video_type?.toUpperCase()}
-                      <ArrowLeftRight size={12} />
+                      <span className="chip gap-1">
+                        {v.video_type?.toUpperCase()}
+                        <ArrowLeftRight size={12} />
+                      </span>
                     </button>
                     {v.google_drive_view_url && (
-                      <a href={v.google_drive_view_url} target="_blank" rel="noreferrer" className="text-xs text-navy underline">
+                      <a href={v.google_drive_view_url} target="_blank" rel="noreferrer" className="link-btn">
                         View in Drive
                       </a>
                     )}
                   </div>
                   <button
+                    type="button"
                     onClick={() => deleteVideo(v)}
-                    className="p-1.5 rounded-lg text-red-400 hover:bg-red-50 transition-colors"
+                    aria-label="Delete video"
+                    className="icon-btn text-[var(--message-red)]"
                   >
-                    <Trash2 size={15} />
+                    <Trash2 size={18} />
                   </button>
                 </div>
               ))}
@@ -1059,8 +1072,8 @@ export default function JobDetail() {
         <Section title="Documents">
           <div className="space-y-2">
             {invoice && (
-              <div className="flex items-center gap-2 text-sm text-[#6B7280] mb-1">
-                <span className="font-medium text-[#1F2937]">Invoice #{invoice.invoice_number ?? job.job_number}</span>
+              <div className="flex items-center gap-2 text-sm text-[var(--text-secondary)] mb-1">
+                <span className="font-medium text-[var(--text)]">Invoice #{invoice.invoice_number ?? job.job_number}</span>
                 <Badge status={invoice.payment_status === 'paid' ? 'completed' : invoice.payment_status === 'partial' ? 'quote' : 'contact'} />
               </div>
             )}
@@ -1105,84 +1118,81 @@ export default function JobDetail() {
             </div>
           ) : (
             <div>
-              <p className="text-sm text-[#1F2937] whitespace-pre-wrap">{job.notes || 'No notes yet.'}</p>
-              <button onClick={() => setEditNotes(true)} className="text-xs text-navy underline mt-2">Edit</button>
+              <p className="text-sm text-[var(--text)] whitespace-pre-wrap">{job.notes || 'No notes yet.'}</p>
+              <button type="button" onClick={() => setEditNotes(true)} className="link-btn">Edit</button>
             </div>
           )}
         </Section>
       </div>
 
-      {/* Sticky bottom action bar */}
-      <div className="fixed left-0 right-0 bg-white border-t border-[#E5E7EB] pl-4 pr-20 py-3 flex gap-2 z-30 no-print"
-           style={{ bottom: 'calc(82px + env(safe-area-inset-bottom))' }}>
+      {/* Fixed bottom action stack */}
+      <div className="job-actions z-30 no-print">
         {(job.status === 'contact' || job.status === 'quote') && (
-          <Button variant="gold" className="flex-1" onClick={() => setApptModal(true)}>
+          <Button variant="gold" className="w-full" onClick={() => setApptModal(true)}>
             <Calendar size={16} /> Schedule Appointment
           </Button>
         )}
         {job.status === 'appointment' && (
           <>
-            <Button variant="primary" className="flex-1" onClick={() => saveStatus('active')}>
+            <Button variant="primary" className="w-full" onClick={() => saveStatus('active')}>
               Mark Active
             </Button>
-            <Button variant="gold" className="flex-1" onClick={() => navigate(`/invoices/new/${id}`)}>
+            <Button variant="gold" className="w-full" onClick={() => navigate(`/invoices/new/${id}`)}>
               Build Invoice
             </Button>
           </>
         )}
         {job.status === 'active' && (
-          <div className="flex flex-col gap-2 flex-1">
-            <div className="flex gap-2">
-              {!hasInvoice && (
-                <Button variant="gold" className="flex-1" onClick={() => navigate(`/invoices/new/${id}`)}>
-                  Build Invoice
-                </Button>
-              )}
-              {hasInvoice && !technicianSigned && (
-                <Button variant="gold" className="flex-1" onClick={() => navigate(`/invoices/${invoice.id}?sign=1`)}>
-                  Technician Sign
-                </Button>
-              )}
-              {hasInvoice && technicianSigned && !customerSigned && (
-                <Button variant="gold" className="flex-1" onClick={() => navigate(`/invoices/${invoice.id}?sign=1`)}>
-                  Customer Sign
-                </Button>
-              )}
-              {hasInvoice && technicianSigned && customerSigned && (
-                <Button variant="primary" className="flex-1" onClick={() => saveStatus('completed')}>
-                  Mark Completed
-                </Button>
-              )}
-            </div>
+          <>
+            {!hasInvoice && (
+              <Button variant="gold" className="w-full" onClick={() => navigate(`/invoices/new/${id}`)}>
+                Build Invoice
+              </Button>
+            )}
+            {hasInvoice && !technicianSigned && (
+              <Button variant="gold" className="w-full" onClick={() => navigate(`/invoices/${invoice.id}?sign=1`)}>
+                Technician Sign
+              </Button>
+            )}
+            {hasInvoice && technicianSigned && !customerSigned && (
+              <Button variant="gold" className="w-full" onClick={() => navigate(`/invoices/${invoice.id}?sign=1`)}>
+                Customer Sign
+              </Button>
+            )}
+            {hasInvoice && technicianSigned && customerSigned && (
+              <Button variant="primary" className="w-full" onClick={() => saveStatus('completed')}>
+                Mark Completed
+              </Button>
+            )}
             {(hasInvoice || hasWarranty) && (
-              <div className="flex gap-2">
+              <div className="job-actions-row">
                 {hasInvoice && (
-                  <Button variant="secondary" className="flex-1" onClick={() => navigate(`/invoices/${invoice.id}`)}>
+                  <Button variant="secondary" onClick={() => navigate(`/invoices/${invoice.id}`)}>
                     Print Invoice
                   </Button>
                 )}
                 {hasWarranty && (
-                  <Button variant="secondary" className="flex-1" onClick={() => navigate(`/warranties/${warranty.id}`)}>
+                  <Button variant="secondary" onClick={() => navigate(`/warranties/${warranty.id}`)}>
                     Print Warranty
                   </Button>
                 )}
               </div>
             )}
-          </div>
+          </>
         )}
         {job.status === 'cancelled' && (
-          <div className="w-full text-center py-2 text-sm text-[#6B7280] bg-gray-100 rounded-lg">
+          <div className="job-cancelled glass-blur">
             This job has been cancelled. Tap Restore in the header to reactivate it.
           </div>
         )}
         {job.status === 'completed' && (
-          <div className="flex flex-col gap-2 flex-1">
+          <>
             <SendCollage images={images} signedUrls={signedUrls} />
             <Button variant="gold" className="w-full" disabled={!customer?.phone}
               onClick={requestReview}>
               <MessageSquare size={16} /> Request Review
             </Button>
-          </div>
+          </>
         )}
       </div>
 
@@ -1193,13 +1203,14 @@ export default function JobDetail() {
         >
           <div className="flex items-center justify-between px-4 py-3" onClick={e => e.stopPropagation()}>
             {lightboxImg.img.image_type === 'collage' ? (
-              <span className={`inline-flex items-center text-xs font-bold px-2 py-1 rounded ${imageBadgeClass('collage')}`}>
+              <span className="lightbox-tag">
                 COLLAGE
               </span>
             ) : (
               <button
+                type="button"
                 onClick={e => { e.stopPropagation(); toggleImageType(lightboxImg.img) }}
-                className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-1 rounded ${imageBadgeClass(lightboxImg.img.image_type)}`}
+                className="lightbox-tag"
               >
                 {lightboxImg.img.image_type?.toUpperCase()}
                 <ArrowLeftRight size={12} />
@@ -1207,14 +1218,18 @@ export default function JobDetail() {
             )}
             <div className="flex items-center gap-3">
               <button
+                type="button"
                 onClick={() => deletePhoto(lightboxImg.img)}
-                className="p-2 rounded-lg bg-red-500/20 text-red-400"
+                aria-label="Delete photo"
+                className="lightbox-btn lightbox-btn--danger"
               >
                 <Trash2 size={18} />
               </button>
               <button
+                type="button"
                 onClick={() => setLightboxImg(null)}
-                className="p-2 rounded-lg bg-white/10 text-white"
+                aria-label="Close"
+                className="lightbox-btn"
               >
                 <X size={18} />
               </button>
@@ -1244,15 +1259,17 @@ export default function JobDetail() {
               className="max-w-full max-h-full object-contain rounded-lg"
             />
             <button
+              type="button"
               onClick={e => { e.stopPropagation(); goToPhoto('prev') }}
-              className="absolute left-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/40 text-white"
+              className="lightbox-nav absolute left-2 top-1/2 -translate-y-1/2"
               aria-label="Previous photo"
             >
               <ChevronLeft size={24} />
             </button>
             <button
+              type="button"
               onClick={e => { e.stopPropagation(); goToPhoto('next') }}
-              className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/40 text-white"
+              className="lightbox-nav absolute right-2 top-1/2 -translate-y-1/2"
               aria-label="Next photo"
             >
               <ChevronRight size={24} />
@@ -1281,15 +1298,15 @@ export default function JobDetail() {
         title="Make this a separate customer?"
       >
         <div className="space-y-3">
-          <p className="text-sm text-[#1F2937]">
+          <p className="text-sm text-[var(--text)]">
             {`This job (${job.job_number}) will get its own copy of this customer's details. ${sharedJobs.map(j => j.job_number ?? 'job').join(', ')} ${sharedJobs.length === 1 ? 'keeps' : 'keep'} the original. After this, editing the customer on one job no longer changes the other. Nothing is deleted.`}
           </p>
           {invoiceLocked && (
-            <p className="text-sm text-[#1F2937]">
+            <p className="text-sm text-[var(--text)]">
               {"This job's invoice is signed. It will look the same until you edit the new customer. After you edit, a reprinted invoice and warranty will show the new details."}
             </p>
           )}
-          {separateError && <p className="text-sm text-red-600">{separateError}</p>}
+          {separateError && <p className="text-sm text-[var(--message-red)]">{separateError}</p>}
           <div className="flex gap-2">
             <Button variant="primary" className="flex-1" onClick={handleSeparate} disabled={separating}>
               {separating ? 'Working…' : 'Make separate'}

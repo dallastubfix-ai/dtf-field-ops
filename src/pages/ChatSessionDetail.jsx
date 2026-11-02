@@ -1,25 +1,20 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft } from 'lucide-react'
 import { format } from 'date-fns'
 import { supabase } from '../lib/supabase'
+import PageHeader from '../components/layout/PageHeader'
 import LoadingSpinner from '../components/ui/LoadingSpinner'
 
+// Only these two get their own look; everything else is the neutral badge.
 const intentColors = {
-  booking:    'bg-green-100 text-green-700',
-  query:      'bg-blue-100 text-blue-700',
-  cached:     'bg-gray-100 text-gray-600',
-  greeting:   'bg-gray-100 text-gray-600',
-  farewell:   'bg-gray-100 text-gray-600',
-  unclear:    'bg-amber-100 text-amber-700',
-  escalation: 'bg-red-100 text-red-600',
-  fallback:   'bg-amber-100 text-amber-700',
+  booking:    'ui-badge-active',
+  escalation: 'ui-badge-cancelled',
 }
 
 function IntentBadge({ intent }) {
-  const colors = intentColors[intent] ?? 'bg-gray-100 text-gray-600'
+  const colors = intentColors[intent] ?? 'ui-badge-neutral'
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold capitalize ${colors}`}>
+    <span className={`ui-badge inline-flex items-center capitalize ${colors}`}>
       {intent ?? 'unknown'}
     </span>
   )
@@ -57,7 +52,8 @@ export default function ChatSessionDetail() {
 
   useEffect(() => {
     if (!loading) {
-      bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+      const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      bottomRef.current?.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth' })
     }
   }, [loading, messages])
 
@@ -67,21 +63,11 @@ export default function ChatSessionDetail() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <header className="bg-navy px-4 py-4">
-        <div className="flex items-center gap-3">
-          <button onClick={() => navigate('/chat-sessions')} className="text-white">
-            <ArrowLeft size={20} />
-          </button>
-          <div>
-            <h1 className="text-white font-bold text-base leading-tight">
-              Session {shortId}
-            </h1>
-            {sessionDate && (
-              <p className="text-blue-200 text-xs mt-0.5">{sessionDate}</p>
-            )}
-          </div>
-        </div>
-      </header>
+      <PageHeader
+        title={`Session ${shortId}`}
+        subtitle={sessionDate}
+        onBack={() => navigate('/chat-sessions')}
+      />
 
       <div className="flex-1 px-4 py-4 space-y-4">
         {loading ? (
@@ -94,10 +80,10 @@ export default function ChatSessionDetail() {
               {/* User bubble — right-aligned */}
               {msg.user_message && (
                 <div className="flex flex-col items-end">
-                  <span className="text-xs text-[#9CA3AF] mb-1 mr-1">Customer</span>
-                  <div className="bg-[#F3F4F6] rounded-xl px-4 py-3 max-w-[85%]">
-                    <p className="text-sm text-[#1F2937]">{msg.user_message}</p>
-                    <p className="text-xs text-[#9CA3AF] mt-1">
+                  <span className="chat-who mb-1 mr-1">Customer</span>
+                  <div className="chat-bubble chat-bubble--customer">
+                    <p className="text-sm">{msg.user_message}</p>
+                    <p className="chat-meta mt-1">
                       {msg.created_at ? format(new Date(msg.created_at), 'h:mm a') : ''}
                     </p>
                   </div>
@@ -107,18 +93,18 @@ export default function ChatSessionDetail() {
               {/* Assistant bubble — left-aligned */}
               {msg.assistant_response && (
                 <div className="flex flex-col items-start">
-                  <span className="text-xs text-[#9CA3AF] mb-1 ml-1">Cipher</span>
-                  <div className="bg-navy text-white rounded-xl px-4 py-3 max-w-[85%]">
+                  <span className="chat-who mb-1 ml-1">Cipher</span>
+                  <div className="chat-bubble chat-bubble--assistant">
                     <p className="text-sm">{msg.assistant_response}</p>
                     <div className="flex items-center gap-2 mt-2 flex-wrap">
                       {msg.intent && <IntentBadge intent={msg.intent} />}
                       {msg.confidence != null && (
-                        <span className="text-xs text-blue-200">
+                        <span className="chat-meta">
                           {formatConfidence(msg.confidence)}
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-blue-200 mt-1">
+                    <p className="chat-meta mt-1">
                       {msg.created_at ? format(new Date(msg.created_at), 'h:mm a') : ''}
                     </p>
                   </div>

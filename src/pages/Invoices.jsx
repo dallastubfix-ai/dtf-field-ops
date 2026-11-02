@@ -157,7 +157,7 @@ export default function Invoices() {
       <PageHeader title="Invoices" />
 
       {toast && (
-        <div className={`fixed top-16 left-1/2 -translate-x-1/2 z-50 text-white text-sm px-4 py-2 rounded-lg shadow-lg max-w-[90vw] text-center ${toast.kind === 'error' ? 'bg-red-600' : 'bg-green-600'}`}>
+        <div className={`ui-toast ${toast.kind === 'error' ? 'ui-toast--error' : 'ui-toast--success'}`}>
           {toast.text}
         </div>
       )}

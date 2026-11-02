@@ -12,14 +12,15 @@ export default class ErrorBoundary extends Component {
     if (this.state.hasError) {
       return (
         <div className="min-h-screen glass-page flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl p-6 max-w-sm w-full shadow">
-            <h2 className="font-bold text-red-600 mb-2">Something went wrong</h2>
-            <p className="text-sm text-[#6B7280]">
+          <div className="glass-card max-w-sm w-full">
+            <h2 className="font-bold text-[var(--message-red)] mb-2">Something went wrong</h2>
+            <p className="text-sm text-[var(--text-secondary)]">
               {this.state.error?.message ?? 'Unknown error'}
             </p>
             <button
+              type="button"
               onClick={() => window.location.href = '/'}
-              className="mt-4 w-full bg-[#1E40AF] text-white rounded-lg py-2 text-sm font-semibold"
+              className="ui-btn ui-btn-primary mt-4 w-full"
             >
               Go Home
             </button>
