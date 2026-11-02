@@ -10,6 +10,7 @@ import { cleanupLeftoverInvoices } from '../lib/localCleanup'
 import EmptyState from '../components/ui/EmptyState'
 import LoadingSpinner from '../components/ui/LoadingSpinner'
 import Badge from '../components/ui/Badge'
+import PageHeader from '../components/layout/PageHeader'
 
 const FILTERS = [
   { label: 'All',     value: 'all'     },
@@ -19,12 +20,11 @@ const FILTERS = [
   { label: 'Quote',   value: 'quote'   },
 ]
 
-const paymentPill = {
-  unpaid:  'bg-red-100 text-red-600',
-  partial: 'bg-amber-100 text-amber-700',
-  paid:    'bg-green-100 text-green-700',
-  quote:   'bg-blue-100 text-blue-700',
-}
+// A missing status shows as "Unpaid", so it gets the Unpaid colors too.
+const pillClass = (status) =>
+  status == null || status === 'unpaid' ? 'status-pill--unpaid'
+  : status === 'paid' ? 'status-pill--paid'
+  : ''
 
 const PAYMENT_STATUS_OPTIONS = ['unpaid', 'partial', 'paid', 'quote']
 
@@ -141,12 +141,10 @@ export default function Invoices() {
 
   if (error) return (
     <div className="min-h-screen">
-      <header className="bg-navy px-4 py-4">
-        <h1 className="text-white font-bold text-lg">Invoices</h1>
-      </header>
+      <PageHeader title="Invoices" />
       <div className="px-4 py-8 text-center">
-        <p className="text-red-600 font-medium">Failed to load invoices</p>
-        <p className="text-sm text-[#6B7280] mt-1">{error}</p>
+        <p className="text-[var(--message-red)] font-medium">Failed to load invoices</p>
+        <p className="text-sm text-[var(--text-secondary)] mt-1">{error}</p>
       </div>
     </div>
   )
@@ -156,9 +154,7 @@ export default function Invoices() {
       {statusMenuFor && (
         <div className="fixed inset-0 z-40" onClick={() => setStatusMenuFor(null)} />
       )}
-      <header className="bg-navy px-4 py-4">
-        <h1 className="text-white font-bold text-lg">Invoices</h1>
-      </header>
+      <PageHeader title="Invoices" />
 
       {toast && (
         <div className={`fixed top-16 left-1/2 -translate-x-1/2 z-50 text-white text-sm px-4 py-2 rounded-lg shadow-lg max-w-[90vw] text-center ${toast.kind === 'error' ? 'bg-red-600' : 'bg-green-600'}`}>
@@ -166,36 +162,32 @@ export default function Invoices() {
         </div>
       )}
 
-      {/* Summary strip */}
-      {outstanding > 0 && (
-        <div className="bg-red-50 border-b border-red-100 px-4 py-3 flex items-center justify-between">
-          <span className="text-sm font-medium text-red-700">Total Outstanding</span>
-          <span className="text-lg font-bold text-red-600">
-            ${outstanding.toFixed(2)}
-          </span>
-        </div>
-      )}
+      <div className="px-4 pt-3 pb-4 space-y-3">
+        {/* Summary strip */}
+        {outstanding > 0 && (
+          <div className="invoice-summary">
+            <span className="invoice-summary-label">Total Outstanding</span>
+            <span className="invoice-summary-amount">
+              ${outstanding.toFixed(2)}
+            </span>
+          </div>
+        )}
 
-      {/* Filter tabs */}
-      <div className="bg-white border-b border-[#E5E7EB] overflow-x-auto">
-        <div className="flex px-4">
+        {/* Filter tabs */}
+        <div className="filter-tabs" role="group" aria-label="Filter invoices">
           {FILTERS.map(f => (
             <button
               key={f.value}
+              type="button"
+              aria-pressed={filter === f.value}
               onClick={() => setFilter(f.value)}
-              className={`px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
-                filter === f.value
-                  ? 'border-navy text-navy'
-                  : 'border-transparent text-[#6B7280] hover:text-[#1F2937]'
-              }`}
+              className="filter-tab"
             >
               {f.label}
             </button>
           ))}
         </div>
-      </div>
 
-      <div className="px-4 py-4 space-y-3">
         {invoices === undefined ? (
           <div className="flex justify-center py-12">
             <LoadingSpinner size="lg" />
@@ -210,10 +202,10 @@ export default function Invoices() {
               <div
                 key={inv.id || inv._localId}
                 onClick={() => navigate(`/invoices/${inv.id}`)}
-                className="bg-white rounded-xl border border-[#E5E7EB] shadow-sm p-4 cursor-pointer hover:shadow-md transition-shadow"
+                className="glass-row invoice-card"
               >
-                <div className="flex items-start justify-between mb-1">
-                  <span className="font-bold text-[#1F2937] text-base">
+                <div className="invoice-top">
+                  <span className="invoice-num">
                     #{inv.invoice_number ?? job?.job_number ?? '--'}
                   </span>
                   <div className="relative">
@@ -224,15 +216,15 @@ export default function Invoices() {
                         e.stopPropagation()
                         setStatusMenuFor(statusMenuFor === inv.id ? null : inv.id)
                       }}
-                      className={`text-xs font-semibold px-2 py-0.5 rounded-full capitalize ${paymentPill[inv.payment_status] ?? 'bg-gray-100 text-gray-600'}${savingStatusFor === inv.id ? ' opacity-60' : ''}`}
+                      className="status-btn"
                     >
-                      <span className="inline-flex items-center gap-0.5">
+                      <span className={`status-pill ${pillClass(inv.payment_status)}`}>
                         {inv.payment_status ?? 'Unpaid'}
-                        <ChevronDown size={12} />
+                        <ChevronDown size={14} strokeWidth={2.4} aria-hidden="true" />
                       </span>
                     </button>
                     {statusMenuFor === inv.id && (
-                      <div className="absolute right-0 top-full mt-1 z-50 bg-white rounded-lg border border-[#E5E7EB] shadow-lg overflow-hidden w-28">
+                      <div className="status-menu">
                         {PAYMENT_STATUS_OPTIONS.map(val => (
                           <button
                             key={val}
@@ -241,7 +233,7 @@ export default function Invoices() {
                               e.stopPropagation()
                               updatePaymentStatus(inv.id, val)
                             }}
-                            className="w-full text-left px-3 py-2 text-sm capitalize hover:bg-[#F3F4F6] transition-colors"
+                            className="status-menu-item"
                           >
                             {val}
                           </button>
@@ -255,14 +247,14 @@ export default function Invoices() {
                     <Badge status="cancelled" />
                   </div>
                 )}
-                <div className="text-sm text-[#6B7280]">
+                <div className="invoice-customer">
                   {customer?.full_name ?? '--'} · {job?.job_number ?? '--'}
                 </div>
-                <div className="text-2xl font-bold text-navy mt-1">
+                <div className="invoice-amount">
                   ${Number(inv.total ?? 0).toFixed(2)}
                 </div>
                 {inv.service_date && (
-                  <div className="text-xs text-[#9CA3AF] mt-1">
+                  <div className="invoice-date">
                     Service: {format(new Date(inv.service_date), 'MMM d, yyyy')}
                   </div>
                 )}

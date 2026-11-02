@@ -1,7 +1,8 @@
 import { useNavigate } from 'react-router-dom'
-import { ChevronRight, Settings, CheckCircle, Car } from 'lucide-react'
+import { ChevronRight, Settings, Check, CloudOff, Car } from 'lucide-react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import db from '../lib/db'
+import PageHeader from '../components/layout/PageHeader'
 import { todayKey, monthKeyOf, monthRange, summarizeCalculated } from '../lib/mileage'
 
 export default function More() {
@@ -14,56 +15,42 @@ export default function More() {
 
   return (
     <div className="min-h-screen">
-      <header className="bg-navy px-4 py-4">
-        <h1 className="text-white font-bold text-lg">More</h1>
-      </header>
+      <PageHeader title="More" />
 
-      <div className="px-4 py-4 space-y-5">
+      <div className="px-4 pt-3 pb-4 space-y-3">
         {/* Sync status */}
-        <div className="bg-white rounded-xl border border-[#E5E7EB] shadow-sm overflow-hidden">
-          <div className="flex items-center gap-3 px-4 py-3.5">
-            <CheckCircle size={18} className={pendingCount > 0 ? 'text-amber-500' : 'text-green-500'} />
-            <span className="text-sm text-[#1F2937]">
-              {pendingCount > 0 ? `${pendingCount} item${pendingCount > 1 ? 's' : ''} pending sync` : 'All synced ✓'}
-            </span>
-          </div>
+        <div className="sync-block">
+          <span className={`sync-icon${pendingCount > 0 ? '' : ' sync-icon--ok'}`}>
+            {pendingCount > 0
+              ? <CloudOff size={18} aria-hidden="true" />
+              : <Check size={18} strokeWidth={2.6} aria-hidden="true" />}
+          </span>
+          <span className="sync-text">
+            {pendingCount > 0 ? `${pendingCount} item${pendingCount > 1 ? 's' : ''} pending sync` : 'All synced'}
+          </span>
         </div>
 
         {/* Tools */}
-        <div>
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-[#6B7280] mb-3">
-            Tools
-          </h2>
-          <div className="bg-white rounded-xl border border-[#E5E7EB] shadow-sm overflow-hidden">
-            <button
-              onClick={() => navigate('/more/mileage')}
-              className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-[#F3F4F6] transition-colors"
-            >
-              <Car size={18} className="text-navy" />
-              <span className="flex-1 text-sm font-medium text-[#1F2937] text-left">Mileage</span>
-              {monthSummary.days > 0 && (
-                <span className="text-xs font-semibold text-[#6B7280]">{monthSummary.miles} mi</span>
-              )}
-              <ChevronRight size={16} className="text-[#9CA3AF]" />
-            </button>
-          </div>
+        <div className="space-y-3">
+          <h2 className="section-label uppercase">Tools</h2>
+          <button type="button" onClick={() => navigate('/more/mileage')} className="more-row">
+            <span className="more-row-icon"><Car size={20} aria-hidden="true" /></span>
+            <span className="more-row-label">Mileage</span>
+            {monthSummary.days > 0 && (
+              <span className="more-row-extra">{monthSummary.miles} mi</span>
+            )}
+            <ChevronRight size={20} className="text-[var(--text-secondary)]" aria-hidden="true" />
+          </button>
         </div>
 
         {/* App */}
-        <div>
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-[#6B7280] mb-3">
-            App
-          </h2>
-          <div className="bg-white rounded-xl border border-[#E5E7EB] shadow-sm overflow-hidden">
-            <button
-              onClick={() => navigate('/settings')}
-              className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-[#F3F4F6] transition-colors"
-            >
-              <Settings size={18} className="text-navy" />
-              <span className="flex-1 text-sm font-medium text-[#1F2937] text-left">Settings</span>
-              <ChevronRight size={16} className="text-[#9CA3AF]" />
-            </button>
-          </div>
+        <div className="space-y-3">
+          <h2 className="section-label uppercase">App</h2>
+          <button type="button" onClick={() => navigate('/settings')} className="more-row">
+            <span className="more-row-icon"><Settings size={20} aria-hidden="true" /></span>
+            <span className="more-row-label">Settings</span>
+            <ChevronRight size={20} className="text-[var(--text-secondary)]" aria-hidden="true" />
+          </button>
         </div>
       </div>
     </div>

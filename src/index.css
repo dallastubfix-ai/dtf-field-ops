@@ -503,6 +503,278 @@
   }
   .job-tab:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
 
+  /* ── PageHeader extensions (leading slot, centered title) ── */
+  .page-header--leading { padding-left: 12px; }
+  .page-header-title--centered { flex: 1; text-align: center; }
+
+  /* ── Invoices ── */
+  .invoice-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    background: var(--glass-fill);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-shadow);
+    border-radius: var(--radius-card);
+  }
+  .invoice-summary-label {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text);
+  }
+  .invoice-summary-amount {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--message-red);
+  }
+  .filter-tabs {
+    display: flex;
+    gap: 2px;
+    padding: 4px;
+    border-radius: var(--radius-lg);
+    background: var(--track-fill);
+  }
+  .filter-tab {
+    flex: 1;
+    min-width: 0;
+    height: 44px;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+  }
+  .filter-tab[aria-pressed="true"] {
+    background: var(--tab-active-fill);
+    color: var(--tab-active-text);
+    font-weight: 700;
+  }
+  .filter-tab:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+  .invoice-card {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 10px 16px 14px;
+    border-radius: var(--radius-card);
+    cursor: pointer;
+  }
+  .invoice-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .invoice-num {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text);
+  }
+  .status-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    min-height: 44px;
+    min-width: 44px;
+    background: transparent;
+  }
+  .status-btn:disabled { opacity: 0.6; }
+  .status-btn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+  .status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 4px 8px 4px 10px;
+    border-radius: var(--radius-pill);
+    font-size: 12.5px;
+    font-weight: 700;
+    text-transform: capitalize;
+    background: var(--neutral-badge-fill);
+    color: var(--neutral-badge-text);
+  }
+  .status-pill--unpaid { background: var(--neutral-badge-fill); color: var(--message-red); }
+  .status-pill--paid { background: var(--success-tint-fill); color: var(--success-tint-text); }
+  .status-menu {
+    position: absolute;
+    right: 0;
+    top: 100%;
+    z-index: 50;
+    width: 128px;
+    overflow: hidden;
+    background: var(--modal-fill);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--modal-shadow);
+    border-radius: var(--radius-md);
+    -webkit-backdrop-filter: blur(var(--blur-modal)) saturate(var(--glass-saturate));
+    backdrop-filter: blur(var(--blur-modal)) saturate(var(--glass-saturate));
+  }
+  .status-menu-item {
+    display: block;
+    width: 100%;
+    min-height: 44px;
+    padding: 0 14px;
+    text-align: left;
+    font-size: 15px;
+    font-weight: 500;
+    text-transform: capitalize;
+    color: var(--text);
+  }
+  .status-menu-item:hover { background: var(--inset-fill); }
+  .status-menu-item:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
+  .invoice-customer {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-secondary);
+  }
+  .invoice-amount {
+    font-size: 22px;
+    line-height: 30px;
+    font-weight: 700;
+    color: var(--accent-text);
+  }
+  .invoice-date {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+  }
+
+  /* ── Calendar ── */
+  .cal-card {
+    padding: 12px;
+    background: var(--glass-fill);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-shadow);
+    border-radius: var(--radius-card);
+  }
+  .cal-weekdays,
+  .cal-grid {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+  }
+  .cal-weekday {
+    padding: 4px 0 6px;
+    text-align: center;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-label);
+  }
+  .cal-cell {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    min-height: 52px;
+    padding-top: 2px;
+    background: transparent;
+  }
+  .cal-cell:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; border-radius: var(--radius-sm); }
+  .cal-num {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--text);
+  }
+  .cal-num--outside { color: var(--text-secondary); }
+  .cal-num--today {
+    box-shadow: inset 0 0 0 1.5px var(--selected-border);
+    font-weight: 700;
+  }
+  .cal-num--selected {
+    background: linear-gradient(160deg, var(--selected-fill-from), var(--selected-fill-to));
+    color: var(--on-selected);
+    font-weight: 700;
+  }
+  .cal-dot-slot {
+    height: 6px;
+    display: flex;
+    justify-content: center;
+  }
+  .cal-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent-text);
+  }
+  .cal-empty {
+    padding: 32px 0;
+    text-align: center;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-secondary);
+  }
+
+  /* ── More ── */
+  .sync-block {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    background: var(--glass-fill);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-shadow);
+    border-radius: var(--radius-card);
+  }
+  .sync-icon {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--inset-fill);
+    color: var(--text);
+  }
+  .sync-icon--ok {
+    background: var(--success-solid-fill);
+    color: var(--on-success-solid);
+  }
+  .sync-text {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text);
+  }
+  .more-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    min-height: 64px;
+    padding: 12px 16px;
+    text-align: left;
+    background: var(--glass-fill);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-shadow);
+    border-radius: var(--radius-card);
+  }
+  .more-row:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+  .more-row-icon {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: var(--inset-fill);
+    color: var(--text);
+  }
+  .more-row-label {
+    flex: 1;
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text);
+  }
+  .more-row-extra {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-secondary);
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .switch-thumb { transition: none; }
     .ui-btn { transition: none; }
