@@ -13,6 +13,7 @@ import { upsertServerRow } from '../lib/sync'
 import Badge from '../components/ui/Badge'
 import Card from '../components/ui/Card'
 import PageHeader from '../components/layout/PageHeader'
+import { SkeletonGroup, SkeletonRow } from '../components/ui/Skeleton'
 
 export default function Calendar() {
   const navigate = useNavigate()
@@ -137,7 +138,11 @@ export default function Calendar() {
           <h2 className="section-label uppercase">
             {format(selected, 'EEEE, MMMM d')}
           </h2>
-          {selectedAppts.length === 0 ? (
+          {appointments === undefined ? (
+            <SkeletonGroup className="space-y-3">
+              {[0, 1].map(i => <SkeletonRow key={i} />)}
+            </SkeletonGroup>
+          ) : selectedAppts.length === 0 ? (
             <p className="cal-empty">No appointments this day.</p>
           ) : (
             <div className="space-y-3">

@@ -17,7 +17,7 @@ import PageHeader from '../components/layout/PageHeader'
 import Badge from '../components/ui/Badge'
 import Button from '../components/ui/Button'
 import Card from '../components/ui/Card'
-import LoadingSpinner from '../components/ui/LoadingSpinner'
+import { SkeletonGroup, SkeletonHeader, SkeletonCard } from '../components/ui/Skeleton'
 import Modal from '../components/ui/Modal'
 import Input from '../components/ui/Input'
 import Select from '../components/ui/Select'
@@ -704,9 +704,12 @@ export default function JobDetail() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <LoadingSpinner />
-      </div>
+      <SkeletonGroup className="min-h-screen">
+        <SkeletonHeader />
+        <div className="px-4 py-4 space-y-3">
+          {[0, 1, 2].map(i => <SkeletonCard key={i} />)}
+        </div>
+      </SkeletonGroup>
     )
   }
 
@@ -993,7 +996,7 @@ export default function JobDetail() {
                 const key = img.id || img._localId
                 const url = signedUrls[key]
                 return (
-                  <div key={key} className="photo-tile">
+                  <div key={key} className="photo-tile" aria-busy={url ? undefined : 'true'}>
                     {url ? (
                       <img
                         src={url}
@@ -1003,9 +1006,7 @@ export default function JobDetail() {
                         onClick={() => setLightboxImg({ url, img })}
                       />
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <div className="ui-spinner w-5 h-5" />
-                      </div>
+                      <div aria-hidden="true" className="skeleton w-full h-full rounded-none" />
                     )}
                     <span className="photo-pill">
                       {img.image_type?.toUpperCase()}

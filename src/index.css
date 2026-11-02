@@ -107,6 +107,7 @@
   [data-theme="light"] .ui-field { color-scheme: light; }
   [data-theme="dark"] .ui-field { color-scheme: dark; }
   .ui-field-h { min-height: 48px; }
+  .ui-field:disabled { opacity: 0.6; }
   .ui-field::placeholder { color: var(--text-secondary); opacity: 1; }
   .ui-field:focus,
   .ui-field:focus-visible {
@@ -834,6 +835,7 @@
     font-weight: 500;
   }
   .fx-chip:disabled { opacity: 0.4; }
+  .fx-option:disabled { opacity: 0.5; }
   .fx-chip[aria-pressed="true"],
   .fx-option[aria-pressed="true"],
   .fx-option[data-selected="true"] {
@@ -1294,13 +1296,59 @@
     background: rgba(0,0,0,0.65);
     color: #FFFFFF;
   }
-  .photo-done {
+  /* Upload state over a session photo: Queued, Uploading, Uploaded, Failed */
+  .photo-status {
     position: absolute;
     inset: 0;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
+    gap: 6px;
     background: rgba(0,0,0,0.6);
+    color: #FFFFFF;
+    font-size: 12px;
+    line-height: 16px;
+    font-weight: 700;
+    text-align: center;
+  }
+  .photo-retry {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 44px;
+    padding: 0 14px;
+    border-radius: var(--radius-pill);
+    border: 1.5px solid #FFFFFF;
+    background: rgba(0,0,0,0.35);
+    color: #FFFFFF;
+    font-size: 13px;
+    font-weight: 700;
+  }
+  .photo-retry:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+  .photo-retry:disabled { opacity: 0.5; }
+  /* 72 x 4 bar on a photo. The fill moves while the percentage is unknown. */
+  .photo-bar {
+    position: relative;
+    overflow: hidden;
+    width: 72px;
+    height: 4px;
+    border-radius: var(--radius-pill);
+    background: rgba(255,255,255,0.3);
+  }
+  .photo-bar-fill {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 40%;
+    border-radius: inherit;
+    background: #FFFFFF;
+    animation: upload-slide 1.2s ease-in-out infinite;
+  }
+  @keyframes upload-slide {
+    from { transform: translateX(-100%); }
+    to { transform: translateX(250%); }
   }
   .photo-done-dot {
     display: flex;
@@ -1575,9 +1623,87 @@
     color: var(--text);
   }
 
+  /* Upload progress bar (photo summary card, video status strip) */
+  .progress-track {
+    position: relative;
+    overflow: hidden;
+    height: 8px;
+    border-radius: var(--radius-pill);
+    background: var(--inset-fill);
+    box-shadow: inset 0 0 0 1px var(--control-border);
+  }
+  .progress-fill {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    border-radius: inherit;
+    background: var(--accent-text);
+    transition: width 200ms linear;
+  }
+  .progress-track--indeterminate .progress-fill {
+    width: 40%;
+    animation: upload-slide 1.2s ease-in-out infinite;
+  }
+  .upload-summary-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  /* Builders: action row under the sticky header, and toasts at the bottom so they
+     never cover it */
+  .builder-actions {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+    gap: 8px;
+    margin-top: 8px;
+    padding: 8px;
+    background: var(--tab-fill);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-card);
+    box-shadow: var(--glass-shadow);
+  }
+  .builder-actions .ui-btn {
+    min-height: 44px;
+    padding: 4px 8px;
+    font-size: 13px;
+    line-height: 16px;
+    text-align: center;
+  }
+  .ui-toast--bottom {
+    top: auto;
+    bottom: calc(170px + env(safe-area-inset-bottom));
+  }
+
+  /* Loading placeholders. The highlight sweeps left to right; static under reduced motion. */
+  .skeleton {
+    position: relative;
+    overflow: hidden;
+    background: var(--inset-fill);
+    border-radius: var(--radius-sm);
+  }
+  .skeleton::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    opacity: 0.5;
+    background: linear-gradient(90deg, rgba(0,0,0,0), var(--glass-border), rgba(0,0,0,0));
+    transform: translateX(-100%);
+    animation: skeleton-shimmer 1.4s linear infinite;
+  }
+  @keyframes skeleton-shimmer {
+    to { transform: translateX(100%); }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     /* A stopped spinner reads as a hang, so it slows down instead */
     .ui-spinner { animation-duration: 2s; }
+    .skeleton::after { display: none; }
+    .photo-bar-fill,
+    .progress-track--indeterminate .progress-fill { animation: none; left: 30%; }
+    .progress-fill { transition: none; }
     .switch-thumb { transition: none; }
     .ui-btn { transition: none; }
     .glass-tab { transition: none; }

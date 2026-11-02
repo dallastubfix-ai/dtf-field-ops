@@ -1,7 +1,7 @@
 import { useRef, useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Camera, Check, Image, X, Upload } from 'lucide-react'
+import { AlertCircle, Camera, Check, Clock, Image, RotateCcw, X, Upload } from 'lucide-react'
 import { format } from 'date-fns'
 import { supabase } from '../lib/supabase'
 import db from '../lib/db'
@@ -50,6 +50,7 @@ export default function ImageCapture() {
   const [captured, setCaptured] = useState([])
   const [uploading, setUploading] = useState(false)
   const [progress, setProgress] = useState({})
+  const [runIds, setRunIds] = useState([]) // display only: photos in the current upload run
   const [coords, setCoords] = useState(null)
   const [toast, setToast] = useState(null) // { text, kind }
 
@@ -90,7 +91,7 @@ export default function ImageCapture() {
     })
   }
 
-  const upload = async () => {
+  const upload = async (onlyId) => {
     if (captured.length === 0) return
     setUploading(true)
 
@@ -137,7 +138,7 @@ export default function ImageCapture() {
 
     const ts = format(new Date(), "yyyy-MM-dd'T'HH-mm-ss")
     let failed = 0
-    const pending = captured.filter(i => progress[i.id] !== 'done')
+    const pending = captured.filter(i => progress[i.id] !== 'done' && (!onlyId || i.id === onlyId))
     for (const item of pending) {
       setProgress(p => ({ ...p, [item.id]: 'uploading' }))
       try {
@@ -207,6 +208,32 @@ export default function ImageCapture() {
     setTimeout(() => navigate(`/jobs/${id}`, { replace: true }), 900)
   }
 
+  // Display only. Photos in this run show "Queued" until upload() reaches them, so a
+  // retried photo's old "Failed" is cleared first. upload() itself is unchanged.
+  const startUpload = (onlyId) => {
+    const ids = captured
+      .filter(i => progress[i.id] !== 'done' && (!onlyId || i.id === onlyId))
+      .map(i => i.id)
+    setRunIds(ids)
+    setProgress(p => {
+      const next = { ...p }
+      for (const itemId of ids) if (next[itemId] === 'error') delete next[itemId]
+      return next
+    })
+    upload(onlyId)
+  }
+
+  const tileState = (item) => {
+    const p = progress[item.id]
+    if (p === 'done' || p === 'uploading' || p === 'error') return p
+    return uploading && runIds.includes(item.id) ? 'queued' : null
+  }
+  const doneCount = captured.filter(i => progress[i.id] === 'done').length
+  const failedCount = captured.filter(i => progress[i.id] === 'error').length
+  const notDoneCount = captured.length - doneCount
+  const allDone = captured.length > 0 && doneCount === captured.length
+  const retryAll = !uploading && failedCount > 0 && failedCount === notDoneCount
+
   return (
     <div className="min-h-screen">
       <PageHeader
@@ -272,17 +299,50 @@ export default function ImageCapture() {
               This Session ({captured.length})
             </h2>
             <div className="grid grid-cols-3 gap-2">
-              {captured.map(item => (
+              {captured.map(item => {
+                const state = tileState(item)
+                return (
                 <div key={item.id} className="photo-tile">
                   <img src={item.preview} alt="" className="w-full h-full object-cover" />
+                  {state === 'queued' && (
+                    <div className="photo-status">
+                      <Clock size={22} aria-hidden="true" />
+                      <span>Queued</span>
+                    </div>
+                  )}
+                  {state === 'uploading' && (
+                    <div className="photo-status">
+                      <Upload size={22} aria-hidden="true" />
+                      <span>Uploading</span>
+                      <span className="photo-bar" aria-hidden="true"><span className="photo-bar-fill" /></span>
+                    </div>
+                  )}
+                  {state === 'done' && (
+                    <div className="photo-status">
+                      <span className="photo-done-dot"><Check size={18} strokeWidth={3} aria-hidden="true" /></span>
+                      <span>Uploaded</span>
+                    </div>
+                  )}
+                  {state === 'error' && (
+                    <div className="photo-status justify-end pb-2.5">
+                      <span className="flex items-center gap-1">
+                        <AlertCircle size={20} aria-hidden="true" />
+                        Failed
+                      </span>
+                      <button
+                        type="button"
+                        className="photo-retry"
+                        onClick={() => startUpload(item.id)}
+                        disabled={uploading}
+                      >
+                        <RotateCcw size={16} aria-hidden="true" />
+                        Retry
+                      </button>
+                    </div>
+                  )}
                   <span className="photo-pill">
                     {item.type.toUpperCase()}
                   </span>
-                  {progress[item.id] === 'done' && (
-                    <div className="photo-done">
-                      <span className="photo-done-dot"><Check size={18} strokeWidth={3} /></span>
-                    </div>
-                  )}
                   {!uploading && (
                     <button
                       type="button"
@@ -294,8 +354,35 @@ export default function ImageCapture() {
                     </button>
                   )}
                 </div>
-              ))}
+                )
+              })}
             </div>
+          </div>
+        )}
+
+        {/* Upload summary: progress by completed photos, then the result */}
+        {captured.length > 0 && (uploading || doneCount > 0 || failedCount > 0) && (
+          <div className="glass-card space-y-3" aria-live="polite">
+            {uploading ? (
+              <>
+                <p className="upload-summary-title">{doneCount} of {captured.length} uploaded</p>
+                <div className="progress-track" aria-hidden="true">
+                  <div className="progress-fill" style={{ width: `${(doneCount / captured.length) * 100}%` }} />
+                </div>
+              </>
+            ) : failedCount > 0 ? (
+              <p className="flex items-center gap-2 text-[15px] font-bold text-[var(--message-red)]">
+                <AlertCircle size={18} aria-hidden="true" className="shrink-0" />
+                {doneCount} uploaded, {failedCount} failed
+              </p>
+            ) : allDone ? (
+              <p className="flex items-center gap-3 upload-summary-title">
+                <span className="photo-done-dot shrink-0"><Check size={18} strokeWidth={3} aria-hidden="true" /></span>
+                {captured.length} photo{captured.length > 1 ? 's' : ''} uploaded
+              </p>
+            ) : (
+              <p className="upload-summary-title">{doneCount} of {captured.length} uploaded</p>
+            )}
           </div>
         )}
 
@@ -303,11 +390,17 @@ export default function ImageCapture() {
           <Button
             variant="primary"
             className="w-full py-3"
-            onClick={upload}
-            disabled={uploading}
+            onClick={() => startUpload()}
+            disabled={uploading || allDone}
           >
-            <Upload size={16} />
-            {uploading ? 'Uploading…' : `Upload ${captured.length} Photo${captured.length > 1 ? 's' : ''}`}
+            {allDone ? <Check size={16} aria-hidden="true" /> : retryAll ? <RotateCcw size={16} aria-hidden="true" /> : <Upload size={16} aria-hidden="true" />}
+            {uploading
+              ? 'Uploading…'
+              : allDone
+                ? 'Photos uploaded'
+                : retryAll
+                  ? `Retry ${failedCount} Photo${failedCount > 1 ? 's' : ''}`
+                  : `Upload ${notDoneCount} Photo${notDoneCount > 1 ? 's' : ''}`}
           </Button>
         )}
       </div>

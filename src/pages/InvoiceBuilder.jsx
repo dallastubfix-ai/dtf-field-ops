@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, Printer, Save, Shield } from 'lucide-react'
+import { AlertCircle, Shield, X } from 'lucide-react'
 import { format } from 'date-fns'
 import { supabase } from '../lib/supabase'
 import db from '../lib/db'
@@ -11,6 +11,7 @@ import { formatEnum } from '../lib/formatEnum'
 import { getJobSurfaceText, buildInvoiceLines } from '../lib/fixtures'
 import Button from '../components/ui/Button'
 import Modal from '../components/ui/Modal'
+import PageHeader from '../components/layout/PageHeader'
 import AddressAutocomplete from '../components/ui/AddressAutocomplete'
 import { useAuth } from '../context/AuthContext'
 import SignatureCapture from '../components/SignatureCapture'
@@ -235,13 +236,13 @@ async function loadJobContext(jobId) {
 function Field({ label, value, onChange, type = 'text', className = '', disabled = false }) {
   return (
     <div className={className}>
-      <div className="text-[10px] font-semibold uppercase tracking-wide text-[#6B7280] mb-0.5">{label}</div>
+      <div className="ui-field-label mb-1">{label}</div>
       <input
         type={type}
         value={value}
         onChange={e => onChange(e.target.value)}
         disabled={disabled}
-        className="border border-[#E5E7EB] rounded px-2 py-1 text-sm w-full focus:outline-none focus:ring-1 focus:ring-navy disabled:opacity-60 disabled:bg-gray-50"
+        className="ui-field ui-field-h px-3 w-full"
       />
     </div>
   )
@@ -275,7 +276,7 @@ export default function InvoiceBuilder() {
   const [saved, setSaved] = useState(false)
   const [newInvoiceWarning, setNewInvoiceWarning] = useState(null) // { problems, overflow, overflowAmount }, set only for a new invoice
   const [existingWarranty, setExistingWarranty] = useState(null)
-  const [toast, setToast] = useState('')
+  const [toast, setToast] = useState(null) // { text, kind }
   const [showSigCapture, setShowSigCapture] = useState(false)
   const [confirmRemoveLine, setConfirmRemoveLine] = useState(false)
   const [warningAcknowledged, setWarningAcknowledged] = useState(false)
@@ -608,7 +609,7 @@ export default function InvoiceBuilder() {
       // Already found signed on the server during an earlier save on this page.
       if (signedWhileOpen.current) {
         toastMs = 6000
-        setToast(SIGNED_WHILE_OPEN_MSG)
+        setToast({ text: SIGNED_WHILE_OPEN_MSG, kind: 'error' })
         return false
       }
 
@@ -633,7 +634,7 @@ export default function InvoiceBuilder() {
           // and the job page refreshes it from the server when reopened.
         }
         toastMs = 6000
-        setToast(SIGNED_WHILE_OPEN_MSG)
+        setToast({ text: SIGNED_WHILE_OPEN_MSG, kind: 'error' })
         return false
       }
 
@@ -644,7 +645,7 @@ export default function InvoiceBuilder() {
         if (signed) {
           setInv(v => ({ ...v, ...(server ?? {}), warranty_years: savedWarrantyYears.current }))
           toastMs = 6000
-          setToast('This invoice is already signed, so the warranty length was not changed and nothing was saved.')
+          setToast({ text: 'This invoice is already signed, so the warranty length was not changed and nothing was saved.', kind: 'error' })
           return false
         }
       }
@@ -672,17 +673,18 @@ export default function InvoiceBuilder() {
       if (warrantyNote) {
         // Stay on the page so the message can be read.
         toastMs = 6000
-        setToast(warrantyNote)
+        // "Invoice saved. ..." means it was queued for upload; "Invoice saved, but ..." means it failed.
+        setToast({ text: warrantyNote, kind: warrantyNote.startsWith('Invoice saved.') ? 'success' : 'error' })
         return
       }
-      setToast(wasNew ? 'Invoice saved ✓' : 'Invoice updated ✓')
+      setToast({ text: wasNew ? 'Invoice saved ✓' : 'Invoice updated ✓', kind: 'success' })
       if (shouldNavigateBack) navigate(`/jobs/${inv.job_id}`)
     } catch (err) {
       console.error('Invoice save failed:', err)
-      setToast(`Saved locally · ${err.message || 'offline — reopen online to upload'}`)
+      setToast({ text: `Saved locally · ${err.message || 'offline — reopen online to upload'}`, kind: 'error' })
     } finally {
       setSaving(false)
-      setTimeout(() => setToast(''), toastMs)
+      setTimeout(() => setToast(null), toastMs)
     }
   }
 
@@ -743,13 +745,13 @@ export default function InvoiceBuilder() {
         technician_signed_at: signedAt,
         customer_signed_at: signedAt,
       })
-      setToast('Signatures saved ✓')
-      setTimeout(() => setToast(''), 2800)
+      setToast({ text: 'Signatures saved ✓', kind: 'success' })
+      setTimeout(() => setToast(null), 2800)
       navigate(`/jobs/${inv.job_id}`)
     } catch (err) {
       console.error('Signature save error:', err)
-      setToast('Signatures uploaded but not saved to record — try again')
-      setTimeout(() => setToast(''), 3500)
+      setToast({ text: 'Signatures uploaded but not saved to record — try again', kind: 'error' })
+      setTimeout(() => setToast(null), 3500)
     }
   }
 
@@ -783,12 +785,12 @@ export default function InvoiceBuilder() {
       if (error) throw error
       await db.invoices.where('id').equals(inv.id).modify({ technician_signature_url: techUrl })
       setInv(v => ({ ...v, technician_signature_url: techUrl }))
-      setToast('Technician signature saved')
-      setTimeout(() => setToast(''), 3500)
+      setToast({ text: 'Technician signature saved', kind: 'success' })
+      setTimeout(() => setToast(null), 3500)
     } catch (err) {
       console.error('Technician signature save error:', err)
-      setToast('Signature uploaded but not saved to record — try again')
-      setTimeout(() => setToast(''), 3500)
+      setToast({ text: 'Signature uploaded but not saved to record — try again', kind: 'error' })
+      setTimeout(() => setToast(null), 3500)
     }
   }
 
@@ -811,13 +813,13 @@ export default function InvoiceBuilder() {
         technician_signature_url: null,
         customer_signature_url: null,
       })
-      setToast('Invoice unlocked — signatures cleared')
-      setTimeout(() => setToast(''), 2800)
+      setToast({ text: 'Invoice unlocked — signatures cleared', kind: 'success' })
+      setTimeout(() => setToast(null), 2800)
     } catch (err) {
       console.error('Unlock failed:', err)
       setInv(v => ({ ...v, ...prev }))
-      setToast('Could not unlock the invoice. Check your connection and try again.')
-      setTimeout(() => setToast(''), 3500)
+      setToast({ text: 'Could not unlock the invoice. Check your connection and try again.', kind: 'error' })
+      setTimeout(() => setToast(null), 3500)
     }
   }
 
@@ -844,66 +846,71 @@ export default function InvoiceBuilder() {
 
   return (
     <div className="min-h-screen">
-      {/* Top nav — hidden on print */}
-      <header className="bg-navy px-4 py-4 flex items-center gap-3 no-print sticky top-0 z-30">
-        <button onClick={() => navigate(-1)} className="text-white"><ArrowLeft size={20} /></button>
-        <h1 className="text-white font-bold text-base flex-1">Invoice Builder</h1>
-        <div className="flex gap-2">
-          {!isLocked && (
-            <Button variant="secondary" className="text-white border-white/30 py-1.5 px-3" onClick={() => requestAction('save')} disabled={saving}>
-              <Save size={14} /> {saving ? '…' : 'Save'}
+      {/* Top nav and actions — hidden on print */}
+      <PageHeader
+        title="Invoice Builder"
+        sticky
+        onBack={() => navigate(-1)}
+        className="no-print"
+        below={
+          <div className="builder-actions">
+            {!isLocked && (
+              <Button variant="secondary" onClick={() => requestAction('save')} disabled={saving}>
+                {saving ? '…' : 'Save'}
+              </Button>
+            )}
+            <Button variant="primary" onClick={() => requestAction('print')} disabled={saving}>
+              Print
             </Button>
-          )}
-          <Button variant="gold" className="py-1.5 px-3" onClick={() => requestAction('print')} disabled={saving}>
-            <Printer size={14} /> Print
-          </Button>
-          <Button variant="secondary" className="text-white border-white/30 py-1.5 px-3" onClick={() => requestAction('quote')} disabled={saving}>
-            <Printer size={14} /> Print as Quote
-          </Button>
-        </div>
-      </header>
+            <Button variant="secondary" onClick={() => requestAction('quote')} disabled={saving}>
+              Print as Quote
+            </Button>
+          </div>
+        }
+      />
 
       {toast && (
-        <div className="no-print fixed top-16 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-white text-sm px-4 py-2 rounded-lg shadow-lg">
-          {toast}
+        <div className={`no-print ui-toast ui-toast--bottom ui-toast--${toast.kind}`}>
+          {toast.text}
         </div>
       )}
 
       {/* Edit form — no-print */}
       <div className="no-print px-4 py-5 space-y-5 max-w-2xl mx-auto">
         {missingFromInvoice && (
-          <div role="alert" className="bg-red-50 border-2 border-red-500 rounded-xl px-4 py-3">
-            <p className="text-sm font-bold text-red-700">Not on this invoice:</p>
-            <ul className="mt-1 space-y-0.5">
-              {newInvoiceWarning.problems.map((p, i) => (
-                <li key={i} className="text-sm font-bold text-red-700">{`${p.title} - ${p.message}`}</li>
-              ))}
-              {newInvoiceWarning.overflow > 0 && (
-                <li className="text-sm font-bold text-red-700">
-                  {`${newInvoiceWarning.overflow} more ${newInvoiceWarning.overflow === 1 ? 'line' : 'lines'} didn't fit (${MAX_LINES} line maximum) - ${money(newInvoiceWarning.overflowAmount)} not included.`}
-                </li>
-              )}
-            </ul>
+          <div role="alert" className="glass-card flex gap-2 text-[var(--message-red)]">
+            <AlertCircle size={16} aria-hidden="true" className="shrink-0 mt-0.5" />
+            <div className="min-w-0">
+              <p className="text-sm font-bold">Not on this invoice:</p>
+              <ul className="mt-1 space-y-0.5">
+                {newInvoiceWarning.problems.map((p, i) => (
+                  <li key={i} className="text-sm font-bold">{`${p.title} - ${p.message}`}</li>
+                ))}
+                {newInvoiceWarning.overflow > 0 && (
+                  <li className="text-sm font-bold">
+                    {`${newInvoiceWarning.overflow} more ${newInvoiceWarning.overflow === 1 ? 'line' : 'lines'} didn't fit (${MAX_LINES} line maximum) - ${money(newInvoiceWarning.overflowAmount)} not included.`}
+                  </li>
+                )}
+              </ul>
+            </div>
           </div>
         )}
         {isLocked && (
-          <div className="bg-amber-50 border border-amber-300 rounded-xl px-4 py-3 flex items-center justify-between gap-3">
-            <p className="text-sm text-amber-800 font-medium">This invoice has been signed by both parties and is locked.</p>
-            <button
-              onClick={handleUnlock}
-              className="shrink-0 text-xs font-semibold text-amber-700 border border-amber-400 rounded-lg px-3 py-1.5 hover:bg-amber-100 transition-colors"
-            >
+          <div className="inset-box note-warn items-center gap-3 px-4 py-3">
+            <AlertCircle size={16} aria-hidden="true" />
+            <p className="flex-1">This invoice has been signed by both parties and is locked.</p>
+            <Button variant="secondary" className="shrink-0 min-h-[44px] px-3 text-sm" onClick={handleUnlock}>
               Unlock
-            </button>
+            </Button>
           </div>
         )}
-        <div className="bg-white rounded-xl border border-[#E5E7EB] shadow-sm p-4 grid grid-cols-2 gap-3">
+        <div className="glass-card grid grid-cols-2 gap-3">
           <Field label="Invoice #"    value={inv.invoice_number} onChange={v => set('invoice_number', v)} disabled={isLocked} />
           <Field label="Invoice Date" value={inv.invoice_date}   onChange={v => set('invoice_date', v)} type="date" disabled={isLocked} />
         </div>
 
-        <div className="bg-white rounded-xl border border-[#E5E7EB] shadow-sm p-4 space-y-3">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Customer</h3>
+        <div className="glass-card space-y-3">
+          <h3 className="ui-field-label">Customer</h3>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Full Name"  value={inv.customer_name}    onChange={v => set('customer_name', v)}    className="col-span-2" disabled={isLocked} />
             <Field label="Phone"      value={inv.customer_phone}   onChange={v => set('customer_phone', v)} disabled={isLocked} />
@@ -919,8 +926,8 @@ export default function InvoiceBuilder() {
           </div>
         </div>
 
-        <div className="bg-white rounded-xl border border-[#E5E7EB] shadow-sm p-4 space-y-3">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Service Details</h3>
+        <div className="glass-card space-y-3">
+          <h3 className="ui-field-label">Service Details</h3>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Service Date"  value={inv.service_date}  onChange={v => set('service_date', v)}  type="date" disabled={isLocked} />
             <Field label="Technician"    value={inv.technician}    onChange={v => set('technician', v)} disabled={isLocked} />
@@ -929,9 +936,9 @@ export default function InvoiceBuilder() {
           </div>
         </div>
 
-        <div className="bg-white rounded-xl border border-[#E5E7EB] shadow-sm p-4 space-y-2">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-[#6B7280] mb-2">Line Items</h3>
-          <div className="grid grid-cols-12 gap-1 text-[10px] font-semibold uppercase text-[#9CA3AF] mb-1">
+        <div className="glass-card space-y-2">
+          <h3 className="ui-field-label mb-2">Line Items</h3>
+          <div className="grid grid-cols-12 gap-1 text-[10px] font-semibold uppercase text-[var(--text-secondary)] mb-1">
             <span className="col-span-5">Description</span>
             <span className="col-span-4">Notes/Type</span>
             <span className="col-span-1">Rate</span>
@@ -940,13 +947,13 @@ export default function InvoiceBuilder() {
           {inv.line_items.map((item, i) => (
             <div key={i} className="grid grid-cols-12 gap-1">
               <input value={item.description} onChange={e => setItem(i, 'description', e.target.value)} disabled={isLocked}
-                className="col-span-5 border border-[#E5E7EB] rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-navy disabled:opacity-60 disabled:bg-gray-50" />
+                className="ui-field col-span-5 min-w-0 min-h-[44px] rounded-[var(--radius-sm)] px-2 text-xs" />
               <input value={item.notes} onChange={e => setItem(i, 'notes', e.target.value)} disabled={isLocked}
-                className="col-span-4 border border-[#E5E7EB] rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-navy disabled:opacity-60 disabled:bg-gray-50" />
+                className="ui-field col-span-4 min-w-0 min-h-[44px] rounded-[var(--radius-sm)] px-2 text-xs" />
               <input value={item.rate} onChange={e => setItem(i, 'rate', e.target.value)} disabled={isLocked}
-                className="col-span-1 border border-[#E5E7EB] rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-navy disabled:opacity-60 disabled:bg-gray-50" />
+                className="ui-field col-span-1 min-w-0 min-h-[44px] rounded-[var(--radius-sm)] px-2 text-xs" />
               <input value={item.amount} onChange={e => setItem(i, 'amount', e.target.value)} disabled={isLocked}
-                className="col-span-2 border border-[#E5E7EB] rounded px-2 py-1 text-xs text-right focus:outline-none focus:ring-1 focus:ring-navy disabled:opacity-60 disabled:bg-gray-50" />
+                className="ui-field col-span-2 min-w-0 min-h-[44px] rounded-[var(--radius-sm)] px-2 text-xs text-right" />
             </div>
           ))}
           {!isLocked && (
@@ -962,73 +969,77 @@ export default function InvoiceBuilder() {
               )}
             </div>
           )}
-          <div className="border-t border-[#E5E7EB] pt-2 mt-2 space-y-1 text-sm">
-            <div className="flex justify-between"><span className="text-[#6B7280]">Subtotal</span><span className="font-medium">${subtotal.toFixed(2)}</span></div>
+          <div className="inset-box mt-2 px-3 py-2 space-y-1 text-sm text-[var(--text)]">
+            <div className="flex justify-between"><span>Subtotal</span><span className="font-medium">${subtotal.toFixed(2)}</span></div>
             <div className="flex items-center gap-2">
-              <span className="text-[#6B7280] flex-1">Discount ($)</span>
-              <input value={inv.discount} onChange={e => set('discount', e.target.value)} disabled={isLocked} className="w-20 border border-[#E5E7EB] rounded px-2 py-1 text-xs text-right focus:outline-none disabled:opacity-60 disabled:bg-gray-50" />
+              <span className="flex-1">Discount ($)</span>
+              <input value={inv.discount} onChange={e => set('discount', e.target.value)} disabled={isLocked} className="ui-field w-20 min-h-[44px] rounded-[var(--radius-sm)] px-2 text-xs text-right" />
             </div>
             {!isLocked && (
               <div className="flex flex-wrap justify-end gap-2">
                 {DISCOUNT_PERCENTS.map(pct => (
                   <button key={pct} type="button" onClick={() => applyDiscountPercent(pct)} disabled={!(subtotal > 0)}
-                    className="min-h-[44px] px-3 rounded-full text-sm font-semibold border border-[#E5E7EB] text-[#6B7280] disabled:opacity-50 active:scale-95 transition-all">
+                    className="fx-option min-h-[44px] px-3">
                     {pct}%
                   </button>
                 ))}
                 <button type="button" onClick={() => set('discount', '0')}
-                  className="min-h-[44px] px-3 rounded-full text-sm font-semibold border border-[#E5E7EB] text-[#6B7280] active:scale-95 transition-all">
+                  className="fx-option min-h-[44px] px-3">
                   Clear
                 </button>
               </div>
             )}
             <div className="flex items-center gap-2">
-              <span className="text-[#6B7280] flex-1">Tax (%)</span>
-              <input value={inv.tax_rate} onChange={e => set('tax_rate', e.target.value)} disabled={isLocked} className="w-20 border border-[#E5E7EB] rounded px-2 py-1 text-xs text-right focus:outline-none disabled:opacity-60 disabled:bg-gray-50" />
+              <span className="flex-1">Tax (%)</span>
+              <input value={inv.tax_rate} onChange={e => set('tax_rate', e.target.value)} disabled={isLocked} className="ui-field w-20 min-h-[44px] rounded-[var(--radius-sm)] px-2 text-xs text-right" />
             </div>
-            <div className="flex justify-between font-bold text-navy text-base pt-1 border-t border-[#E5E7EB]">
+            <div className="flex justify-between font-bold text-[var(--accent-text)] text-base pt-2">
               <span>Total</span><span>${total.toFixed(2)}</span>
             </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-xl border border-[#E5E7EB] shadow-sm p-4 space-y-3">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Payment Methods</h3>
+        <div className="glass-card space-y-3">
+          <h3 className="ui-field-label">Payment Methods</h3>
           <div className="flex flex-wrap gap-2">
             {PAYMENT_METHODS.map(m => (
               <button key={m} type="button" onClick={() => togglePayment(m)}
-                className={`px-3 py-1.5 rounded-full text-sm border transition-all ${(inv.payment_methods ?? []).includes(m) ? 'bg-navy text-white border-navy' : 'border-[#E5E7EB] text-[#6B7280]'}${isLocked ? ' pointer-events-none opacity-60' : ''}`}>
+                aria-pressed={(inv.payment_methods ?? []).includes(m)}
+                className={`fx-option min-h-[44px] px-3${isLocked ? ' pointer-events-none opacity-60' : ''}`}>
                 {m}
               </button>
             ))}
           </div>
         </div>
 
-        <div className="bg-white rounded-xl border border-[#E5E7EB] shadow-sm p-4 space-y-2">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-[#6B7280] mb-2">Notes</h3>
+        <div className="glass-card space-y-2">
+          <h3 className="ui-field-label mb-2">Notes</h3>
           {[1,2,3].map(n => (
             <input key={n} value={inv[`notes${n}`]} onChange={e => set(`notes${n}`, e.target.value)}
               placeholder={`Note line ${n}`} disabled={isLocked}
-              className="w-full border border-[#E5E7EB] rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-navy disabled:opacity-60 disabled:bg-gray-50" />
+              className="ui-field ui-field-h w-full px-3" />
           ))}
         </div>
 
-        <div className="bg-white rounded-xl border border-[#E5E7EB] shadow-sm p-4 space-y-3">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Warranty</h3>
+        <div className="glass-card space-y-3">
+          <h3 className="ui-field-label">Warranty</h3>
           <div className="flex gap-2">
-            <button onClick={() => set('warranty_included', true)}
-              className={`flex-1 py-2 rounded-lg text-sm font-semibold border transition-all ${inv.warranty_included ? 'bg-green-500 text-white border-green-500' : 'border-[#E5E7EB] text-[#6B7280]'}${isLocked ? ' pointer-events-none opacity-60' : ''}`}>
+            <button type="button" onClick={() => set('warranty_included', true)}
+              aria-pressed={!!inv.warranty_included}
+              className={`fx-option flex-1${isLocked ? ' pointer-events-none opacity-60' : ''}`}>
               YES — {warrantyYears}-Year Included
             </button>
-            <button onClick={() => set('warranty_included', false)}
-              className={`flex-1 py-2 rounded-lg text-sm font-semibold border transition-all ${!inv.warranty_included ? 'bg-red-500 text-white border-red-500' : 'border-[#E5E7EB] text-[#6B7280]'}${isLocked ? ' pointer-events-none opacity-60' : ''}`}>
+            <button type="button" onClick={() => set('warranty_included', false)}
+              aria-pressed={!inv.warranty_included}
+              className={`fx-option flex-1${isLocked ? ' pointer-events-none opacity-60' : ''}`}>
               NO
             </button>
           </div>
           <div className="flex gap-2">
             {[2, 6].map(n => (
-              <button key={n} onClick={() => set('warranty_years', n)} disabled={isLocked}
-                className={`flex-1 py-2 rounded-lg text-sm font-semibold border transition-all ${warrantyYears === n ? 'bg-navy text-white border-navy' : 'border-[#E5E7EB] text-[#6B7280]'}${isLocked ? ' pointer-events-none opacity-60' : ''}`}>
+              <button key={n} type="button" onClick={() => set('warranty_years', n)} disabled={isLocked}
+                aria-pressed={warrantyYears === n}
+                className={`fx-option flex-1${isLocked ? ' pointer-events-none opacity-60' : ''}`}>
                 {n} Years
               </button>
             ))}
@@ -1036,7 +1047,7 @@ export default function InvoiceBuilder() {
           {!inv.warranty_included && (
             <input value={inv.warranty_no_reason} onChange={e => set('warranty_no_reason', e.target.value)}
               placeholder="Reason warranty not included…" disabled={isLocked}
-              className="w-full border border-[#E5E7EB] rounded px-2 py-1.5 text-sm focus:outline-none disabled:opacity-60 disabled:bg-gray-50" />
+              className="ui-field ui-field-h w-full px-3" />
           )}
         </div>
 
@@ -1271,7 +1282,7 @@ export default function InvoiceBuilder() {
       {/* Portal keeps the Modal's un-typed close button out of any surrounding form. */}
       {createPortal(
         <Modal open={confirmRemoveLine} onClose={() => setConfirmRemoveLine(false)} title="Remove line?">
-          <p className="text-sm text-[#1F2937] mb-4">
+          <p className="text-sm text-[var(--text)] mb-4">
             The last line has details filled in. Remove it?
           </p>
           <div className="flex gap-2">
@@ -1290,10 +1301,10 @@ export default function InvoiceBuilder() {
         <Modal open={pendingAction !== null} onClose={() => setPendingAction(null)} title="Not everything is on this invoice">
           <ul className="space-y-1 mb-4">
             {newInvoiceWarning?.problems.map((p, i) => (
-              <li key={i} className="text-sm font-bold text-red-700">{`${p.title} - ${p.message}`}</li>
+              <li key={i} className="text-sm font-bold text-[var(--message-red)]">{`${p.title} - ${p.message}`}</li>
             ))}
             {newInvoiceWarning?.overflow > 0 && (
-              <li className="text-sm font-bold text-red-700">
+              <li className="text-sm font-bold text-[var(--message-red)]">
                 {`${newInvoiceWarning.overflow} more ${newInvoiceWarning.overflow === 1 ? 'line' : 'lines'} didn't fit (${MAX_LINES} line maximum) - ${money(newInvoiceWarning.overflowAmount)} not included.`}
               </li>
             )}
@@ -1311,35 +1322,39 @@ export default function InvoiceBuilder() {
       )}
 
       {sigLinkState && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-6">
-          <div className="bg-white rounded-xl p-6 w-full max-w-sm">
+        <div className="no-print fixed inset-0 z-50 flex items-center justify-center p-6">
+          <div className="ui-modal-scrim absolute inset-0" />
+          <div className="ui-modal-panel relative rounded-[var(--radius-modal)] w-full max-w-sm">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-bold text-[#111827]">Customer Signing Link</h2>
-              <button onClick={() => setSigLinkState(null)} className="text-[#6B7280] text-2xl leading-none px-1">×</button>
+              <h2 className="ui-modal-title">Customer Signing Link</h2>
+              <button type="button" onClick={() => setSigLinkState(null)} aria-label="Close" className="ui-modal-close">
+                <X size={20} />
+              </button>
             </div>
             {sigLinkState.status === 'generating' && (
-              <p className="text-sm text-[#6B7280]">Generating link…</p>
+              <p className="text-sm text-[var(--text-secondary)]">Generating link…</p>
             )}
             {sigLinkState.status === 'error' && (
-              <p className="text-sm text-red-600">Failed to generate link. Please try again.</p>
+              <p className="text-sm text-[var(--message-red)]">Failed to generate link. Please try again.</p>
             )}
             {sigLinkState.status === 'ready' && (
               <>
-                <p className="text-xs text-[#6B7280] mb-3">Copy this link and send it to your customer. It expires in 24 hours and can only be used once.</p>
-                <div className="bg-[#F3F4F6] rounded-lg px-3 py-2.5 text-xs font-mono text-[#111827] break-all mb-4 select-all">
+                <p className="text-xs text-[var(--text-secondary)] mb-3">Copy this link and send it to your customer. It expires in 24 hours and can only be used once.</p>
+                <div className="inset-box px-3 py-2.5 text-xs font-mono text-[var(--text)] break-all mb-4 select-all">
                   {sigLinkState.url}
                 </div>
-                <button
+                <Button
+                  variant="primary"
+                  className="w-full"
                   onClick={() => {
                     navigator.clipboard.writeText(sigLinkState.url)
-                    setToast('Link copied ✓')
-                    setTimeout(() => setToast(''), 2000)
+                    setToast({ text: 'Link copied ✓', kind: 'success' })
+                    setTimeout(() => setToast(null), 2000)
                     setSigLinkState(null)
                   }}
-                  className="w-full py-2.5 text-sm font-bold text-white bg-[#1E40AF] rounded-lg"
                 >
                   Copy Link
-                </button>
+                </Button>
               </>
             )}
           </div>

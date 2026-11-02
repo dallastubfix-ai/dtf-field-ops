@@ -10,6 +10,7 @@ import { summarizeJobFixtures } from '../lib/fixtures'
 import Badge from '../components/ui/Badge'
 import EmptyState from '../components/ui/EmptyState'
 import PageHeader from '../components/layout/PageHeader'
+import { SkeletonGroup, SkeletonJobRow } from '../components/ui/Skeleton'
 
 const FILTERS = [
   { label: 'All',        value: 'all'        },
@@ -134,7 +135,11 @@ export default function Jobs() {
 
       {/* Job list */}
       <div className="px-4 pt-3 pb-4 space-y-[10px]">
-        {!jobs || jobs.length === 0 ? (
+        {jobs === undefined ? (
+          <SkeletonGroup className="space-y-[10px]">
+            {[0, 1, 2, 3].map(i => <SkeletonJobRow key={i} />)}
+          </SkeletonGroup>
+        ) : !jobs || jobs.length === 0 ? (
           <EmptyState
             icon={Briefcase}
             title="No jobs yet"

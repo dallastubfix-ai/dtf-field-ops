@@ -8,7 +8,7 @@ import { supabase } from '../lib/supabase'
 import { upsertServerRow } from '../lib/sync'
 import { cleanupLeftoverInvoices } from '../lib/localCleanup'
 import EmptyState from '../components/ui/EmptyState'
-import LoadingSpinner from '../components/ui/LoadingSpinner'
+import { SkeletonGroup, SkeletonRow, SkeletonSummary } from '../components/ui/Skeleton'
 import Badge from '../components/ui/Badge'
 import PageHeader from '../components/layout/PageHeader'
 
@@ -163,7 +163,8 @@ export default function Invoices() {
       )}
 
       <div className="px-4 pt-3 pb-4 space-y-3">
-        {/* Summary strip */}
+        {/* Summary strip (placeholder while loading; the list below announces "Loading") */}
+        {invoices === undefined && <SkeletonSummary />}
         {outstanding > 0 && (
           <div className="invoice-summary">
             <span className="invoice-summary-label">Total Outstanding</span>
@@ -189,9 +190,9 @@ export default function Invoices() {
         </div>
 
         {invoices === undefined ? (
-          <div className="flex justify-center py-12">
-            <LoadingSpinner size="lg" />
-          </div>
+          <SkeletonGroup className="space-y-3">
+            {[0, 1, 2].map(i => <SkeletonRow key={i} className="glass-row invoice-card" />)}
+          </SkeletonGroup>
         ) : invoices.length === 0 ? (
           <EmptyState icon={FileText} title="No invoices yet" subtitle="Build an invoice from a job." />
         ) : (

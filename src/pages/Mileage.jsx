@@ -7,7 +7,7 @@ import db from '../lib/db'
 import PageHeader from '../components/layout/PageHeader'
 import Button from '../components/ui/Button'
 import EmptyState from '../components/ui/EmptyState'
-import LoadingSpinner from '../components/ui/LoadingSpinner'
+import { SkeletonGroup, SkeletonStatTile, SkeletonCard } from '../components/ui/Skeleton'
 import { useOnlineStatus } from '../hooks/useOnlineStatus'
 import { todayKey, monthKeyOf, shiftMonth, monthRange, yearRange, summarizeCalculated, fetchDayGroups, refreshMileageRows, calculateDay, friendlyReason, MAX_AUTO_ATTEMPTS, requestRecalc, getRecalcDays, subscribeRecalc, setStartsFromHome } from '../lib/mileage'
 
@@ -140,16 +140,24 @@ export default function Mileage() {
       </div>
 
       <div className="px-4 py-4 space-y-3 max-w-lg mx-auto">
-        <div className="grid grid-cols-2 gap-3">
-          <div className="glass-row home-stat">
-            <div className="home-stat-label">{monthName} total</div>
-            <div className="text-lg font-bold text-[var(--accent-text)]">{monthTotal} mi</div>
+        {loading ? (
+          // Placeholders; the day list below announces "Loading"
+          <div className="grid grid-cols-2 gap-3">
+            <SkeletonStatTile />
+            <SkeletonStatTile />
           </div>
-          <div className="glass-row home-stat">
-            <div className="home-stat-label">{yearStart.slice(0, 4)} total</div>
-            <div className="text-lg font-bold text-[var(--accent-text)]">{yearTotal} mi</div>
+        ) : (
+          <div className="grid grid-cols-2 gap-3">
+            <div className="glass-row home-stat">
+              <div className="home-stat-label">{monthName} total</div>
+              <div className="text-lg font-bold text-[var(--accent-text)]">{monthTotal} mi</div>
+            </div>
+            <div className="glass-row home-stat">
+              <div className="home-stat-label">{yearStart.slice(0, 4)} total</div>
+              <div className="text-lg font-bold text-[var(--accent-text)]">{yearTotal} mi</div>
+            </div>
           </div>
-        </div>
+        )}
         {notIncluded > 0 && (
           <p className="note-warn">
             <AlertCircle size={16} aria-hidden="true" />
@@ -164,7 +172,9 @@ export default function Mileage() {
         )}
 
         {loading ? (
-          <div className="flex justify-center py-10"><LoadingSpinner /></div>
+          <SkeletonGroup className="space-y-3">
+            {[0, 1, 2].map(i => <SkeletonCard key={i} lines={1} />)}
+          </SkeletonGroup>
         ) : dayKeys.length === 0 ? (
           <EmptyState icon={Car} title={`No mileage days in ${monthLabel}`} subtitle="Days with appointments will show up here." />
         ) : dayKeys.map(day => {

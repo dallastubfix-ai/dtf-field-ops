@@ -10,6 +10,7 @@ import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
 import EmptyState from '../components/ui/EmptyState'
 import PageHeader from '../components/layout/PageHeader'
+import { SkeletonGroup, SkeletonStatTile, SkeletonRow } from '../components/ui/Skeleton'
 
 export default function Home() {
   const navigate = useNavigate()
@@ -126,14 +127,20 @@ export default function Home() {
 
       <div className="px-4 pt-3 pb-4 space-y-3">
         {/* Stats (exactly three tiles) */}
-        <div className="grid grid-cols-3 gap-[10px]">
-          {stats.map(s => (
-            <div key={s.label} className="glass-row home-stat">
-              <div className="home-stat-num">{s.value}</div>
-              <div className="home-stat-label">{s.label}</div>
-            </div>
-          ))}
-        </div>
+        {appointments === undefined || weekAppointments === undefined || unpaidInvoices === undefined ? (
+          <SkeletonGroup className="grid grid-cols-3 gap-[10px]">
+            {[0, 1, 2].map(i => <SkeletonStatTile key={i} />)}
+          </SkeletonGroup>
+        ) : (
+          <div className="grid grid-cols-3 gap-[10px]">
+            {stats.map(s => (
+              <div key={s.label} className="glass-row home-stat">
+                <div className="home-stat-num">{s.value}</div>
+                <div className="home-stat-label">{s.label}</div>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Quick actions */}
         <div className="grid grid-cols-3 gap-[10px]">
@@ -155,7 +162,11 @@ export default function Home() {
           <h2 className="section-label">
             TODAY'S SCHEDULE
           </h2>
-          {!appointments || appointments.length === 0 ? (
+          {appointments === undefined ? (
+            <SkeletonGroup className="space-y-3">
+              {[0, 1].map(i => <SkeletonRow key={i} />)}
+            </SkeletonGroup>
+          ) : !appointments || appointments.length === 0 ? (
             <EmptyState
               icon={Calendar}
               title="No appointments today"

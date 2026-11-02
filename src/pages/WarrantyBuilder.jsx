@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Printer } from 'lucide-react'
+import { AlertCircle } from 'lucide-react'
 import { normalize as normalizeWarrantyYears, YEARS_WORD, warrantyExpiry } from '../lib/warranty'
 import { supabase } from '../lib/supabase'
 import db from '../lib/db'
 import Button from '../components/ui/Button'
+import PageHeader from '../components/layout/PageHeader'
+import { SkeletonGroup, SkeletonHeader, SkeletonCard } from '../components/ui/Skeleton'
 
 const NBSP = ' '
 
@@ -133,13 +135,13 @@ const WARRANTY_PRINT_CSS = `
 function Field({ label, value, onChange, type = 'text', className = '', disabled = false }) {
   return (
     <div className={className}>
-      <div className="text-[10px] font-semibold uppercase tracking-wide text-[#6B7280] mb-0.5">{label}</div>
+      <div className="ui-field-label mb-1">{label}</div>
       <input
         type={type}
         value={value}
         onChange={e => onChange(e.target.value)}
         disabled={disabled}
-        className="border border-[#E5E7EB] rounded px-2 py-1 text-sm w-full focus:outline-none focus:ring-1 focus:ring-navy disabled:opacity-60 disabled:bg-gray-50"
+        className="ui-field ui-field-h px-3 w-full"
       />
     </div>
   )
@@ -213,36 +215,51 @@ export default function WarrantyBuilder() {
   }, [id])
 
   if (loading) {
-    return <div className="flex items-center justify-center min-h-screen"><div className="w-8 h-8 animate-spin rounded-full border-2 border-[#E5E7EB] border-t-navy" /></div>
+    return (
+      <SkeletonGroup className="no-print min-h-screen">
+        <SkeletonHeader />
+        <div className="px-4 py-5 max-w-lg mx-auto">
+          <SkeletonCard lines={4} />
+        </div>
+      </SkeletonGroup>
+    )
   }
 
   return (
     <div className="min-h-screen">
-      {/* Header */}
-      <header className="bg-navy px-4 py-4 flex items-center gap-3 no-print sticky top-0 z-30">
-        <button onClick={() => navigate(-1)} className="text-white"><ArrowLeft size={20} /></button>
-        <h1 className="text-white font-bold text-base flex-1">Warranty Builder</h1>
-        <Button variant="gold" className="py-1.5 px-3" onClick={() => {
-          document.title = `${w.invoice_number || 'warranty'}-warranty`
-          window.print()
-        }}>
-          <Printer size={14} /> Print
-        </Button>
-      </header>
+      {/* Header and actions — hidden on print */}
+      <PageHeader
+        title="Warranty Builder"
+        sticky
+        onBack={() => navigate(-1)}
+        className="no-print"
+        below={
+          <div className="builder-actions">
+            <Button variant="primary" onClick={() => {
+              document.title = `${w.invoice_number || 'warranty'}-warranty`
+              window.print()
+            }}>
+              Print
+            </Button>
+          </div>
+        }
+      />
 
       {/* Edit fields */}
       <div className="no-print px-4 py-5 space-y-4 max-w-lg mx-auto">
         {isLocked && (
-          <div className="bg-amber-50 border border-amber-300 rounded-xl px-4 py-3">
-            <p className="text-sm text-amber-800 font-medium">This warranty's invoice has been signed by both parties and is locked.</p>
-          </div>
+          <p className="inset-box note-warn px-4 py-3">
+            <AlertCircle size={16} aria-hidden="true" />
+            <span>This warranty's invoice has been signed by both parties and is locked.</span>
+          </p>
         )}
         {invoiceUnconfirmed && (
-          <div className="bg-amber-50 border border-amber-300 rounded-xl px-4 py-3">
-            <p className="text-sm text-amber-800 font-medium">The warranty length could not be confirmed from the invoice, so 2 years is shown. Check the length before printing.</p>
-          </div>
+          <p className="inset-box note-warn px-4 py-3">
+            <AlertCircle size={16} aria-hidden="true" />
+            <span>The warranty length could not be confirmed from the invoice, so 2 years is shown. Check the length before printing.</span>
+          </p>
         )}
-        <div className="bg-white rounded-xl border border-[#E5E7EB] shadow-sm p-4 grid grid-cols-2 gap-3">
+        <div className="glass-card grid grid-cols-2 gap-3">
           <Field label="Invoice #"     value={w.invoice_number}  onChange={v => set('invoice_number', v)} disabled={isLocked} />
           <Field label="Service Date"  value={w.service_date}    onChange={v => {
             set('service_date', v)
@@ -253,7 +270,7 @@ export default function WarrantyBuilder() {
           <Field label="Customer Name" value={w.customer_name}   onChange={v => set('customer_name', v)} className="col-span-2" disabled={isLocked} />
           <Field label="Service Address" value={w.service_address} onChange={v => set('service_address', v)} className="col-span-2" disabled={isLocked} />
         </div>
-        <p className="text-xs text-[#9CA3AF] text-center">Edit the fields above, then tap Print to save as PDF.</p>
+        <p className="text-xs text-[var(--text-secondary)] text-center">Edit the fields above, then tap Print to save as PDF.</p>
       </div>
 
       {/* ── PRINT VIEW — matches dtf-warranty-builder.html ── */}

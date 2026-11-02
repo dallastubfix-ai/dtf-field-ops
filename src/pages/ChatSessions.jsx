@@ -4,7 +4,7 @@ import { MessageSquare } from 'lucide-react'
 import { format } from 'date-fns'
 import { supabase } from '../lib/supabase'
 import PageHeader from '../components/layout/PageHeader'
-import LoadingSpinner from '../components/ui/LoadingSpinner'
+import { SkeletonGroup, SkeletonRow } from '../components/ui/Skeleton'
 import EmptyState from '../components/ui/EmptyState'
 
 // Only these two get their own look; everything else is the neutral badge.
@@ -70,9 +70,9 @@ export default function ChatSessions() {
 
       <div className="px-4 py-4">
         {loading ? (
-          <div className="flex justify-center py-16">
-            <LoadingSpinner size="lg" />
-          </div>
+          <SkeletonGroup className="space-y-3">
+            {[0, 1, 2, 3].map(i => <SkeletonRow key={i} />)}
+          </SkeletonGroup>
         ) : sessions.length === 0 ? (
           <EmptyState
             icon={MessageSquare}

@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { format } from 'date-fns'
 import { supabase } from '../lib/supabase'
 import PageHeader from '../components/layout/PageHeader'
-import LoadingSpinner from '../components/ui/LoadingSpinner'
+import { SkeletonGroup, SkeletonBubbles } from '../components/ui/Skeleton'
 
 // Only these two get their own look; everything else is the neutral badge.
 const intentColors = {
@@ -71,9 +71,9 @@ export default function ChatSessionDetail() {
 
       <div className="flex-1 px-4 py-4 space-y-4">
         {loading ? (
-          <div className="flex justify-center py-16">
-            <LoadingSpinner size="lg" />
-          </div>
+          <SkeletonGroup>
+            <SkeletonBubbles count={4} />
+          </SkeletonGroup>
         ) : (
           messages.map(msg => (
             <div key={msg.id} className="space-y-3">

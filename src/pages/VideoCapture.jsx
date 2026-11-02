@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { AlertCircle, Circle, Square, RefreshCw, Upload } from 'lucide-react'
+import { AlertCircle, Check, Circle, Square, RefreshCw, RotateCcw, Upload } from 'lucide-react'
 import { format } from 'date-fns'
 import { supabase } from '../lib/supabase'
 import db from '../lib/db'
@@ -34,6 +34,8 @@ export default function VideoCapture() {
   const [blob, setBlob] = useState(null)
   const [blobUrl, setBlobUrl] = useState(null)
   const [uploading, setUploading] = useState(false)
+  const [uploadPct, setUploadPct] = useState(null) // display only: null until the browser reports a size
+  const [uploadState, setUploadState] = useState(null) // display only: null | 'done' | 'error'
   const [toast, setToast] = useState(null) // { text, kind }
   const [noProvider, setNoProvider] = useState(false)
   const [job, setJob] = useState(null)
@@ -87,6 +89,7 @@ export default function VideoCapture() {
     if (blobUrl) URL.revokeObjectURL(blobUrl)
     setBlob(null)
     setBlobUrl(null)
+    setUploadState(null)
   }
 
   const handleGalleryPick = (e) => {
@@ -96,6 +99,7 @@ export default function VideoCapture() {
     setBlob(file)
     setBlobUrl(url)
     setGallerySrc(url)
+    setUploadState(null)
   }
 
   const uploadToDrive = async () => {
@@ -123,20 +127,33 @@ export default function VideoCapture() {
     form.append('metadata', new Blob([JSON.stringify(meta)], { type: 'application/json' }))
     form.append('file', blob)
 
+    setUploadPct(null)
     try {
-      const res = await fetch(
-        'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink',
-        {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${providerToken}` },
-          body: form,
+      // XMLHttpRequest instead of fetch only so the upload percentage can be shown.
+      // Same URL, method, Authorization header and FormData body as before.
+      const { id: fileId, webViewLink } = await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest()
+        xhr.open('POST', 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink')
+        xhr.setRequestHeader('Authorization', `Bearer ${providerToken}`)
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) setUploadPct(Math.round((e.loaded / e.total) * 100))
         }
-      )
-      if (!res.ok) {
-        const errBody = await res.text()
-        throw new Error(`Drive ${res.status}: ${errBody.slice(0, 120)}`)
-      }
-      const { id: fileId, webViewLink } = await res.json()
+        xhr.onload = () => {
+          if (xhr.status < 200 || xhr.status > 299) {
+            reject(new Error(`Drive ${xhr.status}: ${String(xhr.responseText ?? '').slice(0, 120)}`))
+            return
+          }
+          try {
+            resolve(JSON.parse(xhr.responseText))
+          } catch (err) {
+            reject(err)
+          }
+        }
+        xhr.onerror = () => reject(new Error('Failed to fetch')) // the message fetch gave for a network error
+        xhr.ontimeout = () => reject(new Error('Upload timed out'))
+        xhr.onabort = () => reject(new Error('Upload was cancelled'))
+        xhr.send(form)
+      })
 
       const record = {
         id: crypto.randomUUID(),
@@ -150,10 +167,12 @@ export default function VideoCapture() {
       await supabase.from('videos').insert(record)
       await db.videos.add({ ...record, _synced: true })
 
+      setUploadState('done')
       setToast({ text: 'Video uploaded to Google Drive!', kind: 'success' })
       setTimeout(() => navigate(`/jobs/${id}`, { replace: true }), 900)
     } catch (err) {
       const msg = err?.message ?? String(err)
+      setUploadState('error')
       setToast({ text: `Upload failed: ${msg}`, kind: 'error' })
     } finally {
       setUploading(false)
@@ -213,6 +232,38 @@ export default function VideoCapture() {
         )}
       </div>
 
+      {/* Upload status */}
+      {blob && (uploading || uploadState) && (
+        <div className="px-4 pt-4">
+          <div className="inset-box inset-box--opaque px-4 py-3 space-y-2" aria-live="polite">
+            {uploading ? (
+              <>
+                <div className="flex items-center justify-between gap-2 text-sm font-bold text-[var(--text)]">
+                  <span className="flex items-center gap-2">
+                    <Upload size={18} aria-hidden="true" />
+                    Uploading
+                  </span>
+                  {uploadPct !== null && <span>{uploadPct}%</span>}
+                </div>
+                <div className={`progress-track${uploadPct === null ? ' progress-track--indeterminate' : ''}`} aria-hidden="true">
+                  <div className="progress-fill" style={uploadPct === null ? undefined : { width: `${uploadPct}%` }} />
+                </div>
+              </>
+            ) : uploadState === 'done' ? (
+              <p className="flex items-center gap-3 upload-summary-title">
+                <span className="photo-done-dot shrink-0"><Check size={18} strokeWidth={3} aria-hidden="true" /></span>
+                Video uploaded
+              </p>
+            ) : (
+              <p className="flex items-center gap-2 text-sm font-bold text-[var(--message-red)]">
+                <AlertCircle size={18} aria-hidden="true" className="shrink-0" />
+                Upload failed
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Controls */}
       <div className="px-4 py-6 flex flex-col items-center gap-4">
         {recording && (
@@ -237,12 +288,22 @@ export default function VideoCapture() {
           </button>
         ) : (
           <div className="flex gap-3 w-full">
-            <Button variant="secondary" className="flex-1 text-white border-white/30 hover:bg-white/10" onClick={reRecord}>
+            <Button variant="secondary" className="flex-1 text-white border-white/30 hover:bg-white/10" onClick={reRecord} disabled={uploading}>
               <RefreshCw size={16} /> Re-record
             </Button>
-            <Button variant="gold" className="flex-1" onClick={uploadToDrive} disabled={uploading}>
-              <Upload size={16} />
-              {uploading ? 'Uploading…' : 'Upload to Drive'}
+            <Button variant="gold" className="flex-1" onClick={uploadToDrive} disabled={uploading || uploadState === 'done'}>
+              {uploadState === 'done'
+                ? <Check size={16} aria-hidden="true" />
+                : uploadState === 'error' && !uploading
+                  ? <RotateCcw size={16} aria-hidden="true" />
+                  : <Upload size={16} aria-hidden="true" />}
+              {uploading
+                ? 'Uploading…'
+                : uploadState === 'done'
+                  ? 'Video uploaded'
+                  : uploadState === 'error'
+                    ? 'Retry upload'
+                    : 'Upload to Drive'}
             </Button>
           </div>
         )}
