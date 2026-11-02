@@ -180,6 +180,19 @@
   }
   .ui-modal-close:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 
+  /* Signature popup (SignatureCapture). No blur here: the scrim behind it carries the blur.
+     Edges are box-shadows, not borders, so the measured pad box (and the saved PNG) keep their size. */
+  .sig-panel {
+    background: var(--modal-fill);
+    color: var(--text);
+    box-shadow: var(--modal-shadow), inset 0 0 0 1px var(--glass-border);
+  }
+  /* White drawing area stays white in both themes; this ring gives it a 3:1 edge on the panel */
+  .sig-pad-frame {
+    border-radius: 4px;
+    box-shadow: 0 0 0 2px var(--control-border);
+  }
+
   /* Appearance card */
   .appearance-head {
     display: flex;

@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, useState } from 'react'
+import { X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import SignaturePad from './SignaturePad'
 
@@ -112,13 +113,13 @@ export default function SignatureCapture({ invoiceId, technicianName, customerNa
 
   return (
     <div
-      className="fixed inset-0 z-[60] bg-black/90 flex items-center justify-center overflow-hidden"
+      className="fixed inset-0 z-[60] ui-modal-scrim flex items-center justify-center overflow-hidden"
       style={{
         paddingTop: 'env(safe-area-inset-top)',
         paddingBottom: 'env(safe-area-inset-bottom)',
       }}
     >
-      <div className="bg-white rounded-xl p-3"
+      <div className="sig-panel rounded-[var(--radius-modal)] p-3"
         style={{
           width: 'calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 16px)',
           height: 'calc(100vw - 16px)',
@@ -130,10 +131,10 @@ export default function SignatureCapture({ invoiceId, technicianName, customerNa
         }}
       >
         <div className="flex items-center gap-3 h-11 shrink-0 mb-2">
-          <h2 className="text-sm font-bold text-[#111827] whitespace-nowrap">
+          <h2 className="text-sm font-bold text-[var(--text)] whitespace-nowrap">
             Step {step === 'technician' ? '1' : '2'} of 2 - {step === 'technician' ? 'Technician Signature' : 'Customer Signature'}
           </h2>
-          <div className="flex-1 min-w-0 text-sm font-semibold text-[#111827]">
+          <div className="flex-1 min-w-0 text-sm font-semibold text-[var(--text)]">
             {step === 'technician' ? (
               <span className="block truncate">{technicianName || 'Technician'}</span>
             ) : (
@@ -142,14 +143,16 @@ export default function SignatureCapture({ invoiceId, technicianName, customerNa
                 value={custName}
                 onChange={e => setCustName(e.target.value)}
                 placeholder="Customer name"
-                className="border border-[#E5E7EB] rounded px-2 h-10 text-sm w-full focus:outline-none focus:ring-2 focus:ring-[#1E40AF]"
+                className="ui-field px-2 h-10 text-sm w-full"
               />
             )}
           </div>
-          <button onClick={onClose} className="w-11 h-11 shrink-0 flex items-center justify-center text-[#6B7280] text-2xl leading-none">×</button>
+          <button type="button" onClick={onClose} aria-label="Close" className="ui-modal-close m-0 w-11 h-11 shrink-0">
+            <X size={20} />
+          </button>
         </div>
 
-        <div ref={padBoxRef} className="relative flex-1 min-h-0">
+        <div ref={padBoxRef} className={`relative flex-1 min-h-0${linkReady ? '' : ' sig-pad-frame'}`}>
           {!linkReady && padSize?.step === step && (
             <SignaturePad
               key={step}
@@ -162,16 +165,17 @@ export default function SignatureCapture({ invoiceId, technicianName, customerNa
           )}
 
           {linkReady && (
-            <div className="absolute inset-0 overflow-auto p-4 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-800 flex flex-col justify-center gap-3">
-              <span className="font-semibold text-sm">Link ready — send to customer:</span>
-              <span className="font-mono break-all">{sigLinkState.url}</span>
+            <div className="absolute inset-0 overflow-auto p-4 inset-box text-xs text-[var(--text)] flex flex-col justify-center gap-3">
+              <span className="font-semibold text-sm text-[var(--accent-text)]">Link ready — send to customer:</span>
+              <span className="font-mono break-all text-[var(--text)]">{sigLinkState.url}</span>
               <button
+                type="button"
                 onClick={() => {
                   navigator.clipboard.writeText(sigLinkState.url)
                   setCopied(true)
                   setTimeout(() => setCopied(false), 2000)
                 }}
-                className="self-start px-4 min-h-[44px] bg-[#1E40AF] text-white text-sm font-semibold rounded-lg"
+                className="ui-btn ui-btn-secondary self-start px-4 min-h-[44px] text-sm"
               >
                 {copied ? 'Copied ✓' : 'Copy Link'}
               </button>
@@ -180,38 +184,42 @@ export default function SignatureCapture({ invoiceId, technicianName, customerNa
         </div>
 
         <div className="flex items-center gap-3 shrink-0 mt-2">
-          <p className="flex-1 min-w-0 text-red-600 text-xs">{error}</p>
+          <p className="flex-1 min-w-0 text-[var(--message-red)] text-xs">{error}</p>
           <button
+            type="button"
             onClick={() => {
               const pad = step === 'technician' ? techPadRef : custPadRef
               pad.current?.clear()
               setError(null)
             }}
-            className="px-4 min-h-[44px] text-sm font-semibold text-[#6B7280] border border-[#E5E7EB] rounded-lg whitespace-nowrap"
+            className="ui-btn ui-btn-secondary px-4 min-h-[44px] text-sm whitespace-nowrap"
           >
             Clear
           </button>
           {step === 'customer' && onSendToCustomer && (
             <button
+              type="button"
               onClick={handleSendToCustomerClick}
               disabled={savingTech || sigLinkState?.status === 'generating'}
-              className="px-4 min-h-[44px] text-sm font-semibold text-[#1E40AF] border border-[#1E40AF] rounded-lg whitespace-nowrap disabled:opacity-60"
+              className="ui-btn ui-btn-secondary px-4 min-h-[44px] text-sm whitespace-nowrap disabled:opacity-60"
             >
               {savingTech ? 'Saving…' : sigLinkState?.status === 'generating' ? '…' : 'Send to Customer'}
             </button>
           )}
           {step === 'technician' ? (
             <button
+              type="button"
               onClick={handleTechNext}
-              className="px-5 min-h-[44px] text-sm font-bold text-white bg-[#1E40AF] rounded-lg whitespace-nowrap"
+              className="ui-btn ui-btn-primary px-5 min-h-[44px] text-sm whitespace-nowrap"
             >
               Next — Customer
             </button>
           ) : (
             <button
+              type="button"
               onClick={handleConfirm}
               disabled={uploading}
-              className="px-5 min-h-[44px] text-sm font-bold text-white bg-[#1E40AF] rounded-lg whitespace-nowrap disabled:opacity-60"
+              className="ui-btn ui-btn-primary px-5 min-h-[44px] text-sm whitespace-nowrap disabled:opacity-60"
             >
               {uploading ? 'Saving…' : 'Confirm & Save'}
             </button>
