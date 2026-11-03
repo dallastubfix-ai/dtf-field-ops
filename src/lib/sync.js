@@ -82,10 +82,12 @@ async function pendingIdsFor(tableName) {
 // row (marked _synced: true), reusing _localId so no duplicates are created.
 // removeMissing: ONLY when serverRows is the complete set for the table (or for
 // the slice removeScope describes). Deletes local rows the server no longer has,
-// except pending ones. An empty list never deletes anything.
+// except pending ones. An empty list never deletes anything unless the caller also
+// passes allowEmpty: true, which says "this empty result is trusted" (the query had
+// no error and the user is signed in). allowEmpty does nothing without removeMissing.
 export async function mergeServerRows(
   tableName, serverRows,
-  { removeMissing = false, honorUnsyncedFlag = false, removeScope = null } = {}
+  { removeMissing = false, allowEmpty = false, honorUnsyncedFlag = false, removeScope = null } = {}
 ) {
   if (!Array.isArray(serverRows)) return
   const table = db[tableName]
@@ -111,7 +113,7 @@ export async function mergeServerRows(
     }
     await table.bulkPut(toPut)
 
-    if (removeMissing && serverRows.length > 0) {
+    if (removeMissing && (serverRows.length > 0 || allowEmpty)) {
       const gone = locals
         .filter(r => r.id != null && !serverIds.has(r.id) && !isPending(r) && (!removeScope || removeScope(r)))
         .map(r => r._localId)

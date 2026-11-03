@@ -77,11 +77,15 @@ export default function Home() {
 
     // Background refresh — merge today's appointments; queued local changes are kept
     const refresh = async () => {
-      const { data: appts } = await supabase
+      const { data: appts, error } = await supabase
         .from('appointments')
         .select('*, jobs(*, customers(*))')
         .gte('appointment_datetime', format(today, 'yyyy-MM-dd') + 'T00:00:00')
         .lte('appointment_datetime', format(today, 'yyyy-MM-dd') + 'T23:59:59')
+      // An empty list only counts as "deleted on the server" when the query succeeded and
+      // we are signed in (an expired session can make row-level security return nothing).
+      const { data: { session } } = await supabase.auth.getSession()
+      const trustEmpty = !error && !!session
       if (appts) {
         const apptRows = []
         for (const a of appts) {
@@ -93,7 +97,7 @@ export default function Home() {
             if (cust) await upsertServerRow('customers', { ...cust, _synced: true })
           }
         }
-        await mergeServerRows('appointments', apptRows, { removeMissing: true, removeScope: inFetchedDay })
+        await mergeServerRows('appointments', apptRows, { removeMissing: true, allowEmpty: trustEmpty, removeScope: inFetchedDay })
 
         // Re-read lookup maps now that Dexie is fresh, otherwise today's
         // appointments can't resolve their job/customer for display + nav.
