@@ -12,8 +12,8 @@ const MIDDLE_DOT = String.fromCharCode(183)
 // Order the groups are listed in (and the order their text prints in).
 export const GROUP_ORDER = ['repair', 'bottom_refinish', 'refinish', 'countertop']
 
-// WORK COVERED shows this many lines; the rest collapse into one "+N more" line.
-export const MAX_WORK_LINES = 4
+// The work table shows this many rows; the rest collapse into one "+N more items" row.
+export const MAX_WORK_LINES = 12
 
 const NEUTRAL_TITLE = 'Warranty & Service Guarantee'
 
@@ -65,15 +65,15 @@ function toMDY(ymd) {
   return y && m && d ? `${m}/${d}/${y}` : ''
 }
 
-// "<name> <short word> (em dash) <service>". The word is skipped when the name already has it;
+// "<name> <short word>". The word is skipped when the name already has it;
 // an unnamed card gets the capitalized word on its own.
-function buildLabel(card) {
+function buildSubject(card) {
   const word = SHORT_WORDS[card.fixture]
   const name = typeof card.name === 'string' ? card.name.trim() : ''
   let subject
   if (name) subject = name.toLowerCase().includes(word.toLowerCase()) ? name : `${name} ${word}`
   else subject = word.charAt(0).toUpperCase() + word.slice(1)
-  return `${subject} ${EM_DASH} ${SERVICE_LABELS[card.service]}`.trim()
+  return subject
 }
 
 // Trimmed text of a value; '' for null, undefined, or anything that cannot be turned into text.
@@ -119,6 +119,7 @@ function fallbackResult(invoiceYears, serviceDate, invoiceNumber) {
     title: NEUTRAL_TITLE,
     workLines: [workLineWithoutCards(invoiceNumber)],
     contentGroups: contentGroupsForYears(invoiceYears),
+    moreCount: 0,
   }
 }
 
@@ -142,7 +143,8 @@ function titleFor(groups, hasRebuild) {
 //   cards: job.fixtures (anything else is treated as no cards)
 //   invoiceYears: the invoice's warranty_years (goes through normalize)
 //   serviceDate: 'yyyy-MM-dd' (no valid date means no expiry text)
-//   invoiceNumber: shown in the no-cards line and the "+N more" line
+//   invoiceNumber: shown in the no-cards line and the "+N more items" line
+// moreCount is how many items are past MAX_WORK_LINES (0 when none).
 // Each item's years = min(card length, invoice length). warn is true when any card
 // suggests a longer length than the invoice (on-screen only).
 export function buildWarrantyItems(cards, invoiceYears, serviceDate, invoiceNumber) {
@@ -156,10 +158,12 @@ export function buildWarrantyItems(cards, invoiceYears, serviceDate, invoiceNumb
       const suggested = cardYears(card)
       const years = Math.min(suggested, inv)
       const expiry = safeExpiry(serviceDate, years)
-      const label = buildLabel(card)
+      const subject = buildSubject(card)
+      const serviceLabel = SERVICE_LABELS[card.service]
+      const label = `${subject} ${EM_DASH} ${serviceLabel}`.trim()
       const line = `${label} ${MIDDLE_DOT} ${yearsText(years)}` +
         (expiry ? ` ${MIDDLE_DOT} expires ${toMDY(expiry)}` : '')
-      return { label, group: groupOf(card), years, expiry, line, suggested }
+      return { label, subject, serviceLabel, group: groupOf(card), years, expiry, line, suggested }
     })
 
     const groups = GROUP_ORDER.filter(g => items.some(item => item.group === g))
@@ -167,10 +171,11 @@ export function buildWarrantyItems(cards, invoiceYears, serviceDate, invoiceNumb
     const expiries = items.map(item => item.expiry).filter(Boolean).sort()
 
     const lines = items.map(item => item.line)
+    const moreCount = Math.max(0, lines.length - MAX_WORK_LINES)
     const workLines = lines.length > MAX_WORK_LINES
       ? [
           ...lines.slice(0, MAX_WORK_LINES),
-          `+${lines.length - MAX_WORK_LINES} more, see ${number ? `Invoice #${number}` : 'the invoice'}`,
+          `+${moreCount} more items, see ${number ? `Invoice #${number}` : 'the invoice'}`,
         ]
       : lines
 
@@ -184,6 +189,7 @@ export function buildWarrantyItems(cards, invoiceYears, serviceDate, invoiceNumb
       title: titleFor(groups, hasRebuild),
       workLines,
       contentGroups: groups,
+      moreCount,
     }
   } catch {
     return fallbackResult(inv, serviceDate, number)

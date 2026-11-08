@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { AlertCircle } from 'lucide-react'
 import { normalize as normalizeWarrantyYears, warrantyExpiry, isNewWarranty } from '../lib/warranty'
@@ -10,25 +10,6 @@ import { SkeletonGroup, SkeletonHeader, SkeletonCard } from '../components/ui/Sk
 import LegacyWarrantyPrint from '../components/warranty/LegacyWarrantyPrint'
 import WarrantyPrintV2 from '../components/warranty/WarrantyPrintV2'
 import { buildWarrantyItems } from '../lib/warrantyItems'
-
-// US Letter minus the @page margins in WARRANTY_PRINT_CSS (0.38in top, 0.35in bottom, 0.42in sides), in CSS px.
-const PRINT_WIDTH_PX = (8.5 - 0.84) * 96
-const PRINT_HEIGHT_PX = (11 - 0.73) * 96
-
-// Estimate only: lays the hidden new print out off-screen at the printed width (the same way
-// InvoiceBuilder's updateContinuedNote does) and reports whether it is taller than one page.
-function printTakesTwoPages(root) {
-  const page = root?.querySelector('.warranty-page')
-  if (!page) return false
-  root.style.cssText = `display:block;position:absolute;left:-10000px;top:0;visibility:hidden;width:${PRINT_WIDTH_PX}px`
-  page.style.cssText = `width:${PRINT_WIDTH_PX}px;padding:0`
-  try {
-    return page.getBoundingClientRect().height > PRINT_HEIGHT_PX
-  } finally {
-    root.removeAttribute('style')
-    page.removeAttribute('style')
-  }
-}
 
 function Field({ label, value, onChange, type = 'text', className = '', disabled = false }) {
   return (
@@ -62,8 +43,6 @@ export default function WarrantyBuilder() {
   const [loading, setLoading] = useState(true)
   const [isLocked, setIsLocked] = useState(false)
   const [invoiceUnconfirmed, setInvoiceUnconfirmed] = useState(false)
-  const pageRef = useRef(null)
-  const [twoPages, setTwoPages] = useState(false)
 
   const set = (key, value) => setW(v => ({ ...v, [key]: value }))
 
@@ -124,18 +103,6 @@ export default function WarrantyBuilder() {
     load()
   }, [id])
 
-  // Two-page estimate for the new print. Never runs on the legacy path (it only clears the flag).
-  useEffect(() => {
-    if (loading || !showNew) { setTwoPages(false); return }
-    let cancelled = false
-    const measure = () => {
-      if (!cancelled) setTwoPages(printTakesTwoPages(pageRef.current?.querySelector('.warr-print')))
-    }
-    measure()
-    document.fonts?.ready.then(measure)
-    return () => { cancelled = true }
-  }, [loading, showNew, w])
-
   if (loading) {
     return (
       <SkeletonGroup className="no-print min-h-screen">
@@ -148,7 +115,7 @@ export default function WarrantyBuilder() {
   }
 
   return (
-    <div className="min-h-screen" ref={pageRef}>
+    <div className="min-h-screen">
       {/* Header and actions — hidden on print */}
       <PageHeader
         title="Warranty Builder"
@@ -191,12 +158,6 @@ export default function WarrantyBuilder() {
           <p className="inset-box note-warn px-4 py-3">
             <AlertCircle size={16} aria-hidden="true" />
             <span>No fixture cards were found for this job, so Work Covered shows the invoice line instead. If you're offline, try again when you're back online.</span>
-          </p>
-        )}
-        {showNew && twoPages && (
-          <p className="inset-box note-warn px-4 py-3">
-            <AlertCircle size={16} aria-hidden="true" />
-            <span>This warranty may print on 2 pages. That's okay; page 2 is still part of the warranty.</span>
           </p>
         )}
         <div className="glass-card grid grid-cols-2 gap-3">
