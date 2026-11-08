@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { AlertCircle } from 'lucide-react'
-import { normalize as normalizeWarrantyYears, warrantyExpiry } from '../lib/warranty'
+import { normalize as normalizeWarrantyYears, warrantyExpiry, isNewWarranty } from '../lib/warranty'
 import { supabase } from '../lib/supabase'
 import db from '../lib/db'
 import Button from '../components/ui/Button'
 import PageHeader from '../components/layout/PageHeader'
 import { SkeletonGroup, SkeletonHeader, SkeletonCard } from '../components/ui/Skeleton'
 import LegacyWarrantyPrint from '../components/warranty/LegacyWarrantyPrint'
+import WarrantyPrintV2 from '../components/warranty/WarrantyPrintV2'
+import { buildWarrantyItems } from '../lib/warrantyItems'
 
 function Field({ label, value, onChange, type = 'text', className = '', disabled = false }) {
   return (
@@ -36,6 +38,7 @@ export default function WarrantyBuilder() {
     service_address: '',
     technician: 'John Figueroa Jr.',
     warranty_years: 2,
+    fixtures: [],
   })
   const [loading, setLoading] = useState(true)
   const [isLocked, setIsLocked] = useState(false)
@@ -83,6 +86,7 @@ export default function WarrantyBuilder() {
         service_address: appt?.location_address ?? customer?.address ?? '',
         technician: warranty.technician ?? 'John Figueroa Jr.',
         warranty_years: years,
+        fixtures: job?.fixtures ?? [],
       })
       setInvoiceUnconfirmed(!invoice)
       setIsLocked(!!(invoice?.technician_signature_url && invoice?.customer_signature_url))
@@ -101,6 +105,14 @@ export default function WarrantyBuilder() {
       </SkeletonGroup>
     )
   }
+
+  // New warranty version: service date on or after the switch date, or any 1-year warranty.
+  const showNew =
+    new URLSearchParams(window.location.search).get('v') === 'new' || // TEMPORARY preview, remove in Phase 4
+    isNewWarranty(w.service_date, w.warranty_years)
+  const result = showNew
+    ? buildWarrantyItems(w.fixtures, w.warranty_years, w.service_date, w.invoice_number)
+    : null
 
   return (
     <div className="min-h-screen">
@@ -142,7 +154,7 @@ export default function WarrantyBuilder() {
             set('service_date', v)
             if (v) set('expiry_date', warrantyExpiry(v, w.warranty_years))
           }} type="date" disabled={isLocked} />
-          <Field label="Expiry Date"   value={w.expiry_date}     onChange={v => set('expiry_date', v)} type="date" disabled={isLocked} />
+          <Field label="Expiry Date"   value={showNew ? result.latestExpiry : w.expiry_date} onChange={v => set('expiry_date', v)} type="date" disabled={isLocked || showNew} />
           <Field label="Technician"    value={w.technician}      onChange={v => set('technician', v)} disabled={isLocked} />
           <Field label="Customer Name" value={w.customer_name}   onChange={v => set('customer_name', v)} className="col-span-2" disabled={isLocked} />
           <Field label="Service Address" value={w.service_address} onChange={v => set('service_address', v)} className="col-span-2" disabled={isLocked} />
@@ -151,7 +163,9 @@ export default function WarrantyBuilder() {
       </div>
 
       {/* ── PRINT VIEW — matches dtf-warranty-builder.html ── */}
-      <LegacyWarrantyPrint w={w} />
+      {showNew
+        ? <WarrantyPrintV2 w={w} result={result} />
+        : <LegacyWarrantyPrint w={w} />}
     </div>
   )
 }

@@ -13,7 +13,7 @@ const MIDDLE_DOT = String.fromCharCode(183)
 export const GROUP_ORDER = ['repair', 'bottom_refinish', 'refinish', 'countertop']
 
 // WORK COVERED shows this many lines; the rest collapse into one "+N more" line.
-export const MAX_WORK_LINES = 8
+export const MAX_WORK_LINES = 4
 
 const NEUTRAL_TITLE = 'Warranty & Service Guarantee'
 

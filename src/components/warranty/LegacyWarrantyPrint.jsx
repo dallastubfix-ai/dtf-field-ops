@@ -1,5 +1,6 @@
 // Legacy warranty print: today's printed warranty (text, CSS and markup), moved here
 // unchanged from WarrantyBuilder.jsx. Do not edit; the new version lives elsewhere.
+import { YEARS_WORD } from '../../lib/warranty'
 
 const NBSP = ' '
 
