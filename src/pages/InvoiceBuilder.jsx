@@ -1032,11 +1032,11 @@ export default function InvoiceBuilder() {
             </button>
           </div>
           <div className="flex gap-2">
-            {[2, 6].map(n => (
+            {[1, 2, 6].map(n => (
               <button key={n} type="button" onClick={() => set('warranty_years', n)} disabled={isLocked}
                 aria-pressed={warrantyYears === n}
                 className={`fx-option flex-1${isLocked ? ' pointer-events-none opacity-60' : ''}`}>
-                {n} Years
+                {n} {n === 1 ? 'Year' : 'Years'}
               </button>
             ))}
           </div>
