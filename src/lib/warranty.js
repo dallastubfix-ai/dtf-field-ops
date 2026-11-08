@@ -30,3 +30,18 @@ export function warrantyExpiry(serviceDateString, years) {
   if (!isValid(start)) return ''
   return format(addYears(start, normalize(years)), 'yyyy-MM-dd')
 }
+
+// Warranties with a service date on or after this day (yyyy-MM-dd) print the new
+// version; earlier ones keep printing the legacy version. Set to the go-live day
+// in the final commit before merge. Far-future placeholder until then.
+export const NEW_WARRANTY_START_DATE = '9999-12-31'
+
+// True when the new warranty version should print: any 1-year warranty (none
+// existed before the new version), or a valid yyyy-MM-dd service date on or after
+// the start date. A missing or invalid date is false, so it falls back to legacy.
+export function isNewWarranty(serviceDate, years) {
+  if (normalize(years) === 1) return true
+  const text = String(serviceDate ?? '').slice(0, 10)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(text) || !isValid(parseISO(text))) return false
+  return text >= NEW_WARRANTY_START_DATE
+}
