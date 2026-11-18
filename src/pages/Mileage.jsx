@@ -9,6 +9,7 @@ import Button from '../components/ui/Button'
 import EmptyState from '../components/ui/EmptyState'
 import { SkeletonGroup, SkeletonStatTile, SkeletonCard } from '../components/ui/Skeleton'
 import { useOnlineStatus } from '../hooks/useOnlineStatus'
+import { isSubcontract, jobLabel } from '../lib/jobLabel'
 import { todayKey, monthKeyOf, shiftMonth, monthRange, yearRange, summarizeCalculated, fetchDayGroups, refreshMileageRows, calculateDay, friendlyReason, MAX_AUTO_ATTEMPTS, requestRecalc, getRecalcDays, subscribeRecalc, setStartsFromHome } from '../lib/mileage'
 
 const prettyDay = (key) => {
@@ -229,7 +230,7 @@ export default function Mileage() {
                             </div>
                           )}
                           <div className="text-xs text-[var(--text)]">
-                            {i + 1}. {s.job_number ?? `Stop ${i + 1}`}{s.city ? `, ${s.city}` : ''}
+                            {i + 1}. {isSubcontract(s) ? jobLabel(s) : (s.job_number ?? `Stop ${i + 1}`)}{s.city ? `, ${s.city}` : ''}
                           </div>
                         </div>
                       ))}
@@ -251,7 +252,7 @@ export default function Mileage() {
                   {skipped.length > 0 && (
                     <p className="note-warn">
                       <AlertCircle size={16} aria-hidden="true" />
-                      <span>Not counted (no address): {skipped.map(s => s.job_number ?? 'job').join(', ')}</span>
+                      <span>Not counted (no address): {skipped.map(s => (isSubcontract(s) ? jobLabel(s) : (s.job_number ?? 'job'))).join(', ')}</span>
                     </p>
                   )}
                   {!(row?.legs?.length > 0) && skipped.length === 0 && !canFlip && (

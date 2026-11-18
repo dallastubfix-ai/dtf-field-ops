@@ -9,6 +9,7 @@ import { mergeServerRows, upsertServerRow } from '../lib/sync'
 import { summarizeJobFixtures } from '../lib/fixtures'
 import { jobLabel, displayStatus } from '../lib/jobLabel'
 import Badge from '../components/ui/Badge'
+import CompanyDot from '../components/ui/CompanyDot'
 import EmptyState from '../components/ui/EmptyState'
 import PageHeader from '../components/layout/PageHeader'
 import { SkeletonGroup, SkeletonJobRow } from '../components/ui/Skeleton'
@@ -178,6 +179,7 @@ export default function Jobs() {
                         className="w-2 h-2 shrink-0 rounded-full bg-[var(--status-dot-success)]"
                       />
                     )}
+                    <CompanyDot job={job} />
                     <span className="job-id">{jobLabel(job)}</span>
                   </div>
                   <Badge status={displayStatus(job)} />

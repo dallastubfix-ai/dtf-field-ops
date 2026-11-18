@@ -10,8 +10,9 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import db from '../lib/db'
 import { supabase } from '../lib/supabase'
 import { upsertServerRow } from '../lib/sync'
-import { displayStatus } from '../lib/jobLabel'
+import { displayStatus, isSubcontract, jobLabel } from '../lib/jobLabel'
 import Badge from '../components/ui/Badge'
+import CompanyDot from '../components/ui/CompanyDot'
 import Card from '../components/ui/Card'
 import PageHeader from '../components/layout/PageHeader'
 import { SkeletonGroup, SkeletonRow } from '../components/ui/Skeleton'
@@ -164,8 +165,8 @@ export default function Calendar() {
                         <div className="text-[var(--text)] font-medium mt-0.5">
                           {customer?.full_name ?? 'Unknown'}
                         </div>
-                        {job?.job_number && (
-                          <div className="text-xs text-[var(--accent-text)] mt-0.5">{job.job_number}</div>
+                        {(job?.job_number || isSubcontract(job)) && (
+                          <div className="text-xs text-[var(--accent-text)] mt-0.5"><CompanyDot job={job} className="mr-1.5 align-middle" />{jobLabel(job)}</div>
                         )}
                         {appt.location_address && (
                           <div className="text-xs text-[var(--text-secondary)]">{appt.location_address}</div>

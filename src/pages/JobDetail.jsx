@@ -8,13 +8,14 @@ import { format } from 'date-fns'
 import { supabase } from '../lib/supabase'
 import db from '../lib/db'
 import { updateRecord, upsertServerRow } from '../lib/sync'
-import { recalcAfterAppointmentChange, recalcAfterAppointmentEdit, recalcAfterStatusChange, todayKey } from '../lib/mileage'
+import { recalcAfterAppointmentChange, recalcAfterAppointmentEdit, recalcAfterStatusChange, recalcAfterLabelChange, todayKey } from '../lib/mileage'
 import { removeJobLocally } from '../lib/localCleanup'
 import { getOtherJobsForCustomer, separateCustomer } from '../lib/customerSeparation'
 import { formatEnum } from '../lib/formatEnum'
 import { useOnlineStatus } from '../hooks/useOnlineStatus'
 import PageHeader from '../components/layout/PageHeader'
 import Badge from '../components/ui/Badge'
+import CompanyDot from '../components/ui/CompanyDot'
 import Button from '../components/ui/Button'
 import Card from '../components/ui/Card'
 import { SkeletonGroup, SkeletonHeader, SkeletonCard } from '../components/ui/Skeleton'
@@ -22,7 +23,7 @@ import Modal from '../components/ui/Modal'
 import Input from '../components/ui/Input'
 import Select from '../components/ui/Select'
 import Textarea from '../components/ui/Textarea'
-import { createCalendarEvent, updateCalendarEvent } from '../lib/googleCalendar'
+import { createCalendarEvent, updateCalendarEvent, refreshCalendarEvents } from '../lib/googleCalendar'
 import { getValidProviderToken } from '../lib/googleToken'
 import AddressAutocomplete from '../components/ui/AddressAutocomplete'
 import CollageMaker from '../components/collage/CollageMaker'
@@ -528,6 +529,32 @@ export default function JobDetail() {
     flashSaved(synced, next == null ? 'Pay cleared' : 'Pay saved')
   }
 
+  // A subcontract job's company or invoice number changed. Mileage legs and the job's Google events carry
+  // the label, so refresh both. Runs after the save; a failure only shows a toast (after the save toast).
+  const CAL_NOT_UPDATED = 'Calendar event not updated. Edit the appointment to refresh it.'
+  const afterLabelChange = async (synced) => {
+    const current = jobRef.current
+    if (!current) return
+    recalcAfterLabelChange(current)
+    const eventIds = appointments.map(a => a.google_calendar_event_id).filter(Boolean)
+    if (eventIds.length === 0) return
+    const tellNotUpdated = () => setTimeout(() => flashToast(CAL_NOT_UPDATED, 4000, 'error'), synced ? 1900 : 3100)
+    if (!isOnline) { tellNotUpdated(); return }
+    try {
+      const token = await getValidProviderToken()
+      if (!token) { tellNotUpdated(); return }
+      const { failed } = await refreshCalendarEvents(token, eventIds, {
+        customerName: customer?.full_name || '',
+        jobNumber: current.job_number || '',
+        workingFor: workingFor(current),
+        label: jobLabel(current),
+      })
+      if (failed > 0) tellNotUpdated()
+    } catch {
+      tellNotUpdated()
+    }
+  }
+
   const saveInvNo = async () => {
     if (!jobRef.current) return
     const next = invNoVal.trim() || null
@@ -536,6 +563,7 @@ export default function JobDetail() {
     if (next === cur) return
     const { synced } = await patchJob({ partner_invoice_no: next })
     flashSaved(synced, 'Invoice number saved')
+    void afterLabelChange(synced)
   }
 
   const markPaid = async () => {
@@ -558,6 +586,7 @@ export default function JobDetail() {
     if (!jobRef.current || key === workingFor(jobRef.current)) return
     const { synced } = await patchJob({ working_for: key })
     flashSaved(synced, `Now a ${key.toUpperCase()} job`)
+    void afterLabelChange(synced)
   }
 
   const saveNotes = async () => {
@@ -700,6 +729,8 @@ export default function JobDetail() {
           appointmentTime: apptTime,
           jobNumber: job?.job_number || '',
           notes: apptVal.notes || '',
+          workingFor: workingFor(job),
+          label: jobLabel(job),
         }
         let eventId
         if (updated.google_calendar_event_id) {
@@ -802,6 +833,8 @@ export default function JobDetail() {
           appointmentTime: apptTime,
           jobNumber: job?.job_number || '',
           notes: '',
+          workingFor: workingFor(job),
+          label: jobLabel(job),
         })
         if (eventId && typeof eventId === 'string') {
           const withEventId = { ...payload, google_calendar_event_id: eventId }
@@ -869,9 +902,9 @@ export default function JobDetail() {
   // wrap taller than a row, and Send Collage's note sits above its two buttons, so both get one more.
   let actionRows = 1
   if (sub) {
-    // Subcontract: Mark Completed (1), the cancelled banner (2), or Send Collage alone (2, or nothing)
+    // Subcontract: Mark Completed (1), the cancelled banner (2), or nothing once completed
     if (job.status === 'cancelled') actionRows = 2
-    else if (job.status === 'completed') actionRows = hasCollage ? 2 : 0
+    else if (job.status === 'completed') actionRows = 0 // no Send Collage, no Review
   } else if (job.status === 'appointment' || job.status === 'cancelled') actionRows = 2
   else if (job.status === 'active' && (hasInvoice || hasWarranty)) actionRows = 2
   else if (job.status === 'completed' && hasCollage) actionRows = 3
@@ -880,6 +913,7 @@ export default function JobDetail() {
   return (
     <div className="job-page min-h-screen" style={{ '--action-stack': `${actionStack}px` }}>
       <PageHeader title={jobLabel(job)} sticky onBack={() => navigate(-1)}>
+        <CompanyDot job={job} />
         <Badge status={displayStatus(job)} className="shrink-0" />
         {job.is_test && (
           <button type="button" onClick={handleDeleteTestJob} className="icon-btn" disabled={deleting} aria-label="Delete job">
@@ -948,7 +982,7 @@ export default function JobDetail() {
               />
 
               <Input
-                label="Uncle's invoice number (optional)"
+                label="Invoice Number (Optional)"
                 id="partner_invoice_no"
                 autoComplete="off"
                 maxLength={60}
@@ -1426,7 +1460,7 @@ export default function JobDetail() {
         )}
         {job.status === 'completed' && (
           <>
-            <SendCollage images={images} signedUrls={signedUrls} />
+            {!sub && <SendCollage images={images} signedUrls={signedUrls} />}
             {!sub && (
               <Button variant="gold" className="w-full" disabled={!customer?.phone}
                 onClick={requestReview}>

@@ -6,6 +6,7 @@ import db from './db'
 import { upsertLocal } from './sync'
 import { loadHomeAddress } from './appSettings'
 import { cityFromAddress } from './cityFromAddress'
+import { isSubcontract, jobLabel } from './jobLabel'
 
 const TZ = 'America/Chicago'
 const METERS_PER_MILE = 1609.344
@@ -92,7 +93,8 @@ export const friendlyReason = (reason) => MESSAGES[reason] ?? MESSAGES.unknown
 // ---------- finding a day's stops ----------
 
 const stopLabel = (s, i) => {
-  const base = s.job_number ?? `Stop ${i + 1}`
+  // BBR / TTR: "BBR - 4471" (or "BBR - No invoice No."). DTF: unchanged.
+  const base = isSubcontract(s) ? jobLabel(s) : (s.job_number ?? `Stop ${i + 1}`)
   return s.city ? `${base}, ${s.city}` : base
 }
 
@@ -115,7 +117,7 @@ export async function fetchDayGroups(startKey, endKey) {
 
   const { data: jobs, error: jobErr } = await supabase
     .from('jobs')
-    .select('id, job_number, status, is_test')
+    .select('id, job_number, status, is_test, working_for, partner_invoice_no')
     .in('id', jobIds)
   if (jobErr) throw new MileageError('network')
   const jobById = new Map((jobs ?? []).map(j => [j.id, j]))
@@ -133,11 +135,16 @@ export async function fetchDayGroups(startKey, endKey) {
     const group = (groups[key] ??= { stops: [], skipped: [] })
     const address = (a.location_address ?? '').trim()
     if (!address) {
-      group.skipped.push({ appointment_id: a.id, job_number: job.job_number ?? null })
+      group.skipped.push({
+        appointment_id: a.id, job_number: job.job_number ?? null,
+        working_for: job.working_for ?? null, partner_invoice_no: job.partner_invoice_no ?? null,
+      })
     } else {
       group.stops.push({
         appointment_id: a.id,
         job_number: job.job_number ?? null,
+        working_for: job.working_for ?? null,
+        partner_invoice_no: job.partner_invoice_no ?? null,
         city: cityFromAddress(address),
         address,
         starts_from_home: a.starts_from_home === true,
@@ -602,6 +609,17 @@ export function recalcAfterStatusChange(job, previousStatus, newStatus) {
     requestJobRecalc(job.id)
   } catch {
     logCode('trigger', 'status')
+  }
+}
+
+// A subcontract job's company or invoice number changed. Saved legs carry the stop label, so the
+// job's past days are recalculated through the same per-job queue a cancel/restore uses.
+export function recalcAfterLabelChange(job) {
+  try {
+    if (!isTracked(job)) return
+    requestJobRecalc(job.id)
+  } catch {
+    logCode('trigger', 'label')
   }
 }
 

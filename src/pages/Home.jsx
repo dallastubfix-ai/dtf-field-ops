@@ -9,6 +9,7 @@ import { mergeServerRows, upsertServerRow } from '../lib/sync'
 import { jobLabel, displayStatus } from '../lib/jobLabel'
 import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
+import CompanyDot from '../components/ui/CompanyDot'
 import EmptyState from '../components/ui/EmptyState'
 import PageHeader from '../components/layout/PageHeader'
 import { SkeletonGroup, SkeletonStatTile, SkeletonRow } from '../components/ui/Skeleton'
@@ -191,6 +192,7 @@ export default function Home() {
                     <div className="flex items-start justify-between">
                       <div className="flex-1 min-w-0">
                         <div className="text-xs font-semibold text-[var(--accent-text)] mb-0.5">
+                          {job && <CompanyDot job={job} className="mr-1.5 align-middle" />}
                           {job ? jobLabel(job) : '—'}
                         </div>
                         <div className="font-bold text-[var(--text)] text-sm">

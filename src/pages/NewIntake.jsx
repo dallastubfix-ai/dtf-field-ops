@@ -19,7 +19,7 @@ import { getValidProviderToken } from '../lib/googleToken'
 import AddressAutocomplete from '../components/ui/AddressAutocomplete'
 import FixtureCardsEditor from '../components/fixtures/FixtureCardsEditor'
 import { sanitizeFixture, createEmptyFixture } from '../lib/fixtures'
-import { COMPANIES, DEFAULT_COMPANY, companyFor, isCompanyKey, isSubcontract } from '../lib/jobLabel'
+import { COMPANIES, DEFAULT_COMPANY, companyFor, isCompanyKey, isSubcontract, jobLabel } from '../lib/jobLabel'
 
 function formatPhone(value) {
   let raw = value.replace(/\D/g, '')
@@ -259,6 +259,8 @@ export default function NewIntake() {
             appointmentTime: apptTime,
             jobNumber: jobNumber || '',
             notes: form.notes || '',
+            workingFor: form.working_for,
+            label: jobLabel(savedJob),
           })
           if (eventId && typeof eventId === 'string') {
             await updateRecord('appointments', { ...apptPayload, google_calendar_event_id: eventId }, isOnline)
