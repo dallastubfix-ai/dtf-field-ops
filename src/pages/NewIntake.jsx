@@ -19,7 +19,7 @@ import { getValidProviderToken } from '../lib/googleToken'
 import AddressAutocomplete from '../components/ui/AddressAutocomplete'
 import FixtureCardsEditor from '../components/fixtures/FixtureCardsEditor'
 import { sanitizeFixture, createEmptyFixture } from '../lib/fixtures'
-import { COMPANIES, DEFAULT_COMPANY, companyFor, isCompanyKey } from '../lib/jobLabel'
+import { COMPANIES, DEFAULT_COMPANY, companyFor, isCompanyKey, isSubcontract } from '../lib/jobLabel'
 
 function formatPhone(value) {
   let raw = value.replace(/\D/g, '')
@@ -152,11 +152,13 @@ export default function NewIntake() {
 
   const submitLabel = () => {
     if (form.appointment_datetime) return 'Save & Schedule'
+    if (isSubcontract(form)) return 'Save'
     if (form.fixtures.some(c => c.fixture)) return 'Save as Quote'
     return 'Save Contact'
   }
 
   const submitStatus = () => {
+    if (isSubcontract(form)) return 'appointment' // subcontract jobs are only ever Scheduled, Completed or Cancelled
     if (form.appointment_datetime) return 'appointment'
     if (form.fixtures.some(c => c.fixture)) return 'quote'
     return 'contact'
@@ -369,7 +371,7 @@ export default function NewIntake() {
         </section>
 
         {/* On the page, not nested in a card: fixture cards are glass themselves */}
-        <FixtureCardsEditor cards={form.fixtures} onChange={cards => set('fixtures', cards)} />
+        <FixtureCardsEditor cards={form.fixtures} onChange={cards => set('fixtures', cards)} hidePrices={isSubcontract(form)} />
 
         <section className="glass-card">
           <Input

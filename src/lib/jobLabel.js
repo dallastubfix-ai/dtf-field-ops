@@ -19,6 +19,22 @@ export function workingFor(job) {
   return job?.working_for ?? DEFAULT_COMPANY
 }
 
+// A subcontract job is any job done for a company other than DTF (BBR, TTR).
+export const isSubcontract = (job) => workingFor(job) !== DEFAULT_COMPANY
+
+// Subcontract jobs use only these three statuses. 'appointment' is shown as "Scheduled".
+export const SUBCONTRACT_STATUS_OPTIONS = [
+  { value: 'appointment', label: 'Scheduled' },
+  { value: 'completed',   label: 'Completed' },
+  { value: 'cancelled',   label: 'Cancelled' },
+]
+
+// The status text a pill should show. DTF jobs show their stored status, unchanged.
+export function displayStatus(job) {
+  if (!job) return undefined
+  return isSubcontract(job) && job.status === 'appointment' ? 'scheduled' : job.status
+}
+
 // Job number when there is one; otherwise "BBR - <partner invoice no>" or "BBR - No invoice No.".
 export function jobLabel(job) {
   if (!job) return ''

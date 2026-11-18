@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
-import { useParams, useNavigate, Link } from 'react-router-dom'
+import { useParams, useNavigate, useLocation, Link } from 'react-router-dom'
 import {
   Phone, Camera, Video, FileText, Shield,
   ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Plus, Calendar, Trash2, X, MessageSquare, MapPin, ArrowLeftRight
@@ -8,7 +8,7 @@ import { format } from 'date-fns'
 import { supabase } from '../lib/supabase'
 import db from '../lib/db'
 import { updateRecord, upsertServerRow } from '../lib/sync'
-import { recalcAfterAppointmentChange, recalcAfterAppointmentEdit, recalcAfterStatusChange } from '../lib/mileage'
+import { recalcAfterAppointmentChange, recalcAfterAppointmentEdit, recalcAfterStatusChange, todayKey } from '../lib/mileage'
 import { removeJobLocally } from '../lib/localCleanup'
 import { getOtherJobsForCustomer, separateCustomer } from '../lib/customerSeparation'
 import { formatEnum } from '../lib/formatEnum'
@@ -30,7 +30,7 @@ import SendCollage from '../components/collage/SendCollage'
 import FixtureCardsEditor from '../components/fixtures/FixtureCardsEditor'
 import FixtureSummary from '../components/fixtures/FixtureSummary'
 import { sanitizeFixture } from '../lib/fixtures'
-import { jobLabel } from '../lib/jobLabel'
+import { jobLabel, workingFor, isSubcontract, displayStatus, COMPANIES, SUBCONTRACT_STATUS_OPTIONS } from '../lib/jobLabel'
 
 // Transient failures (no connection mid-request, expired session, server
 // trouble) are safe to queue and retry. Anything else (RLS, foreign key, bad
@@ -132,6 +132,11 @@ export default function JobDetail() {
   }, [])
   const [customer, setCustomer] = useState(null)
   const [sharedJobs, setSharedJobs] = useState([])
+
+  // Subcontract pay card: the text being typed. It is saved on blur; the effects below reset it
+  // only when the saved value itself changes, so a refresh can't wipe what is being typed.
+  const [payVal, setPayVal] = useState('')
+  const [invNoVal, setInvNoVal] = useState('')
   const [separateOpen, setSeparateOpen] = useState(false)
   const [separating, setSeparating] = useState(false)
   const [separateError, setSeparateError] = useState('')
@@ -198,6 +203,20 @@ export default function JobDetail() {
   }, [job?.status])
 
   useEffect(() => () => clearTimeout(undoTimerRef.current), [])
+
+  useEffect(() => { setPayVal(job?.my_pay == null ? '' : Number(job.my_pay).toFixed(2)) }, [job?.my_pay])
+  useEffect(() => { setInvNoVal(job?.partner_invoice_no ?? '') }, [job?.partner_invoice_no])
+
+  // A toast handed over by the page that sent us here (InvoiceBuilder, for BBR/TTR jobs).
+  const routeLocation = useLocation()
+  useEffect(() => {
+    const msg = routeLocation.state?.toast
+    if (!msg) return
+    const next = { text: msg, kind: 'neutral' }
+    setToast(next)
+    setTimeout(() => setToast(cur => (cur === next ? null : cur)), 3500)
+    navigate(routeLocation.pathname, { replace: true, state: null }) // so a reload doesn't show it again
+  }, [routeLocation.state, routeLocation.pathname, navigate])
 
   // Local state gets the full merged job. The server and Dexie get ONLY the changed fields,
   // so fields written elsewhere (drive_folder_id, customer_id) can't be overwritten by a stale copy.
@@ -455,7 +474,7 @@ export default function JobDetail() {
     const previousStatus = before.status
     const { synced } = await patchJob({ status })
     recalcAfterStatusChange(before, previousStatus, status)
-    flashSaved(synced, `Status → ${formatEnum(status)}`)
+    flashSaved(synced, `Status → ${isSubcontract(before) && status === 'appointment' ? 'Scheduled' : formatEnum(status)}`)
   }
 
   // Runs from the "Cancel job" modal. Same save as before; the previous status is kept for Undo.
@@ -491,8 +510,54 @@ export default function JobDetail() {
   }
 
   const handleUncancelJob = () => {
-    if (!window.confirm('Restore this job to active status?')) return
-    saveStatus('active')
+    const sub = isSubcontract(jobRef.current)
+    if (!window.confirm(sub ? 'Restore this job to scheduled?' : 'Restore this job to active status?')) return
+    saveStatus(sub ? 'appointment' : 'active')
+  }
+
+  // ----- Subcontract pay card (BBR / TTR jobs). Every write goes through patchJob: changed fields only. -----
+  const savePay = async () => {
+    if (!jobRef.current) return
+    const raw = payVal.trim()
+    const next = raw === '' ? null : Math.round(parseFloat(raw) * 100) / 100 // blank = not entered yet, never 0
+    const cur = jobRef.current.my_pay == null ? null : Number(jobRef.current.my_pay)
+    if (next !== null && !Number.isFinite(next)) { setPayVal(cur == null ? '' : cur.toFixed(2)); return } // e.g. a lone "."
+    setPayVal(next == null ? '' : next.toFixed(2))
+    if (next === cur) return
+    const { synced } = await patchJob({ my_pay: next })
+    flashSaved(synced, next == null ? 'Pay cleared' : 'Pay saved')
+  }
+
+  const saveInvNo = async () => {
+    if (!jobRef.current) return
+    const next = invNoVal.trim() || null
+    const cur = (jobRef.current.partner_invoice_no ?? '').trim() || null
+    setInvNoVal(next ?? '')
+    if (next === cur) return
+    const { synced } = await patchJob({ partner_invoice_no: next })
+    flashSaved(synced, 'Invoice number saved')
+  }
+
+  const markPaid = async () => {
+    const { synced } = await patchJob({ pay_status: 'paid', paid_date: todayKey() }) // today in America/Chicago
+    flashSaved(synced, 'Marked paid')
+  }
+
+  const markUnpaid = async () => {
+    const { synced } = await patchJob({ pay_status: 'unpaid', paid_date: null })
+    flashSaved(synced, 'Marked unpaid')
+  }
+
+  const savePaidDate = async (value) => {
+    if (!value) return // a half-typed or cleared date is ignored; Mark unpaid is how a date goes away
+    const { synced } = await patchJob({ paid_date: value })
+    flashSaved(synced, 'Paid date saved')
+  }
+
+  const switchCompany = async (key) => {
+    if (!jobRef.current || key === workingFor(jobRef.current)) return
+    const { synced } = await patchJob({ working_for: key })
+    flashSaved(synced, `Now a ${key.toUpperCase()} job`)
   }
 
   const saveNotes = async () => {
@@ -792,18 +857,30 @@ export default function JobDetail() {
   const customerSigned = !!invoice?.customer_signature_url
   const hasWarranty = !!warranty
 
+  const sub = isSubcontract(job)
+  // Subcontract jobs offer three statuses. A job saved before this step may hold another one
+  // (contact, quote, active): keep it in the list so the dropdown isn't blank.
+  const statusOptions = !sub ? STATUS_OPTIONS
+    : SUBCONTRACT_STATUS_OPTIONS.some(o => o.value === job.status) ? SUBCONTRACT_STATUS_OPTIONS
+    : [STATUS_OPTIONS.find(o => o.value === job.status) ?? { value: job.status, label: formatEnum(job.status) }, ...SUBCONTRACT_STATUS_OPTIONS]
+  const paid = job.pay_status === 'paid'
+
   // Rows in the fixed action stack (the two Print buttons share one). The cancelled banner can
   // wrap taller than a row, and Send Collage's note sits above its two buttons, so both get one more.
   let actionRows = 1
-  if (job.status === 'appointment' || job.status === 'cancelled') actionRows = 2
+  if (sub) {
+    // Subcontract: Mark Completed (1), the cancelled banner (2), or Send Collage alone (2, or nothing)
+    if (job.status === 'cancelled') actionRows = 2
+    else if (job.status === 'completed') actionRows = hasCollage ? 2 : 0
+  } else if (job.status === 'appointment' || job.status === 'cancelled') actionRows = 2
   else if (job.status === 'active' && (hasInvoice || hasWarranty)) actionRows = 2
   else if (job.status === 'completed' && hasCollage) actionRows = 3
-  const actionStack = actionRows * 56 + (actionRows - 1) * 10
+  const actionStack = actionRows > 0 ? actionRows * 56 + (actionRows - 1) * 10 : 0
 
   return (
     <div className="job-page min-h-screen" style={{ '--action-stack': `${actionStack}px` }}>
       <PageHeader title={jobLabel(job)} sticky onBack={() => navigate(-1)}>
-        <Badge status={job.status} className="shrink-0" />
+        <Badge status={displayStatus(job)} className="shrink-0" />
         {job.is_test && (
           <button type="button" onClick={handleDeleteTestJob} className="icon-btn" disabled={deleting} aria-label="Delete job">
             <Trash2 size={20} />
@@ -836,6 +913,73 @@ export default function JobDetail() {
       )}
 
       <div className="px-4 py-4 space-y-3">
+
+        {/* Subcontract pay: BBR / TTR jobs only */}
+        {sub && (
+          <Section title="Subcontract pay">
+            <div className="space-y-4">
+              <div>
+                <div className="ui-field-label mb-1">Working for</div>
+                <div className="theme-segmented" role="group" aria-label="Working for">
+                  {COMPANIES.filter(c => isSubcontract({ working_for: c.key })).map(c => (
+                    <button
+                      key={c.key}
+                      type="button"
+                      className="theme-segment"
+                      aria-pressed={workingFor(job) === c.key}
+                      onClick={() => switchCompany(c.key)}
+                    >
+                      {c.tag}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <Input
+                label="My pay ($)"
+                id="my_pay"
+                inputMode="decimal"
+                autoComplete="off"
+                placeholder="Amount pending"
+                value={payVal}
+                onChange={e => { if (/^\d{0,8}(\.\d{0,2})?$/.test(e.target.value)) setPayVal(e.target.value) }}
+                onBlur={savePay}
+                onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
+              />
+
+              <Input
+                label="Uncle's invoice number (optional)"
+                id="partner_invoice_no"
+                autoComplete="off"
+                maxLength={60}
+                value={invNoVal}
+                onChange={e => setInvNoVal(e.target.value)}
+                onBlur={saveInvNo}
+                onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
+              />
+
+              <div className="flex items-center justify-between gap-3">
+                <span className={`status-pill pr-[10px]${paid ? ' status-pill--paid' : ' status-pill--unpaid'}`}>
+                  {paid ? 'Paid' : 'Unpaid'}
+                </span>
+                {paid ? (
+                  <Button variant="ghost" className="min-h-[44px]" onClick={markUnpaid}>Mark unpaid</Button>
+                ) : (
+                  <Button variant="primary" className="min-h-[44px]" onClick={markPaid}>Mark paid</Button>
+                )}
+              </div>
+              {paid && (
+                <Input
+                  label="Paid on"
+                  id="paid_date"
+                  type="date"
+                  value={job.paid_date ?? ''}
+                  onChange={e => savePaidDate(e.target.value)}
+                />
+              )}
+            </div>
+          </Section>
+        )}
 
         {/* Customer */}
         <Section title="Customer">
@@ -919,14 +1063,14 @@ export default function JobDetail() {
               <Select
                 value={job.status}
                 onChange={e => saveStatus(e.target.value)}
-                options={STATUS_OPTIONS}
+                options={statusOptions}
                 className="flex-1 py-1.5 pr-8"
               />
             </div>
 
             {editFixtures ? (
               <div className="space-y-3 pt-1">
-                <FixtureCardsEditor cards={fixturesVal} onChange={setFixturesVal} />
+                <FixtureCardsEditor cards={fixturesVal} onChange={setFixturesVal} hidePrices={sub} />
                 <div className="flex gap-2">
                   <Button type="button" variant="primary" className="flex-1 min-h-[44px]" onClick={saveFixtures} disabled={saving}>
                     {saving ? 'Saving…' : 'Save'}
@@ -941,7 +1085,7 @@ export default function JobDetail() {
                 {Array.isArray(job.fixtures) && job.fixtures.length > 0 ? (
                   <>
                     <div className="ui-field-label">Fixtures</div>
-                    <FixtureSummary cards={job.fixtures} />
+                    <FixtureSummary cards={job.fixtures} hidePrices={sub} />
                   </>
                 ) : (job.fixture_type || job.surface_type) ? (
                   <div className="space-y-1">
@@ -1136,46 +1280,48 @@ export default function JobDetail() {
           </Button>
         </Section>
 
-        {/* Documents */}
-        <Section title="Documents">
-          <div className="space-y-2">
-            {invoice && (
-              <div className="flex items-center gap-2 text-sm text-[var(--text-secondary)] mb-1">
-                <span className="font-medium text-[var(--text)]">Invoice #{invoice.invoice_number ?? job.job_number}</span>
-                {/* Same label and colors as the Invoices list; a missing status reads as Unpaid */}
-                <span className={`status-pill pr-[10px]${
-                  invoice.payment_status == null || invoice.payment_status === 'unpaid' ? ' status-pill--unpaid'
-                  : invoice.payment_status === 'paid' ? ' status-pill--paid'
-                  : ''
-                }`}>
-                  {invoice.payment_status ?? 'Unpaid'}
-                </span>
+        {/* Documents: DTF only (invoice and warranty) */}
+        {!sub && (
+          <Section title="Documents">
+            <div className="space-y-2">
+              {invoice && (
+                <div className="flex items-center gap-2 text-sm text-[var(--text-secondary)] mb-1">
+                  <span className="font-medium text-[var(--text)]">Invoice #{invoice.invoice_number ?? job.job_number}</span>
+                  {/* Same label and colors as the Invoices list; a missing status reads as Unpaid */}
+                  <span className={`status-pill pr-[10px]${
+                    invoice.payment_status == null || invoice.payment_status === 'unpaid' ? ' status-pill--unpaid'
+                    : invoice.payment_status === 'paid' ? ' status-pill--paid'
+                    : ''
+                  }`}>
+                    {invoice.payment_status ?? 'Unpaid'}
+                  </span>
+                </div>
+              )}
+              <div className="flex gap-2">
+                <Button
+                  variant="secondary"
+                  className="flex-1"
+                  onClick={() => invoice
+                    ? navigate(`/invoices/${invoice.id}`)
+                    : navigate(`/invoices/new/${id}`)
+                  }
+                >
+                  <FileText size={16} />
+                  {invoice ? (invoiceLocked ? 'Signed Invoice' : 'View Invoice') : 'Build Invoice'}
+                </Button>
+                <Button
+                  variant="secondary"
+                  className="flex-1"
+                  disabled={!warranty}
+                  onClick={() => warranty && navigate(`/warranties/${warranty.id}`)}
+                >
+                  <Shield size={16} />
+                  {warranty ? (invoiceLocked ? 'Signed Warranty' : 'View Warranty') : 'No Warranty'}
+                </Button>
               </div>
-            )}
-            <div className="flex gap-2">
-              <Button
-                variant="secondary"
-                className="flex-1"
-                onClick={() => invoice
-                  ? navigate(`/invoices/${invoice.id}`)
-                  : navigate(`/invoices/new/${id}`)
-                }
-              >
-                <FileText size={16} />
-                {invoice ? (invoiceLocked ? 'Signed Invoice' : 'View Invoice') : 'Build Invoice'}
-              </Button>
-              <Button
-                variant="secondary"
-                className="flex-1"
-                disabled={!warranty}
-                onClick={() => warranty && navigate(`/warranties/${warranty.id}`)}
-              >
-                <Shield size={16} />
-                {warranty ? (invoiceLocked ? 'Signed Warranty' : 'View Warranty') : 'No Warranty'}
-              </Button>
             </div>
-          </div>
-        </Section>
+          </Section>
+        )}
 
         {/* Notes */}
         <Section title="Notes">
@@ -1215,12 +1361,17 @@ export default function JobDetail() {
 
       {/* Fixed bottom action stack */}
       <div className="job-actions z-30 no-print">
-        {(job.status === 'contact' || job.status === 'quote') && (
+        {sub && job.status !== 'completed' && job.status !== 'cancelled' && (
+          <Button variant="primary" className="w-full" onClick={() => saveStatus('completed')}>
+            Mark Completed
+          </Button>
+        )}
+        {!sub && (job.status === 'contact' || job.status === 'quote') && (
           <Button variant="gold" className="w-full" onClick={() => setApptModal(true)}>
             <Calendar size={16} /> Schedule Appointment
           </Button>
         )}
-        {job.status === 'appointment' && (
+        {!sub && job.status === 'appointment' && (
           <>
             <Button variant="primary" className="w-full" onClick={() => saveStatus('active')}>
               Mark Active
@@ -1230,7 +1381,7 @@ export default function JobDetail() {
             </Button>
           </>
         )}
-        {job.status === 'active' && (
+        {!sub && job.status === 'active' && (
           <>
             {!hasInvoice && (
               <Button variant="gold" className="w-full" onClick={() => navigate(`/invoices/new/${id}`)}>
@@ -1276,10 +1427,12 @@ export default function JobDetail() {
         {job.status === 'completed' && (
           <>
             <SendCollage images={images} signedUrls={signedUrls} />
-            <Button variant="gold" className="w-full" disabled={!customer?.phone}
-              onClick={requestReview}>
-              <MessageSquare size={16} /> Request Review
-            </Button>
+            {!sub && (
+              <Button variant="gold" className="w-full" disabled={!customer?.phone}
+                onClick={requestReview}>
+                <MessageSquare size={16} /> Request Review
+              </Button>
+            )}
           </>
         )}
       </div>

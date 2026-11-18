@@ -2,7 +2,7 @@ import { priceJob, getFixtureTitles, validateFixture } from '../../lib/fixtures'
 
 const money = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' })
 
-export default function FixtureSummary({ cards }) {
+export default function FixtureSummary({ cards, hidePrices = false }) {
   const priced = priceJob(cards)
   const titles = getFixtureTitles(cards)
   const cardsNeedingDetails = new Set(priced.problems.map(p => p.cardId)).size
@@ -18,7 +18,7 @@ export default function FixtureSummary({ cards }) {
             {lines.map((l, k) => (
               <div key={k} className="fx-sum-line">
                 <span>{l.description}</span>
-                <span className="fx-sum-amount">{money.format(l.amount)}</span>
+                {!hidePrices && <span className="fx-sum-amount">{money.format(l.amount)}</span>}
               </div>
             ))}
             {notes.length > 0 && (
@@ -29,17 +29,19 @@ export default function FixtureSummary({ cards }) {
           </div>
         )
       })}
-      <div className="fx-sum-total">
-        <div className="flex items-baseline justify-between">
-          <span className="fx-total-label">{cardsNeedingDetails ? 'Total so far' : 'Total'}</span>
-          <span className="fx-total-amount">{money.format(priced.total)}</span>
+      {!hidePrices && (
+        <div className="fx-sum-total">
+          <div className="flex items-baseline justify-between">
+            <span className="fx-total-label">{cardsNeedingDetails ? 'Total so far' : 'Total'}</span>
+            <span className="fx-total-amount">{money.format(priced.total)}</span>
+          </div>
+          {cardsNeedingDetails > 0 && (
+            <p className="fx-note mt-1">
+              {cardsNeedingDetails} {cardsNeedingDetails === 1 ? 'card needs' : 'cards need'} details
+            </p>
+          )}
         </div>
-        {cardsNeedingDetails > 0 && (
-          <p className="fx-note mt-1">
-            {cardsNeedingDetails} {cardsNeedingDetails === 1 ? 'card needs' : 'cards need'} details
-          </p>
-        )}
-      </div>
+      )}
     </div>
   )
 }

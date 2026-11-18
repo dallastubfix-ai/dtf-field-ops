@@ -6,7 +6,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import db from '../lib/db'
 import { supabase } from '../lib/supabase'
 import { mergeServerRows, upsertServerRow } from '../lib/sync'
-import { jobLabel } from '../lib/jobLabel'
+import { jobLabel, displayStatus } from '../lib/jobLabel'
 import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
 import EmptyState from '../components/ui/EmptyState'
@@ -203,7 +203,7 @@ export default function Home() {
                           <div className="text-[var(--text-secondary)] text-xs">{appt.location_address}</div>
                         )}
                       </div>
-                      {job?.status && <Badge status={job.status} />}
+                      {job?.status && <Badge status={displayStatus(job)} />}
                     </div>
                   </Card>
                 )

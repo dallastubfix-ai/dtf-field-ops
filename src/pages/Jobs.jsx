@@ -7,7 +7,7 @@ import db from '../lib/db'
 import { supabase } from '../lib/supabase'
 import { mergeServerRows, upsertServerRow } from '../lib/sync'
 import { summarizeJobFixtures } from '../lib/fixtures'
-import { jobLabel } from '../lib/jobLabel'
+import { jobLabel, displayStatus } from '../lib/jobLabel'
 import Badge from '../components/ui/Badge'
 import EmptyState from '../components/ui/EmptyState'
 import PageHeader from '../components/layout/PageHeader'
@@ -180,7 +180,7 @@ export default function Jobs() {
                     )}
                     <span className="job-id">{jobLabel(job)}</span>
                   </div>
-                  <Badge status={job.status} />
+                  <Badge status={displayStatus(job)} />
                 </div>
                 <div className="job-name">
                   {customer?.full_name ?? 'Unknown Customer'}

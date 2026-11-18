@@ -89,7 +89,7 @@ function nextTargetKey(card, from, repairIndex) {
   }
 }
 
-export default function FixtureCardsEditor({ cards, onChange }) {
+export default function FixtureCardsEditor({ cards, onChange, hidePrices = false }) {
   const [pendingRemoveId, setPendingRemoveId] = useState(null)
   // UI only, never saved with the fixtures: card id -> false (collapsed) or true (expanded by the user).
   // A card with no entry is open. Complete cards start collapsed.
@@ -301,7 +301,7 @@ export default function FixtureCardsEditor({ cards, onChange }) {
                       <span className="fx-row-title">{titles[i]}</span>
                       <span className="fx-row-service">{SERVICE_LABELS[card.service]}</span>
                     </span>
-                    <span className="fx-row-amount">{money.format(subtotal)}</span>
+                    {!hidePrices && <span className="fx-row-amount">{money.format(subtotal)}</span>}
                     <ChevronDown size={20} className="fx-row-chevron" />
                   </button>
                 </div>
@@ -481,7 +481,7 @@ export default function FixtureCardsEditor({ cards, onChange }) {
                     </div>
                   )}
 
-                  {cardLines.length > 0 && (
+                  {!hidePrices && cardLines.length > 0 && (
                     <div className="fx-lines">
                       {cardLines.map((l, k) => (
                         <div key={k} className="fx-line">
@@ -528,7 +528,7 @@ export default function FixtureCardsEditor({ cards, onChange }) {
         </button>
       )}
 
-      {list.length > 0 && (
+      {!hidePrices && list.length > 0 && (
         <div className="fx-total">
           <div className="flex items-baseline justify-between">
             <span className="fx-total-label">{cardsNeedingDetails ? 'Total so far' : 'Total'}</span>

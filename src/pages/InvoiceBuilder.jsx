@@ -9,6 +9,7 @@ import { upsertLocal } from '../lib/sync'
 import { normalize as normalizeWarrantyYears, warrantyExpiry } from '../lib/warranty'
 import { formatEnum } from '../lib/formatEnum'
 import { getJobSurfaceText, buildInvoiceLines } from '../lib/fixtures'
+import { isSubcontract } from '../lib/jobLabel'
 import Button from '../components/ui/Button'
 import Modal from '../components/ui/Modal'
 import PageHeader from '../components/layout/PageHeader'
@@ -309,6 +310,11 @@ export default function InvoiceBuilder() {
       if (isNew) {
         const { job, customer, appt } = await loadJobContext(jobId)
         if (!job) return
+        if (isSubcontract(job)) {
+          // BBR / TTR jobs have no invoice. Go back to the job; it shows this as a toast.
+          navigate(`/jobs/${jobId}`, { replace: true, state: { toast: 'No invoice for BBR/TTR jobs' } })
+          return
+        }
         const cards = Array.isArray(job.fixtures) ? job.fixtures : []
         let cardLines = null
         if (cards.length) {

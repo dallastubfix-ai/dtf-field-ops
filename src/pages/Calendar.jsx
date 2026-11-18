@@ -10,6 +10,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import db from '../lib/db'
 import { supabase } from '../lib/supabase'
 import { upsertServerRow } from '../lib/sync'
+import { displayStatus } from '../lib/jobLabel'
 import Badge from '../components/ui/Badge'
 import Card from '../components/ui/Card'
 import PageHeader from '../components/layout/PageHeader'
@@ -170,7 +171,7 @@ export default function Calendar() {
                           <div className="text-xs text-[var(--text-secondary)]">{appt.location_address}</div>
                         )}
                       </div>
-                      {job?.status && <Badge status={job.status} />}
+                      {job?.status && <Badge status={displayStatus(job)} />}
                     </div>
                   </Card>
                 )
