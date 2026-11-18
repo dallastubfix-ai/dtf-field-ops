@@ -19,6 +19,7 @@ import { getValidProviderToken } from '../lib/googleToken'
 import AddressAutocomplete from '../components/ui/AddressAutocomplete'
 import FixtureCardsEditor from '../components/fixtures/FixtureCardsEditor'
 import { sanitizeFixture, createEmptyFixture } from '../lib/fixtures'
+import { COMPANIES, DEFAULT_COMPANY, companyFor, isCompanyKey } from '../lib/jobLabel'
 
 function formatPhone(value) {
   let raw = value.replace(/\D/g, '')
@@ -40,6 +41,7 @@ const now = () => format(new Date(), "yyyy-MM-dd'T'HH:mm")
 const DRAFT_KEY = 'dtf-newintake-draft-v1'
 
 const emptyForm = () => ({
+  working_for: DEFAULT_COMPANY,
   full_name: '', phone: '', call_datetime: now(),
   surface_color: '',
   schedule_appointment: false,
@@ -65,6 +67,7 @@ function loadDraft() {
       form: {
         ...emptyForm(),
         ...d.form,
+        working_for: isCompanyKey(d.form.working_for) ? d.form.working_for : DEFAULT_COMPANY,
         fixtures: cards
           .filter(c => c && typeof c === 'object')
           .map(c => sanitizeFixture({ ...createEmptyFixture(), ...c })),
@@ -79,7 +82,7 @@ function loadDraft() {
 
 function hasEntered(form, linkedCustomer) {
   return !!(
-    linkedCustomer || form.full_name.trim() || form.phone || form.surface_color || form.notes ||
+    linkedCustomer || form.working_for !== DEFAULT_COMPANY || form.full_name.trim() || form.phone || form.surface_color || form.notes ||
     form.lead_source || form.referred_by || form.appointment_datetime || form.location_address ||
     form.schedule_appointment || form.is_test || form.fixtures.length
   )
@@ -184,6 +187,11 @@ export default function NewIntake() {
       // their own separate identifier scheme and never touch the real sequence.
       if (form.is_test) {
         jobNumber = `TEST-${Math.random().toString(36).slice(2, 8).toUpperCase()}`
+      } else if (form.working_for !== DEFAULT_COMPANY) {
+        // BBR / TTR: no DTF job number. This must stay an EXPLICIT null that is sent in the
+        // payload: if job_number were left out, the database default would call
+        // generate_job_number() and use up a real DTF number. No RPC, no fake fallback.
+        jobNumber = null
       } else {
         jobNumber = `DTF-${Date.now().toString().slice(-5)}`
         if (isOnline) {
@@ -196,6 +204,8 @@ export default function NewIntake() {
       const jobPayload = {
         id: generateId(),
         job_number: jobNumber,
+        working_for: form.working_for,
+        pay_status: form.working_for === DEFAULT_COMPANY ? null : 'unpaid',
         customer_id: customerId,
         status: submitStatus(),
         fixtures: form.fixtures.map(sanitizeFixture),
@@ -208,7 +218,10 @@ export default function NewIntake() {
       savedRef.current = true
       removeDraft()
 
-      setToast({ text: `Saved! Job ${jobNumber}`, kind: 'success' })
+      setToast({
+        text: jobNumber == null ? `Saved! ${companyFor(form.working_for).tag} job` : `Saved! Job ${jobNumber}`,
+        kind: 'success',
+      })
       navigate(`/jobs/${savedJob.id}`, { replace: true })
     } catch (err) {
       console.error('Job save failed:', err)
@@ -278,6 +291,29 @@ export default function NewIntake() {
             </button>
           </div>
         )}
+
+        {/* Working for: first, because it decides what the rest of the job is */}
+        <section className="glass-card" aria-label="Working for">
+          <h2 className="ui-field-label mb-2">Working for</h2>
+          <div className="theme-segmented" role="group" aria-label="Working for">
+            {COMPANIES.map(c => (
+              <button
+                key={c.key}
+                type="button"
+                className="theme-segment"
+                aria-pressed={form.working_for === c.key}
+                onClick={() => set('working_for', c.key)}
+              >
+                {c.tag}
+              </button>
+            ))}
+          </div>
+          {form.working_for !== DEFAULT_COMPANY && (
+            <p className="text-[13px] font-medium text-[var(--text-secondary)] mt-2">
+              {companyFor(form.working_for).name}. No DTF job number, invoice or warranty.
+            </p>
+          )}
+        </section>
 
         {/* Section 1 — Customer */}
         <section className="glass-card">

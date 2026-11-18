@@ -6,6 +6,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import db from '../lib/db'
 import { supabase } from '../lib/supabase'
 import { mergeServerRows, upsertServerRow } from '../lib/sync'
+import { jobLabel } from '../lib/jobLabel'
 import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
 import EmptyState from '../components/ui/EmptyState'
@@ -190,7 +191,7 @@ export default function Home() {
                     <div className="flex items-start justify-between">
                       <div className="flex-1 min-w-0">
                         <div className="text-xs font-semibold text-[var(--accent-text)] mb-0.5">
-                          {job?.job_number ?? '—'}
+                          {job ? jobLabel(job) : '—'}
                         </div>
                         <div className="font-bold text-[var(--text)] text-sm">
                           {customer?.full_name ?? 'Unknown Customer'}

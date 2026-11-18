@@ -30,6 +30,7 @@ import SendCollage from '../components/collage/SendCollage'
 import FixtureCardsEditor from '../components/fixtures/FixtureCardsEditor'
 import FixtureSummary from '../components/fixtures/FixtureSummary'
 import { sanitizeFixture } from '../lib/fixtures'
+import { jobLabel } from '../lib/jobLabel'
 
 // Transient failures (no connection mid-request, expired session, server
 // trouble) are safe to queue and retry. Anything else (RLS, foreign key, bad
@@ -801,7 +802,7 @@ export default function JobDetail() {
 
   return (
     <div className="job-page min-h-screen" style={{ '--action-stack': `${actionStack}px` }}>
-      <PageHeader title={job.job_number} sticky onBack={() => navigate(-1)}>
+      <PageHeader title={jobLabel(job)} sticky onBack={() => navigate(-1)}>
         <Badge status={job.status} className="shrink-0" />
         {job.is_test && (
           <button type="button" onClick={handleDeleteTestJob} className="icon-btn" disabled={deleting} aria-label="Delete job">
@@ -878,7 +879,7 @@ export default function JobDetail() {
                     {sharedJobs.slice(0, 3).map((j, i) => (
                       <span key={j.id}>
                         {i > 0 && ', '}
-                        <Link to={`/jobs/${j.id}`} className="text-[var(--accent-text)] underline">{j.job_number ?? 'job'}</Link>
+                        <Link to={`/jobs/${j.id}`} className="text-[var(--accent-text)] underline">{jobLabel(j) || 'job'}</Link>
                       </span>
                     ))}
                     {sharedJobs.length > 3 && ` +${sharedJobs.length - 3} more`}
@@ -1386,7 +1387,7 @@ export default function JobDetail() {
       >
         <div className="space-y-3">
           <p className="text-sm text-[var(--text)]">
-            {`This job (${job.job_number}) will get its own copy of this customer's details. ${sharedJobs.map(j => j.job_number ?? 'job').join(', ')} ${sharedJobs.length === 1 ? 'keeps' : 'keep'} the original. After this, editing the customer on one job no longer changes the other. Nothing is deleted.`}
+            {`This job (${jobLabel(job)}) will get its own copy of this customer's details. ${sharedJobs.map(j => jobLabel(j) || 'job').join(', ')} ${sharedJobs.length === 1 ? 'keeps' : 'keep'} the original. After this, editing the customer on one job no longer changes the other. Nothing is deleted.`}
           </p>
           {invoiceLocked && (
             <p className="text-sm text-[var(--text)]">

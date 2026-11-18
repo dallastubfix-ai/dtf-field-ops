@@ -7,6 +7,7 @@ import db from '../lib/db'
 import { supabase } from '../lib/supabase'
 import { mergeServerRows, upsertServerRow } from '../lib/sync'
 import { summarizeJobFixtures } from '../lib/fixtures'
+import { jobLabel } from '../lib/jobLabel'
 import Badge from '../components/ui/Badge'
 import EmptyState from '../components/ui/EmptyState'
 import PageHeader from '../components/layout/PageHeader'
@@ -66,7 +67,7 @@ export default function Jobs() {
         .filter(c => c.full_name?.toLowerCase().includes(q) || c.phone?.includes(q))
         .map(c => c.id)
       all = all.filter(j =>
-        j.job_number?.toLowerCase().includes(q) ||
+        jobLabel(j).toLowerCase().includes(q) ||
         cids.includes(j.customer_id)
       )
     }
@@ -177,7 +178,7 @@ export default function Jobs() {
                         className="w-2 h-2 shrink-0 rounded-full bg-[var(--status-dot-success)]"
                       />
                     )}
-                    <span className="job-id">{job.job_number}</span>
+                    <span className="job-id">{jobLabel(job)}</span>
                   </div>
                   <Badge status={job.status} />
                 </div>

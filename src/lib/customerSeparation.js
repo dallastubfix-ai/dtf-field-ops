@@ -2,7 +2,8 @@ import { supabase } from './supabase'
 import db from './db'
 import { upsertLocal } from './sync'
 
-const pick = ({ id, job_number, status }) => ({ id, job_number, status })
+const pick = ({ id, job_number, status, working_for, partner_invoice_no }) =>
+  ({ id, job_number, status, working_for, partner_invoice_no })
 
 // Other jobs that share this job's customer record. Dexie answers first so it
 // works offline; a successful server answer replaces it. A failed server call
@@ -23,7 +24,7 @@ export async function getOtherJobsForCustomer(job, isOnline) {
     try {
       const { data, error } = await supabase
         .from('jobs')
-        .select('id, job_number, status')
+        .select('id, job_number, status, working_for, partner_invoice_no')
         .eq('customer_id', job.customer_id)
         .neq('id', job.id)
       if (error) console.error('Shared customer lookup failed:', error.code)
