@@ -532,11 +532,41 @@ export default function JobDetail() {
   // A subcontract job's company or invoice number changed. Mileage legs and the job's Google events carry
   // the label, so refresh both. Runs after the save; a failure only shows a toast (after the save toast).
   const CAL_NOT_UPDATED = 'Calendar event not updated. Edit the appointment to refresh it.'
+
+  // This job's Google event ids. The page's list can miss an id that New Call saved after this page
+  // loaded, so online they are read fresh from the server and merged with the page's. If that read
+  // fails (or offline), the page's ids plus the phone's copy. Ids found are put into the page's list,
+  // so a later appointment edit here updates that event instead of creating another. Never throws.
+  const jobEventIds = async (jobId) => {
+    const ids = new Set(appointments.map(a => a.google_calendar_event_id).filter(Boolean))
+    let rows = null
+    if (isOnline) {
+      try {
+        const { data, error } = await supabase.from('appointments').select('id, google_calendar_event_id').eq('job_id', jobId)
+        if (!error && Array.isArray(data)) rows = data
+      } catch { /* fall back below */ }
+    }
+    if (!rows) {
+      try { rows = await db.appointments.where('job_id').equals(jobId).toArray() } catch { rows = [] }
+    }
+    const found = new Map()
+    for (const r of rows) {
+      if (!r?.google_calendar_event_id) continue
+      ids.add(r.google_calendar_event_id)
+      if (r.id) found.set(r.id, r.google_calendar_event_id)
+    }
+    if (found.size) {
+      setAppointments(list => list.map(a => (!a.google_calendar_event_id && found.has(a.id))
+        ? { ...a, google_calendar_event_id: found.get(a.id) } : a))
+    }
+    return [...ids]
+  }
+
   const afterLabelChange = async (synced) => {
     const current = jobRef.current
     if (!current) return
     recalcAfterLabelChange(current)
-    const eventIds = appointments.map(a => a.google_calendar_event_id).filter(Boolean)
+    const eventIds = await jobEventIds(current.id)
     if (eventIds.length === 0) return
     const tellNotUpdated = () => setTimeout(() => flashToast(CAL_NOT_UPDATED, 4000, 'error'), synced ? 1900 : 3100)
     if (!isOnline) { tellNotUpdated(); return }
@@ -710,7 +740,11 @@ export default function JobDetail() {
       updated_at: new Date().toISOString(),
     }
     setAppointments(list => list.map(x => (x.id || x._localId) === key ? updated : x))
-    await updateRecord('appointments', withoutStartsFromHome(updated), isOnline)
+    // Never send an empty event id here: this page's copy can be missing one New Call saved after
+    // the page loaded, and sending null would erase it on the server.
+    const firstSave = { ...updated }
+    if (!firstSave.google_calendar_event_id) delete firstSave.google_calendar_event_id
+    await updateRecord('appointments', withoutStartsFromHome(firstSave), isOnline)
     recalcAfterAppointmentEdit(job, a, updated)
     setEditApptId(null)
     setSaving(false)
@@ -732,9 +766,23 @@ export default function JobDetail() {
           workingFor: workingFor(job),
           label: jobLabel(job),
         }
+        // No event id on this page's copy: check the server first (New Call saves its event id after
+        // opening this page). If one exists, update that event instead of creating a duplicate.
+        let existingEventId = updated.google_calendar_event_id
+        if (!existingEventId && updated.id) {
+          try {
+            const { data, error } = await supabase.from('appointments').select('google_calendar_event_id').eq('id', updated.id).maybeSingle()
+            if (!error && data?.google_calendar_event_id) existingEventId = data.google_calendar_event_id
+          } catch { /* read failed: create, as before */ }
+          if (existingEventId) {
+            const found = existingEventId
+            setAppointments(list => list.map(x => (x.id || x._localId) === key ? { ...x, google_calendar_event_id: found } : x))
+            try { await db.appointments.where('id').equals(updated.id).modify({ google_calendar_event_id: found }) } catch { /* page state has it */ }
+          }
+        }
         let eventId
-        if (updated.google_calendar_event_id) {
-          eventId = await updateCalendarEvent(token, updated.google_calendar_event_id, appointmentData)
+        if (existingEventId) {
+          eventId = await updateCalendarEvent(token, existingEventId, appointmentData)
         } else {
           eventId = await createCalendarEvent(token, appointmentData)
         }
@@ -912,8 +960,17 @@ export default function JobDetail() {
 
   return (
     <div className="job-page min-h-screen" style={{ '--action-stack': `${actionStack}px` }}>
-      <PageHeader title={jobLabel(job)} sticky onBack={() => navigate(-1)}>
-        <CompanyDot job={job} />
+      <PageHeader
+        title={(
+          // Dot right after the label; a long label truncates but the dot stays visible.
+          <span className="inline-flex items-center gap-2 max-w-full align-bottom">
+            <span className="truncate min-w-0">{jobLabel(job)}</span>
+            <CompanyDot job={job} />
+          </span>
+        )}
+        sticky
+        onBack={() => navigate(-1)}
+      >
         <Badge status={displayStatus(job)} className="shrink-0" />
         {job.is_test && (
           <button type="button" onClick={handleDeleteTestJob} className="icon-btn" disabled={deleting} aria-label="Delete job">

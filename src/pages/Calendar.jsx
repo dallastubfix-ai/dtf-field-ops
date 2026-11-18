@@ -166,7 +166,7 @@ export default function Calendar() {
                           {customer?.full_name ?? 'Unknown'}
                         </div>
                         {(job?.job_number || isSubcontract(job)) && (
-                          <div className="text-xs text-[var(--accent-text)] mt-0.5"><CompanyDot job={job} className="mr-1.5 align-middle" />{jobLabel(job)}</div>
+                          <div className="text-xs text-[var(--accent-text)] mt-0.5">{jobLabel(job)}<CompanyDot job={job} className="ml-1.5 align-middle" /></div>
                         )}
                         {appt.location_address && (
                           <div className="text-xs text-[var(--text-secondary)]">{appt.location_address}</div>

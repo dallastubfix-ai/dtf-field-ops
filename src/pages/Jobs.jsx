@@ -179,8 +179,8 @@ export default function Jobs() {
                         className="w-2 h-2 shrink-0 rounded-full bg-[var(--status-dot-success)]"
                       />
                     )}
-                    <CompanyDot job={job} />
                     <span className="job-id">{jobLabel(job)}</span>
+                    <CompanyDot job={job} />
                   </div>
                   <Badge status={displayStatus(job)} />
                 </div>

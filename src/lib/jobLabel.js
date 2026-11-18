@@ -1,11 +1,12 @@
 // Which company a job is done for, and how to name a job on screen.
 // DTF is the default. BBR and TTR are subcontract jobs: no DTF job number, invoice or warranty.
 // To add a company later, add one row here (key must also be allowed by the jobs.working_for CHECK).
-// colorId is the Google Calendar event color; hex is the matching dot color in the app. DTF has none.
+// dot is the company dot color in the app. colorId is the Google Calendar event color (BBR / TTR only;
+// DTF events never get a colorId). DTF's dot is the same token as the blue DTF job-number text.
 export const COMPANIES = [
-  { key: 'dtf', tag: 'DTF', name: 'Dallas Tub Fix' },
-  { key: 'bbr', tag: 'BBR', name: 'Best in the Business Refinishing', colorId: '6', hex: '#F4511E' },   // Tangerine
-  { key: 'ttr', tag: 'TTR', name: 'Texas Tub, Chip, and Crack Repair', colorId: '10', hex: '#0B8043' }, // Basil
+  { key: 'dtf', tag: 'DTF', name: 'Dallas Tub Fix', dot: 'var(--accent-text)' },
+  { key: 'bbr', tag: 'BBR', name: 'Best in the Business Refinishing', colorId: '6', dot: '#F4511E' },   // Tangerine
+  { key: 'ttr', tag: 'TTR', name: 'Texas Tub, Chip, and Crack Repair', colorId: '10', dot: '#0B8043' }, // Basil
 ]
 
 export const DEFAULT_COMPANY = 'dtf'

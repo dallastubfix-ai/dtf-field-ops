@@ -192,8 +192,8 @@ export default function Home() {
                     <div className="flex items-start justify-between">
                       <div className="flex-1 min-w-0">
                         <div className="text-xs font-semibold text-[var(--accent-text)] mb-0.5">
-                          {job && <CompanyDot job={job} className="mr-1.5 align-middle" />}
                           {job ? jobLabel(job) : '—'}
+                          {job && <CompanyDot job={job} className="ml-1.5 align-middle" />}
                         </div>
                         <div className="font-bold text-[var(--text)] text-sm">
                           {customer?.full_name ?? 'Unknown Customer'}
